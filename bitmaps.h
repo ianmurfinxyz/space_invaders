@@ -71,7 +71,7 @@ Bitmap crab1 {{
   scale
 };
 
-Bitmap ocotpus0 {{
+Bitmap octopus0 {{
   "110000000011",
   "001101101100",
   "000110011000",
@@ -84,7 +84,7 @@ Bitmap ocotpus0 {{
   scale
 };
 
-Bitmap ocotpus1 {{
+Bitmap octopus1 {{
   "001100001100",
   "011001100110",
   "001110011100",
@@ -160,7 +160,7 @@ Bitmap zigzag0 {{
   "010",
   "100",
   "010",
-  "001
+  "001"
 },
   scale
 };

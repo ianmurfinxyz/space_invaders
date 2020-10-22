@@ -1,12 +1,18 @@
 
 #include <chrono>
+#include <thread>
 #include <cstdint>
 #include <iostream>
 #include <algorithm>
 #include <cassert>
 #include <string>
+#include <sstream>
 #include <cmath>
 #include <vector>
+#include <memory>
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
 
 using int8 = std::int8_t;
 using int16 = std::int16_t;
@@ -23,6 +29,8 @@ using uint64 = std::uint64_t;
 //                                                                                               //
 //===============================================================================================//
 
+constexpr long double operator"" _hz(long double hz){return hz;}
+
 template<typename T>
 struct Vector2
 {
@@ -31,8 +39,8 @@ struct Vector2
 
   Vector2() : _x{0}, _y{0} {}
   Vector2(T x, T y) : _x{x}, _y{y} {}
-  void zero() {_x = _y = 0}
-  bool isZero() {return _x == 0 && y == 0;}
+  void zero() {_x = _y = 0;}
+  bool isZero() {return _x == 0 && _y == 0;}
   Vector2 operator+(const Vector2& v) const {return Vector2{_x + v._x, _y + v._y};}
   void operator+=(const Vector2& v) {_x += v._x; _y += v._y;}
   Vector2 operator-(const Vector2& v) const {return Vector2{_x - v._x, _y - v._y};}
@@ -41,7 +49,7 @@ struct Vector2
   void operator*=(float scale) {_x *= scale; _y *= scale;}
   float dot(const Vector2& v) {return (_x * v._x) + (_y * v._y);}
   float cross(const Vector2& v) const {return (_x * v._y) - (_y * v._x);}
-  float length() const {return std::hypt(_x, _y);}
+  float length() const {return std::hypot(_x, _y);}
   float lengthSquared() const {return (_x * _x) + (_y * _y);}
 
   Vector2 normalized() const
@@ -83,42 +91,41 @@ using fRect = Rect<float>;
 //                                                                                               //
 //===============================================================================================//
 
-template<typename T, T lo, T hi>
-class Color3
+class Color3f
 {
+  constexpr static float lo {0.f};
+  constexpr static float hi {1.f};
+
 public:
-  Color3(T r, T g, T b) : 
+  Color3f(float r, float g, float b) : 
     _r{std::clamp(r, lo, hi)},
     _g{std::clamp(g, lo, hi)},
     _b{std::clamp(b, lo, hi)}
   {}
 
-  T getRed() const {return _r;}
-  T getGreen() const {return _g;}
-  T getBlue() const {return _b;}
-  void setRed(T r){_r = std::clamp(r, lo, hi);}
-  void setGreen(T g){_g = std::clamp(g, lo, hi);}
-  void setBlue(T b){_b = std::clamp(b, lo, hi);}
+  float getRed() const {return _r;}
+  float getGreen() const {return _g;}
+  float getBlue() const {return _b;}
+  void setRed(float r){_r = std::clamp(r, lo, hi);}
+  void setGreen(float g){_g = std::clamp(g, lo, hi);}
+  void setBlue(float b){_b = std::clamp(b, lo, hi);}
 
 private:
-  T _r;
-  T _g;
-  T _b;
+  float _r;
+  float _g;
+  float _b;
 };
 
-using Color3f = Color3<float, 0.f, 1.f>;
-using Color3i = Color3<int32, 0, UINT8_MAX>;
-
-namespace Colors
+namespace colors
 {
-  Color3f white {1.f, 1.f, 1.f};
-  Color3f black {0.f, 0.f, 0.f};
-  Color3f red {1.f, 0.f, 0.f};
-  Color3f green {0.f, 1.f, 0.f};
-  Color3f blue {0.f, 0.f, 1.f};
-  Color3f cyan {0.f, 1.f, 1.f};
-  Color3f magenta {1.f, 0.f, 1.f};
-  Color3f yellow {1.f, 1.f, 0.f};
+  const Color3f white {1.f, 1.f, 1.f};
+  const Color3f black {0.f, 0.f, 0.f};
+  const Color3f red {1.f, 0.f, 0.f};
+  const Color3f green {0.f, 1.f, 0.f};
+  const Color3f blue {0.f, 0.f, 1.f};
+  const Color3f cyan {0.f, 1.f, 1.f};
+  const Color3f magenta {1.f, 0.f, 1.f};
+  const Color3f yellow {1.f, 1.f, 0.f};
 }
 
 //===============================================================================================//
@@ -153,8 +160,8 @@ public:
   Bitmap& operator=(const Bitmap&) = default;
   bool getBit(int32 row, int32 col);
   void setBit(int32 row, int32 col, bool value, bool regen = true);
-  int32 getWidth() {return _width;}
-  int32 getHeight() {return _height;}
+  int32 getWidth() const {return _width;}
+  int32 getHeight() const {return _height;}
   const std::vector<uint8>& getBytes() const {return _bytes;}
   void print(std::ostream& out) const;
 
@@ -262,7 +269,7 @@ void Bitmap::print(std::ostream& out) const
 {
   for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
     for(bool bit : *iter){
-      out << bit ? '1' : '0';
+      out << bit;
     }
     out << '\n';
   }
@@ -290,7 +297,7 @@ public:
   };
   
 public:
-  Renderer(Config config);
+  Renderer(const Config& config);
   Renderer(const Renderer&) = delete;
   Renderer* operator=(const Renderer&) = delete;
   ~Renderer();
@@ -303,17 +310,17 @@ public:
 
 private:
   SDL_Window* _window;
-  SDL_GL_Context _glContext;
+  SDL_GLContext _glContext;
   Config _config;
   iRect _viewport;
 };
 
-Renderer::Renderer(Config config)
+Renderer::Renderer(const Config& config)
 {
   _config = config;
 
   _window = SDL_CreateWindow(
-      _config._windowTitle, 
+      _config._windowTitle.c_str(), 
       SDL_WINDOWPOS_UNDEFINED,
       SDL_WINDOWPOS_UNDEFINED,
       _config._windowWidth,
@@ -326,8 +333,8 @@ Renderer::Renderer(Config config)
     exit(EXIT_FAILURE);
   }
 
-  _glcontext = SDL_GL_CreateContext(_window);
-  if(_glcontext == nullptr){
+  _glContext = SDL_GL_CreateContext(_window);
+  if(_glContext == nullptr){
     // TODO: log error
     exit(EXIT_FAILURE);
   }
@@ -335,17 +342,24 @@ Renderer::Renderer(Config config)
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config.openglVersionMajor);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config.openglVersionMinor);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  _viewport = iRect{0, 0, _config._windowWidth, _config._windowHeight};
+
+  setViewport(iRect{0, 0, _config._windowWidth, _config._windowHeight});
+}
+
+Renderer::~Renderer()
+{
+  SDL_GL_DeleteContext(_glContext);
+  SDL_DestroyWindow(_window);
 }
 
 void Renderer::setViewport(iRect viewport)
 {
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  glOrtho(0.0, viewport.w, 0.0, viewport.h, -1.0, 1.0);
+  glOrtho(0.0, viewport._w, 0.0, viewport._h, -1.0, 1.0);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
-  glViewport(viewport.x, viewport.y, viewport.w, viewport.h);
+  glViewport(viewport._x, viewport._y, viewport._w, viewport._h);
   _viewport = viewport;
 }
 
@@ -356,21 +370,21 @@ void Renderer::blitText(Vector2f position, const std::string& text, const Color3
 void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
 {
   glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
-  glRasterPos2f(position.x, position.y);
+  glRasterPos2f(position._x, position._y);
   glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());
 }
 
 void Renderer::clearWindow(const Color3f& color)
 {
-  glClearColor(color.getRed(), color.getGreen(), color.getBlue());
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
   glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void Renderer::clearViewport(const Color3f& color)
 {
   glEnable(GL_SCISSOR_TEST);
-  glScissor(_viewport.x, _viewport.y, _viewport.w, _viewport.h);
-  glClearColor(color.getRed(), color.getGreen(), color.getBlue());
+  glScissor(_viewport._x, _viewport._y, _viewport._w, _viewport._h);
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
   glClear(GL_COLOR_BUFFER_BIT);
   glDisable(GL_SCISSOR_TEST);
 }
@@ -394,11 +408,13 @@ public:
   using Duration_t = std::chrono::nanoseconds;
 
   constexpr static Duration_t oneSecond {1'000'000};
+  constexpr static Duration_t minFramePeriod {2'000'000};
 
   class RealClock
   {
   public:
     explicit RealClock() : _start{}, _now0{}, _now1{}, _dt{}{}
+    ~RealClock() = default;
     void start(){_now0 = Clock_t::now();}
 
     Duration_t update()
@@ -423,13 +439,14 @@ public:
   {
   public:
     explicit GameClock() : _now{}, _scale{1.f}, _isPaused{false}{}
+    ~GameClock() = default;
 
     Duration_t update(Duration_t realDt)
     {
       if(_isPaused) return Duration_t::zero();
       _dt = Duration_t{static_cast<int64>(realDt.count() * _scale)};
-      _now += dt;
-      return dt;
+      _now += _dt;
+      return _dt;
     }
 
     Duration_t getNow() const {return _now;}
@@ -453,6 +470,7 @@ public:
   {
   public:
     explicit Metronome() : _lastTickNow{}, _tickPeriod{}, _totalTicks{0}{}
+    ~Metronome() = default;
 
     int64 doTicks(Duration_t gameNow)
     {
@@ -478,7 +496,8 @@ public:
   class TPSMeter
   {
   public:
-    explicit TPSMeter() : _timer{}, _ticks{0}, _tps{0.f} {}
+    explicit TPSMeter() : _timer{}, _ticks{0}, _tps{0} {}
+    ~TPSMeter() = default;
 
     void recordTicks(Duration_t realDt, int32 ticks)
     {
@@ -499,23 +518,26 @@ public:
     int32 _tps;
   };
 
-  enum ApplicationStates {APPSTATE_MENU, APPSTATE_GAME, APPSTATE_COUNT};
+  enum class ApplicationStates {MENU, GAME};
 
   class ApplicationState
   {
   public:
     ApplicationState(Application* app) : _app(app) {}
+    virtual ~ApplicationState() = default;
     virtual void onUpdate(double now, float dt) = 0;
     virtual void onDraw(double now, float dt) = 0;
-    virtual void onReset();
+    virtual void onReset() = 0;
 
-  private:
+  protected:
     Application* _app;
   };
 
-  class GameState : ApplicationState
+  class GameState : public ApplicationState
   {
   public:
+    GameState(Application* app) : ApplicationState{app}{}
+    virtual ~GameState() = default;
     virtual const std::string& getName() = 0;
     virtual int32 getVersionMajor() = 0;
     virtual int32 getVersionMinor() = 0;
@@ -526,10 +548,10 @@ public:
   struct LoopTick
   {
     explicit LoopTick() : _tpsMeter{}, _metronome{}, _ticksAccumulated{0}, _ticksDoneThisFrame{0},
-      _maxTicksPerFrame{0}, _tickPeriod{0.f}, _tickFrequency{0.f} {}
+      _maxTicksPerFrame{0}, _tickPeriod{0.f} {}
 
-    void (ApplicationState*::_onTick)(double, float);
-    TpsMeter _tpsMeter;
+    void (Application::*_onTick)(Duration_t, Duration_t, Duration_t, float);
+    TPSMeter _tpsMeter;
     Metronome _metronome;
     int64 _ticksAccumulated;
     int32 _ticksDoneThisFrame;
@@ -539,55 +561,81 @@ public:
 
 public:
   Application() = default;
-  void initialize(std::unique_ptr<ApplicationState> menu, std::unique_ptr<ApplicationState* game);
+  ~Application() = default;
+  void initialize(std::unique_ptr<ApplicationState>&& menu, std::unique_ptr<GameState>&& game);
   void shutdown();
   void run();
 
   void transitionToAppState(ApplicationStates newState);
 
+  std::unique_ptr<Renderer>& getRenderer() {return _renderer;}
+
 private:
   void mainloop();
-  void drawPerformanceStats();
+  void drawPerformanceStats(Duration_t realDt, Duration_t gameDt);
+  void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
+  void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
 
 private:
   RealClock _realClock;
   GameClock _gameClock;
 
-  std::array<std::unique_ptr<ApplicationState>, APPSTATE_COUNT> _appStates;
   ApplicationStates _activeAppState;
+  std::unique_ptr<ApplicationState> _menu;
+  std::unique_ptr<GameState> _game;
 
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
 
+  std::unique_ptr<Renderer> _renderer;
+
+  bool _isSleeping;
   bool _isDrawingPerformanceStats;
   bool _isDone;
 };
 
-void Application::initialize(std::unique_ptr<ApplicationState> menu, std::unique_ptr<ApplicationState* game)
+void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::unique_ptr<GameState>&& game)
 {
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initiaize SDL: %s", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 
-  _appStates[APPSTATE_MENU] = std::move{menu};
-  _appStates[APPSTATE_GAME] = std::move{game};
+  _menu = std::move(menu);
+  _game = std::move(game);
 
-  _activeAppState = APPSTATE_MENU;
+  _activeAppState = ApplicationStates::MENU;
 
-  LoopTick* tick = _loopTicks[LOOPTICK_UPDATE];
-  tick->_onTick = &ApplicationState::onUpdate;
+  LoopTick* tick = &_loopTicks[LOOPTICK_UPDATE];
+  tick->_onTick = &Application::onUpdateTick;
   tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
   tick->_maxTicksPerFrame = 5;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  tick = _loopTicks[LOOPTICK_DRAW];
-  tick->_onTick = &ApplicationState::onDraw;
+  tick = &_loopTicks[LOOPTICK_DRAW];
+  tick->_onTick = &Application::onDrawTick;
   tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  _isDrawingPeformanceStats = false;
+  std::stringstream ss {};
+  ss << _game->getName() << " version:" << _game->getVersionMajor() << "." << _game->getVersionMinor();
+  Renderer::Config rencfg {
+    std::string{ss.str()},
+    800,
+    600,   // TODO: load from config file? or something
+    2,
+    1
+  };
+  _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
+
+  _isSleeping = true;
+  _isDrawingPerformanceStats = false;
   _isDone = false;
+}
+
+void Application::shutdown()
+{
+
 }
 
 void Application::run()
@@ -598,6 +646,7 @@ void Application::run()
 
 void Application::mainloop()
 {
+  auto now0 = Clock_t::now();
   auto realDt = _realClock.update();
   auto gameDt = _gameClock.update(realDt);
   auto gameNow = _gameClock.getNow();
@@ -605,21 +654,67 @@ void Application::mainloop()
   // handle user input events
 
   for(int32 i = LOOPTICK_UPDATE; i < LOOPTICK_COUNT; ++i){
-    LoopTick* tick = _loopTicks[i];
+    LoopTick& tick = _loopTicks[i];
     tick._ticksAccumulated += tick._metronome.doTicks(gameNow);
     tick._ticksDoneThisFrame = 0;
     while(tick._ticksAccumulated > 0 && tick._ticksDoneThisFrame < tick._maxTicksPerFrame){
       ++tick._ticksDoneThisFrame;
       --tick._ticksAccumulated;
-      (_appStates[_activeAppState].get()->*tick.on_tick)(gameNow, tick._tickPeriod);
-
-      if(_isDrawingPeformanceStats && i == LOOPTICK_DRAW) 
-        drawPerformanceStats(realDt, gameDt);
+      (this->*tick._onTick)(gameNow, gameDt, realDt, tick._tickPeriod);
     }
     tick._tpsMeter.recordTicks(realDt, tick._ticksDoneThisFrame);
   }
+  
+  if(_isSleeping){
+    auto now1 {Clock_t::now()};
+    auto framePeriod {now1 - now0};
+    if(framePeriod < minFramePeriod)
+      std::this_thread::sleep_for(minFramePeriod - framePeriod); 
+  }
+}
 
-  // handle sleeping
+void Application::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
+{
+
+}
+
+void Application::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
+{
+  double now = static_cast<double>(gameNow.count()) / static_cast<double>(oneSecond.count());
+
+  switch(_activeAppState){
+    case ApplicationStates::MENU:
+      _menu->onUpdate(now, tickDt);
+      break;
+
+    case ApplicationStates::GAME:
+      _game->onUpdate(now, tickDt);
+      break;
+  }
+}
+
+void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
+{
+  // TODO - temp - clear the game viewport only in the game and menu states - only clear window
+  // when toggle perf stats
+  _renderer->clearWindow(colors::red);
+
+  double now = static_cast<double>(gameNow.count()) / static_cast<double>(oneSecond.count());
+
+  switch(_activeAppState){
+    case ApplicationStates::MENU:
+      _menu->onDraw(now, tickDt);
+      break;
+
+    case ApplicationStates::GAME:
+      _game->onDraw(now, tickDt);
+      break;
+  }
+
+  if(_isDrawingPerformanceStats)
+    drawPerformanceStats(realDt, gameDt);
+
+  _renderer->show();
 }
 
 //===============================================================================================//
@@ -628,24 +723,42 @@ void Application::mainloop()
 //                                                                                               //
 //===============================================================================================//
 
-class Game : public Application::GameState
+class Game final : public Application::GameState
 {
+  constexpr static int32 versionMajor {0};
+  constexpr static int32 versionMinor {1};
+
+  const static std::string name;
+
 public:
-  Game(Application* app) : Application::ApplicationState{app}{}
+  Game(Application* app) : Application::GameState{app}{}
+  ~Game() = default;
 
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
 
-  const std::string& getName() {return _name;}
-  int32 getVersionMajor() {return _versionMajor;}
-  int32 getVersionMinor() {return _versionMinor;}
+  const std::string& getName() {return name;}
+  int32 getVersionMajor() {return versionMajor;}
+  int32 getVersionMinor() {return versionMinor;}
 
 private:
-  std::string _name;
-  int32 _versionMajor;
-  int32 _versionMinor;
 };
+
+const std::string Game::name {"Space Invaders"};
+
+void Game::onUpdate(double now, float dt)
+{
+}
+
+void Game::onDraw(double now, float dt)
+{
+
+}
+
+void Game::onReset()
+{
+}
 
 //===============================================================================================//
 //                                                                                               //
@@ -653,17 +766,32 @@ private:
 //                                                                                               //
 //===============================================================================================//
 
-class Menu : public Application::ApplicationState
+class Menu final : public Application::ApplicationState
 {
 public:
   Menu(Application* app) : Application::ApplicationState{app}{}
+  ~Menu() = default;
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
 
 private:
-
 };
+
+void Menu::onUpdate(double now, float dt)
+{
+}
+
+void Menu::onDraw(double now, float dt)
+{
+  std::unique_ptr<Renderer>& renderer = _app->getRenderer();
+  renderer->blitBitmap(Vector2f{100.f, 100.f}, bitmaps::cannon0, colors::cyan);
+  renderer->blitBitmap(Vector2f{150.f, 100.f}, bitmaps::squid0, colors::green);
+}
+
+void Menu::onReset()
+{
+}
 
 //===============================================================================================//
 //                                                                                               //
@@ -671,12 +799,22 @@ private:
 //                                                                                               //
 //===============================================================================================//
 
+static Application* app {nullptr};
+
+void boot()
+{
+  ::app = new Application{};
+
+  std::unique_ptr<Application::ApplicationState> menu{new Menu{::app}};
+  std::unique_ptr<Application::GameState> game{new Game{::app}};
+
+  ::app->initialize(std::move(menu), std::move(game));
+}
+
 int main(int argc, char* arv[])
 {
-  Application app;
-
-  Menu* menu = new Menu(app);
-  Game* game = new Game(app);
-
-  app.initialize(std::unique_ptr{menu}, std::unique_ptr{game});
+  boot();
+  ::app->run();
+  ::app->shutdown();
+  delete ::app;
 }
