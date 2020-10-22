@@ -4,6 +4,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cassert>
+#include <string>
+#include <cmath>
+#include <vector>
 
 using int8 = std::int8_t;
 using int16 = std::int16_t;
@@ -120,7 +123,7 @@ namespace Colors
 
 //===============================================================================================//
 //                                                                                               //
-// ##>BITMAP                                                                                   //
+// ##>BITMAP                                                                                     //
 //                                                                                               //
 //===============================================================================================//
 
@@ -149,7 +152,7 @@ public:
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
   bool getBit(int32 row, int32 col);
-  void setBit(int32 row, int32 col, bool value);
+  void setBit(int32 row, int32 col, bool value, bool regen = true);
   int32 getWidth() {return _width;}
   int32 getHeight() {return _height;}
   const std::vector<uint8>& getBytes() const {return _bytes;}
@@ -159,8 +162,8 @@ private:
   void regenBytes();
 
 private:
-  std::vector<std::vector<bool>> _bits;
-  std::vector<uint8> _bytes;
+  std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
+  std::vector<uint8> _bytes;             // used for rendering
   int32 _width;
   int32 _height;
 };
@@ -246,11 +249,13 @@ bool Bitmap::getBit(int32 row, int32 col)
   return _bits[row][col];
 }
 
-void Bitmap::setBit(int32 row, int32 col, bool value)
+void Bitmap::setBit(int32 row, int32 col, bool value, bool regen)
 {
   assert(0 <= row && row < _width);
   assert(0 <= col && col < _height);
   _bits[row][col] = value;
+  if(regen)
+    regenBytes();
 }
 
 void Bitmap::print(std::ostream& out) const
@@ -263,6 +268,8 @@ void Bitmap::print(std::ostream& out) const
   }
   out << std::endl;
 }
+
+#include "bitmaps.h"
 
 //===============================================================================================//
 //                                                                                               //
@@ -329,6 +336,48 @@ Renderer::Renderer(Config config)
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config.openglVersionMinor);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   _viewport = iRect{0, 0, _config._windowWidth, _config._windowHeight};
+}
+
+void Renderer::setViewport(iRect viewport)
+{
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho(0.0, viewport.w, 0.0, viewport.h, -1.0, 1.0);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glViewport(viewport.x, viewport.y, viewport.w, viewport.h);
+  _viewport = viewport;
+}
+
+void Renderer::blitText(Vector2f position, const std::string& text, const Color3f& color)
+{
+}
+
+void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
+{
+  glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
+  glRasterPos2f(position.x, position.y);
+  glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());
+}
+
+void Renderer::clearWindow(const Color3f& color)
+{
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue());
+  glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void Renderer::clearViewport(const Color3f& color)
+{
+  glEnable(GL_SCISSOR_TEST);
+  glScissor(_viewport.x, _viewport.y, _viewport.w, _viewport.h);
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue());
+  glClear(GL_COLOR_BUFFER_BIT);
+  glDisable(GL_SCISSOR_TEST);
+}
+
+void Renderer::show()
+{
+  SDL_GL_SwapWindow(_window);
 }
 
 //===============================================================================================//
