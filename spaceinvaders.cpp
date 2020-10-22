@@ -104,7 +104,7 @@ private:
 };
 
 using Color3f = Color3<float, 0.f, 1.f>;
-using Colori = Color<int32, 0, UINT8_MAX>;
+using Color3i = Color3<int32, 0, UINT8_MAX>;
 
 namespace Colors
 {
@@ -116,6 +116,152 @@ namespace Colors
   Color3f cyan {0.f, 1.f, 1.f};
   Color3f magenta {1.f, 0.f, 1.f};
   Color3f yellow {1.f, 1.f, 0.f};
+}
+
+//===============================================================================================//
+//                                                                                               //
+// ##>BITMAP                                                                                   //
+//                                                                                               //
+//===============================================================================================//
+
+// Bits in the bitmap are accessible via a [row][col] position mapped to screen space like:
+//
+//          row                               
+//           ^
+//           |                              y
+//         7 | | | |█|█| | | |              ^
+//         6 | | |█|█|█|█| | |              |      screen-space
+//         5 | |█|█|█|█|█|█| |              |         axes
+//         4 |█|█| |█|█| |█|█|       ==>    |
+//         3 |█|█|█|█|█|█|█|█|              |
+//         2 | | |█| | |█| | |              +----------> x
+//         1 | |█| |█|█| |█| |
+//         0 |█| |█| | |█| |█|           i.e bit[0][0] is the bottom-left most bit.
+//           +-----------------> col
+//            0 1 2 3 4 5 6 7
+class Bitmap
+{
+public:
+  constexpr static int32 scaleMax {8};
+
+  Bitmap() : _width{0}, _height{0} {};
+  Bitmap(std::vector<std::string> bits, int32 scale = 1);
+  Bitmap(const Bitmap&) = default;
+  Bitmap& operator=(const Bitmap&) = default;
+  bool getBit(int32 row, int32 col);
+  void setBit(int32 row, int32 col, bool value);
+  int32 getWidth() {return _width;}
+  int32 getHeight() {return _height;}
+  const std::vector<uint8>& getBytes() const {return _bytes;}
+  void print(std::ostream& out) const;
+
+private:
+  void regenBytes();
+
+private:
+  std::vector<std::vector<bool>> _bits;
+  std::vector<uint8> _bytes;
+  int32 _width;
+  int32 _height;
+};
+
+Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
+{
+  assert(0 < scale && scale <= scaleMax);
+  for(auto& str : bits){
+    for(char c : str){
+      assert(c == '0' || c == '1');
+    }
+    while(str.back() == '0'){
+      str.pop_back();
+    }
+  }
+  if(scale > 1){
+    std::vector<std::string> sbits {};
+    std::string row {};
+    for(auto& str : bits){
+      for(auto c : str){
+        for(int i = 0; i < scale; ++i){
+          row.push_back(c);
+        }
+      }
+      row.shrink_to_fit();
+      for(int i = 0; i < scale; ++i){
+        sbits.push_back(row);
+      }
+      row.clear();
+    }
+    bits = std::move(sbits);
+  }
+  int32 w {0};
+  for(const auto& str : bits){
+    w = std::max(w, static_cast<int32>(str.length()));
+  }
+  _width = w;
+  _height = bits.size();
+  std::vector<bool> row {};
+  row.reserve(w);
+  for(const auto& str : bits){
+    row.clear();
+    for(char c : str){
+      bool bit = !(c == '0'); 
+      row.push_back(bit); 
+    }
+    int32 n {w - row.size()};
+    while(n-- > 0){
+      row.push_back(false);
+    }
+    row.shrink_to_fit();
+    _bits.push_back(row);
+  }
+  regenBytes();
+}
+
+void Bitmap::regenBytes()
+{
+  _bytes.clear();
+  uint8 byte {0};
+  int32 bitNo {0};
+  for(const auto& row : _bits){
+    for(bool bit : row){
+      if(bitNo > 7){
+        _bytes.push_back(byte);
+        byte = 0;
+        bitNo = 0;
+      }
+      if(bit) 
+        byte |= 0x01 << (7 - bitNo);
+      bitNo++;
+    }
+    _bytes.push_back(byte);
+    byte = 0;
+    bitNo = 0;
+  }
+}
+
+bool Bitmap::getBit(int32 row, int32 col)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  return _bits[row][col];
+}
+
+void Bitmap::setBit(int32 row, int32 col, bool value)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  _bits[row][col] = value;
+}
+
+void Bitmap::print(std::ostream& out) const
+{
+  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
+    for(bool bit : *iter){
+      out << bit ? '1' : '0';
+    }
+    out << '\n';
+  }
+  out << std::endl;
 }
 
 //===============================================================================================//
