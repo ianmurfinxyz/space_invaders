@@ -10,6 +10,7 @@
 #include <cmath>
 #include <vector>
 #include <memory>
+#include <fstream>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -126,6 +127,57 @@ namespace colors
   const Color3f cyan {0.f, 1.f, 1.f};
   const Color3f magenta {1.f, 0.f, 1.f};
   const Color3f yellow {1.f, 1.f, 0.f};
+}
+
+//===============================================================================================//
+//                                                                                               //
+// ##>LOG                                                                                        //
+//                                                                                               //
+//===============================================================================================//
+
+class Log
+{
+public:
+  static const char* filename {"log"};
+  static const char* delim {": "};
+  static const char* fatal {"fatal"};
+  static const char* error {"error"};
+  static const char* warning {"warning"};
+  static const char* info {"info"};
+  static const char* sdl2_init_failed {"failed to initialize SDL2"};
+  static const char* failed_to_open_log_file {"failed to open log file, redirecting to standard error"};
+  static const char* failed_to_open_config_file {"failed to open config file; using default configuration"};
+  static const char* malformed_config_line {"malformed line in config file; expected key=value pair; ignoring line"};
+  static const char* malformed_config_value {"malformed config property value; expected integer; ignoring line"};
+  static const char* unkown_config_key {"unrecognised config property key; ignoring line"};
+  static const char* set_config_property {"set config property"};
+
+public:
+  Log();
+  ~Log();
+  void log(const char* prefix, const char* error, const std::string& addendum = std::string{});
+
+private:
+  std::ofstream _log;
+};
+
+Log::Log()
+{
+  _log.open(filename, ios_base::trunc);
+  if(!_log)
+    log(error, failed_to_open_log_file);
+}
+
+Log::~Log()
+{
+  if(_log)
+    _log.close();
+}
+
+void log(const char* prefix, const char* error, const std::string* addendum = nullptr)
+{
+  ostream& o {_log ? _log : std::cerr}; 
+  o << prefix << DELIM << error << DELIM << addendum;
 }
 
 //===============================================================================================//
@@ -657,6 +709,44 @@ public:
     float _tickPeriod;
   };
 
+  class AppConfig
+  {
+  public:
+    static const char* filename {"appcfg"};
+    static const char comment {'#'};
+
+    enum PropertyID { PID_WND_WIDTH, PID_WND_HEIGHT, PID_FULLSCREEN, PID_COUNT };
+
+    struct Property
+    {
+      std::string _key;
+      int32 _value;
+      int32 _default;
+    };
+
+  public:
+    AppConfig()
+    {
+      _properties[PID_WND_WIDTH] = {"wndwidth", 800, 800};
+      _properties[PID_WND_HEIGHT] = {"wndheight", 600, 600};
+      _properties[PID_FULLSCREEN] = {"fullscreen", 0, 0};
+    }
+
+    PropertyID searchPid(const std::string& key)
+    {
+      for(int32 pid = PID_WND_WIDTH; pid < PID_COUNT; ++pid)
+        if(_properties[pid].key == key)
+          return pid;
+      return PID_COUNT;
+    }
+
+    void setProperty(PropertyID pid, int32 value){_properties[pid] = value;}
+    int32 getProperty(PropertyID pid){return _properties[pid]._value;}
+
+  private:
+    std::array<Property, PID_COUNT> _properties;
+  };
+
 public:
   Application() = default;
   ~Application() = default;
@@ -674,8 +764,11 @@ private:
   void drawPerformanceStats(Duration_t realDt, Duration_t gameDt);
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
+  void loadConfig();
 
 private:
+  AppConfig _appcfg;
+
   RealClock _realClock;
   GameClock _gameClock;
 
@@ -685,8 +778,9 @@ private:
 
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
 
-  std::unique_ptr<Renderer> _renderer;
+  std::unique_ptr<Log> _log;
   std::unique_ptr<Input> _input;
+  std::unique_ptr<Renderer> _renderer;
 
   bool _isSleeping;
   bool _isDrawingPerformanceStats;
@@ -695,8 +789,12 @@ private:
 
 void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::unique_ptr<GameState>&& game)
 {
+  _log = std::move(std::unique_ptr<Log>{new Log()});
+
+  loadConfig();
+
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initiaize SDL: %s", SDL_GetError());
+    _log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -717,6 +815,8 @@ void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::uniq
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
+  _input = std::move(std::unique_ptr<Input>{new Input()});
+
   std::stringstream ss {};
   ss << _game->getName() << " version:" << _game->getVersionMajor() << "." << _game->getVersionMinor();
   Renderer::Config rencfg {
@@ -727,8 +827,6 @@ void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::uniq
     1
   };
   _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
-
-  _input = std::move(std::unique_ptr<Input>{new Input()});
 
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
@@ -753,7 +851,15 @@ void Application::mainloop()
   auto gameDt = _gameClock.update(realDt);
   auto gameNow = _gameClock.getNow();
 
-  // handle user input events
+  SDL_Event event;
+  while(SDL_PollEvent(&event) != 0){
+    switch(event.type){
+      case SDL_KEYDOWN:
+      case SDL_KEYUP:
+        _input->onEvent(event);
+        break;
+    }
+  }
 
   for(int32 i = LOOPTICK_UPDATE; i < LOOPTICK_COUNT; ++i){
     LoopTick& tick = _loopTicks[i];
@@ -766,6 +872,8 @@ void Application::mainloop()
     }
     tick._tpsMeter.recordTicks(realDt, tick._ticksDoneThisFrame);
   }
+
+  _input->update();
   
   if(_isSleeping){
     auto now1 {Clock_t::now()};
@@ -817,6 +925,58 @@ void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t r
     drawPerformanceStats(realDt, gameDt);
 
   _renderer->show();
+}
+
+void Application::loadConfig()
+{
+  std::ifstream cfile {ApplicationConfig::filename};
+  if(!cfile){
+    _log.log(Log::error, Log::failed_to_open_config_file);
+    return;
+  }
+
+  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
+  auto isNotDigit = [](char ch){return !('0' <= ch && ch < '9');}
+
+  for(std::string line; std::getline(cfile, line);){
+    line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
+
+    if(line.front() == comment) 
+      continue;
+     
+    int32 count {0};
+    count = std::count(line.begin(), line.end(), seperator);
+    if(count != 1){
+      _log.log(Log::warning, Log::malformed_config_line, line);
+      continue;
+    }
+
+    std::size_t pos = line.find_first_of(seperator);
+    std::string key {line.substr(0, pos)};
+    std::string value {line.substr(pos + 1)};
+
+    if(key.empty() || value.empty()){
+      _log.log(Log::warning, Log::malformed_config_line, line);
+      continue; 
+    }
+     
+    AppConfig::PropertyID pid = _appcfg.searchPid(key);
+    if(pid == AppConfig::PropertyID::PID_COUNT){
+      _log.log(Log::warning, Log::unkown_config_key, key);
+      continue;
+    }
+    
+    count = std::count_if(value.begin(), value.end(), isNotDigit);
+    if(count != 0){
+      _log.log(Log::warning, Log::malformed_config_value, value);
+      continue;
+    }
+
+    _appcfg.setProperty(pid, std::stoi(value));
+    _log.log(Log::info, Log::set_config_property, line);
+  }
+
+  cfile.close();
 }
 
 //===============================================================================================//
