@@ -130,6 +130,104 @@ namespace colors
 
 //===============================================================================================//
 //                                                                                               //
+// ##>INPUT MANAGER                                                                              //
+//                                                                                               //
+//===============================================================================================//
+
+class Input
+{
+public:
+  enum KeyCode { 
+    KEY_a, KEY_b, KEY_c, KEY_d, KEY_e, KEY_f, KEY_g, KEY_h, KEY_i, KEY_j, KEY_k, KEY_l, KEY_m, 
+    KEY_n, KEY_o, KEY_p, KEY_q, KEY_r, KEY_s, KEY_t, KEY_u, KEY_v, KEY_w, KEY_x, KEY_y, KEY_z,
+    KEY_SPACE, KEY_ENTER, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_COUNT 
+  };
+
+  enum class KeyState { DOWN, PRESSED, UP, RELEASED };
+
+public:
+  Input();
+  ~Input() = default;
+  void onKeyEvent(const SDL_Event& event);
+  void update();
+  KeyState getKeyState(KeyCode key);
+
+private:
+  KeyCode convertSdlKeyCode(int sdlCode);
+
+private:
+  std::array<KeyState, KEY_COUNT> _keyStates;
+};
+
+Input::Input()
+{
+  for(auto& key : _keyStates)
+    key = KeyState::UP;
+}
+
+void onKeyEvent(const SDL_Event& event)
+{
+  assert(event.type == SDL_KEYDOWN || event.type == SDL_KEYUP);
+
+  KeyCode key = convertSdlKeyCode(event.key.keysym.sym);
+
+  if(key == KEY_COUNT) 
+    return;
+
+  if(event.type == SDL_KEYDOWN)
+    _keyStates[key] = KeyState::PRESSED;
+  else
+    _keyStates[key] = KeyState::RELEASED;
+}
+
+void Input::update()
+{
+  for(auto& state : _keyStates){
+    if(state == KeyState::PRESSED)
+      state = KeyState::DOWN;
+    else if(state == KeyState::RELEASED)
+      state = KeyState::UP;
+  }
+}
+
+Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
+{
+  switch(sdlKeyCode) {
+    case SDLK_a: return KEY_a;
+    case SDLK_b: return KEY_b;
+    case SDLK_c: return KEY_c;
+    case SDLK_d: return KEY_d;
+    case SDLK_e: return KEY_e;
+    case SDLK_f: return KEY_f;
+    case SDLK_g: return KEY_g;
+    case SDLK_h: return KEY_h;
+    case SDLK_i: return KEY_i;
+    case SDLK_j: return KEY_j;
+    case SDLK_k: return KEY_k;
+    case SDLK_l: return KEY_l;
+    case SDLK_m: return KEY_m;
+    case SDLK_n: return KEY_n;
+    case SDLK_o: return KEY_o;
+    case SDLK_p: return KEY_p;
+    case SDLK_q: return KEY_q;
+    case SDLK_r: return KEY_r;
+    case SDLK_s: return KEY_s;
+    case SDLK_t: return KEY_t;
+    case SDLK_v: return KEY_v;
+    case SDLK_w: return KEY_w;
+    case SDLK_x: return KEY_x;
+    case SDLK_y: return KEY_y;
+    case SDLK_LEFT: return KEY_LEFT;
+    case SDLK_RIGHT: return KEY_RIGHT;
+    case SDLK_DOWN: return KEY_DOWN;
+    case SDLK_UP: return KEY_UP;
+    case SDLK_SPACE: return KEY_SPACE;
+    default: return KEY_COUNT;
+  }
+}
+
+//===============================================================================================//
+//                                                                                               //
 // ##>BITMAP                                                                                     //
 //                                                                                               //
 //===============================================================================================//
@@ -569,6 +667,7 @@ public:
   void transitionToAppState(ApplicationStates newState);
 
   std::unique_ptr<Renderer>& getRenderer() {return _renderer;}
+  std::unique_ptr<Input>& getInput() {return _input;}
 
 private:
   void mainloop();
@@ -587,6 +686,7 @@ private:
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
 
   std::unique_ptr<Renderer> _renderer;
+  std::unique_ptr<Input> _input;
 
   bool _isSleeping;
   bool _isDrawingPerformanceStats;
@@ -627,6 +727,8 @@ void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::uniq
     1
   };
   _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
+
+  _input = std::move(std::unique_ptr<Input>{new Input()});
 
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
