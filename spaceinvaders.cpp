@@ -138,19 +138,19 @@ namespace colors
 class Log
 {
 public:
-  static const char* filename {"log"};
-  static const char* delim {": "};
-  static const char* fatal {"fatal"};
-  static const char* error {"error"};
-  static const char* warning {"warning"};
-  static const char* info {"info"};
-  static const char* sdl2_init_failed {"failed to initialize SDL2"};
-  static const char* failed_to_open_log_file {"failed to open log file, redirecting to standard error"};
-  static const char* failed_to_open_config_file {"failed to open config file; using default configuration"};
-  static const char* malformed_config_line {"malformed line in config file; expected key=value pair; ignoring line"};
-  static const char* malformed_config_value {"malformed config property value; expected integer; ignoring line"};
-  static const char* unkown_config_key {"unrecognised config property key; ignoring line"};
-  static const char* set_config_property {"set config property"};
+  static constexpr const char* filename {"log"};
+  static constexpr const char* delim {": "};
+  static constexpr const char* fatal {"fatal"};
+  static constexpr const char* error {"error"};
+  static constexpr const char* warning {"warning"};
+  static constexpr const char* info {"info"};
+  static constexpr const char* sdl2_init_failed {"failed to initialize SDL2"};
+  static constexpr const char* failed_to_open_log_file {"failed to open log file, redirecting to standard error"};
+  static constexpr const char* failed_to_open_config_file {"failed to open config file; using default configuration"};
+  static constexpr const char* malformed_config_line {"malformed line in config file; expected key=value pair; ignoring line"};
+  static constexpr const char* malformed_config_value {"malformed config property value; expected integer; ignoring line"};
+  static constexpr const char* unkown_config_key {"unrecognised config property key; ignoring line"};
+  static constexpr const char* set_config_property {"set config property"};
 
 public:
   Log();
@@ -158,26 +158,29 @@ public:
   void log(const char* prefix, const char* error, const std::string& addendum = std::string{});
 
 private:
-  std::ofstream _log;
+  std::ofstream _os;
 };
 
 Log::Log()
 {
-  _log.open(filename, ios_base::trunc);
-  if(!_log)
+  _os.open(filename, std::ios_base::trunc);
+  if(!_os)
     log(error, failed_to_open_log_file);
 }
 
 Log::~Log()
 {
-  if(_log)
-    _log.close();
+  if(_os)
+    _os.close();
 }
 
-void log(const char* prefix, const char* error, const std::string* addendum = nullptr)
+void Log::log(const char* prefix, const char* error, const std::string& addendum)
 {
-  ostream& o {_log ? _log : std::cerr}; 
-  o << prefix << DELIM << error << DELIM << addendum;
+  std::ostream& o {_os ? _os : std::cerr}; 
+  o << prefix << delim << error;
+  if(!addendum.empty())
+    o << delim << addendum;
+  o << std::endl;
 }
 
 //===============================================================================================//
@@ -217,7 +220,7 @@ Input::Input()
     key = KeyState::UP;
 }
 
-void onKeyEvent(const SDL_Event& event)
+void Input::onKeyEvent(const SDL_Event& event)
 {
   assert(event.type == SDL_KEYDOWN || event.type == SDL_KEYUP);
 
@@ -244,7 +247,7 @@ void Input::update()
 
 Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
 {
-  switch(sdlKeyCode) {
+  switch(sdlCode) {
     case SDLK_a: return KEY_a;
     case SDLK_b: return KEY_b;
     case SDLK_c: return KEY_c;
@@ -712,10 +715,11 @@ public:
   class AppConfig
   {
   public:
-    static const char* filename {"appcfg"};
-    static const char comment {'#'};
+    static constexpr const char* filename {"appcfg"};
+    static constexpr const char comment {'#'};
+    static constexpr const char seperator {'='};
 
-    enum PropertyID { PID_WND_WIDTH, PID_WND_HEIGHT, PID_FULLSCREEN, PID_COUNT };
+    enum PID : int32 { PID_WND_WIDTH, PID_WND_HEIGHT, PID_FULLSCREEN, PID_COUNT };
 
     struct Property
     {
@@ -732,16 +736,16 @@ public:
       _properties[PID_FULLSCREEN] = {"fullscreen", 0, 0};
     }
 
-    PropertyID searchPid(const std::string& key)
+    PID searchPid(const std::string& key)
     {
       for(int32 pid = PID_WND_WIDTH; pid < PID_COUNT; ++pid)
-        if(_properties[pid].key == key)
-          return pid;
+        if(_properties[pid]._key == key)
+          return static_cast<PID>(pid);
       return PID_COUNT;
     }
 
-    void setProperty(PropertyID pid, int32 value){_properties[pid] = value;}
-    int32 getProperty(PropertyID pid){return _properties[pid]._value;}
+    void setProperty(PID pid, int32 value){_properties[pid]._value = value;}
+    int32 getProperty(PID pid){return _properties[pid]._value;}
 
   private:
     std::array<Property, PID_COUNT> _properties;
@@ -854,9 +858,12 @@ void Application::mainloop()
   SDL_Event event;
   while(SDL_PollEvent(&event) != 0){
     switch(event.type){
+      case SDL_QUIT:
+        _isDone = true;
+        return;
       case SDL_KEYDOWN:
       case SDL_KEYUP:
-        _input->onEvent(event);
+        _input->onKeyEvent(event);
         break;
     }
   }
@@ -929,51 +936,51 @@ void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t r
 
 void Application::loadConfig()
 {
-  std::ifstream cfile {ApplicationConfig::filename};
+  std::ifstream cfile {AppConfig::filename};
   if(!cfile){
-    _log.log(Log::error, Log::failed_to_open_config_file);
+    _log->log(Log::error, Log::failed_to_open_config_file);
     return;
   }
 
   auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
-  auto isNotDigit = [](char ch){return !('0' <= ch && ch < '9');}
+  auto isNotDigit = [](char ch){return !('0' <= ch && ch <= '9');};
 
   for(std::string line; std::getline(cfile, line);){
     line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
 
-    if(line.front() == comment) 
+    if(line.front() == AppConfig::comment) 
       continue;
      
     int32 count {0};
-    count = std::count(line.begin(), line.end(), seperator);
+    count = std::count(line.begin(), line.end(), AppConfig::seperator);
     if(count != 1){
-      _log.log(Log::warning, Log::malformed_config_line, line);
+      _log->log(Log::warning, Log::malformed_config_line, line);
       continue;
     }
 
-    std::size_t pos = line.find_first_of(seperator);
+    std::size_t pos = line.find_first_of(AppConfig::seperator);
     std::string key {line.substr(0, pos)};
     std::string value {line.substr(pos + 1)};
 
     if(key.empty() || value.empty()){
-      _log.log(Log::warning, Log::malformed_config_line, line);
+      _log->log(Log::warning, Log::malformed_config_line, line);
       continue; 
     }
      
-    AppConfig::PropertyID pid = _appcfg.searchPid(key);
-    if(pid == AppConfig::PropertyID::PID_COUNT){
-      _log.log(Log::warning, Log::unkown_config_key, key);
+    AppConfig::PID pid = _appcfg.searchPid(key);
+    if(pid == AppConfig::PID_COUNT){
+      _log->log(Log::warning, Log::unkown_config_key, key);
       continue;
     }
     
     count = std::count_if(value.begin(), value.end(), isNotDigit);
     if(count != 0){
-      _log.log(Log::warning, Log::malformed_config_value, value);
+      _log->log(Log::warning, Log::malformed_config_value, value);
       continue;
     }
 
     _appcfg.setProperty(pid, std::stoi(value));
-    _log.log(Log::info, Log::set_config_property, line);
+    _log->log(Log::info, Log::set_config_property, line);
   }
 
   cfile.close();
