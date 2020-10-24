@@ -139,18 +139,24 @@ class Log
 {
 public:
   static constexpr const char* filename {"log"};
-  static constexpr const char* delim {": "};
+  static constexpr const char* delim {" : "};
   static constexpr const char* fatal {"fatal"};
   static constexpr const char* error {"error"};
   static constexpr const char* warning {"warning"};
   static constexpr const char* info {"info"};
   static constexpr const char* sdl2_init_failed {"failed to initialize SDL2"};
-  static constexpr const char* failed_to_open_log_file {"failed to open log file, redirecting to standard error"};
-  static constexpr const char* failed_to_open_config_file {"failed to open config file; using default configuration"};
+  static constexpr const char* failed_to_create_window {"failed to create sdl window"};
+  static constexpr const char* failed_to_create_opengl_context {"failed to create opengl context"};
+  static constexpr const char* failed_to_open_log_file {"failed to open log file : redirecting to standard error"};
+  static constexpr const char* failed_to_open_config_file {"failed to open config file : using default configuration"};
+  static constexpr const char* opengl_set_attribute_fail {"failed to set opengl attribute"};
   static constexpr const char* malformed_config_line {"malformed line in config file; expected key=value pair; ignoring line"};
-  static constexpr const char* malformed_config_value {"malformed config property value; expected integer; ignoring line"};
-  static constexpr const char* unkown_config_key {"unrecognised config property key; ignoring line"};
+  static constexpr const char* malformed_config_value {"malformed config property value : integer expected"};
+  static constexpr const char* unkown_config_key {"unrecognised config property key"};
   static constexpr const char* set_config_property {"set config property"};
+  static constexpr const char* failed_to_open_asset_manifest {"failed to open assets manifest"};
+  static constexpr const char* missing_asset {"missing asset"};
+  static constexpr const char* malformed_bitmap {"malformed bitmap : expected 1's and 0's"};
 
 public:
   Log();
@@ -182,6 +188,8 @@ void Log::log(const char* prefix, const char* error, const std::string& addendum
     o << delim << addendum;
   o << std::endl;
 }
+
+static Log log {};
 
 //===============================================================================================//
 //                                                                                               //
@@ -307,10 +315,11 @@ class Bitmap
 public:
   constexpr static int32 scaleMax {8};
 
-  Bitmap() : _width{0}, _height{0} {};
   Bitmap(std::vector<std::string> bits, int32 scale = 1);
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
+  Bitmap(const Bitmap&&) = default;
+  Bitmap& operator=(const Bitmap&&) = default;
   bool getBit(int32 row, int32 col);
   void setBit(int32 row, int32 col, bool value, bool regen = true);
   int32 getWidth() const {return _width;}
@@ -433,6 +442,141 @@ void Bitmap::print(std::ostream& out) const
 
 //===============================================================================================//
 //                                                                                               //
+// ##>FONT                                                                                       //
+//                                                                                               //
+//===============================================================================================//
+
+class Font
+{
+public:
+  struct Glyph
+  {
+    Bitmap _bitmap;
+    int32 _asciiCode;
+    int32 _offsetX;
+    int32 _advance;
+    int32 _width;
+    int32 _height;
+  };
+
+  struct Meta
+  {
+    int32 _lineSpace;
+    int32 _wordSpace;
+    int32 _glyphSpace;
+    int32 _size;
+  };
+
+public:
+  Font(const std::vector<Glyph>& glyphs, Meta meta);
+  Font(const Font&) = default;
+  Font& operator=(const Font&) = default;
+  int32 getLineSpace() const {return _meta._lineSpace;}
+  int32 getWordSpace() const {return _meta._wordSpace;}
+  int32 getGlyphSpace() const {return _meta._glyphSpace;}
+  int32 getSize() const {return _meta._size;}
+
+  const Glyph& getGlyph(char c) const
+  {
+    assert(' ' <= c && c <= '~');
+    return _glyphs[c - ' '];
+  }
+
+private:
+  std::vector<Glyph> _glyphs;
+  Meta _meta;
+};
+
+Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
+  _glyphs{glyphs}, _meta{meta}
+{
+  static constexpr int checkSum {7505}; // sum of all ascii codes from 32 to 126 inclusive.
+
+  int sum{0};
+  for(const auto& g : _glyphs)
+    sum += g._asciiCode;
+  assert(sum == checkSum);
+
+  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0.asciiCode < g1.asciiCode;};
+  std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
+}
+
+//===============================================================================================//
+//                                                                                               //
+// ##>ASSETS                                                                                     //
+//                                                                                               //
+//===============================================================================================//
+
+class Assets
+{
+public:
+  static constexpr const char* bitmaps_path {"assets/bitmaps/"};
+  static constexpr const char* bitmaps_extension {".bitmap"};
+
+public:
+  Assets(int32 scale) = default;
+  ~Assets() = default;
+  void loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
+  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32>& scales);
+  const Bitmap& getBitmap(const std::string& key) const {return _bitmaps[key];}
+  const Font& getFont(std::string key, int32 scale) const;
+
+private:
+  std::unordered_map<std::string, Bitmap> _bitmaps;
+  std::unordered_map<std::string, std::pair<Font, int32>> _fonts;
+};
+
+void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
+{
+  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
+  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+
+  bool fail {false};
+  std::string path {};
+  for(const auto& key : manifest){
+    if(_bitmaps.find(key) == _bitmaps.end())
+      continue;
+
+    path.clear();
+    path += bitmaps_path;
+    path += key;
+    path += bitmaps_extension;
+    std::ifstream bitmap {path};
+    if(!bitmap){
+      ::log.log(Log::fatal, Log::missing_asset, path);
+      fail = true;
+      continue;
+    }
+
+    bool malformed {false};
+    std::vector<std::string> rows {};
+    for(std::string row; std::getline(bitmap, row);){
+      row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
+      int32 count = std::count(row.begin(), row.end(), isBinary);
+      if(count != row.length()){
+        ::log.log(Log::fatal, Log::malformed_bitmap, path);
+        malformed = true;
+        break;
+      }
+      rows.push_back(row);
+    }
+    if(malformed) continue;
+    std::reverse(rows.begin(), rows.end()); 
+    
+    _bitmaps.emplace(std::make_pair(key, Bitmap{rows, scale}));
+  }
+
+  if(fail)
+    exit(EXIT_FAILURE);
+}
+
+const Font& Assets::getFont(std::string key, int32 scale) const
+{
+
+}
+
+//===============================================================================================//
+//                                                                                               //
 // ##>RENDERER                                                                                   //
 //                                                                                               //
 //===============================================================================================//
@@ -445,8 +589,9 @@ public:
     std::string _windowTitle;
     int32 _windowWidth;
     int32 _windowHeight;
-    int32 openglVersionMajor;
-    int32 openglVersionMinor;
+    int32 _openglVersionMajor;
+    int32 _openglVersionMinor;
+    bool _fullscreen;
   };
   
 public:
@@ -460,6 +605,7 @@ public:
   void clearWindow(const Color3f& color);
   void clearViewport(const Color3f& color);
   void show();
+  Vector2i getWindowSize() const;
 
 private:
   SDL_Window* _window;
@@ -470,7 +616,9 @@ private:
 
 Renderer::Renderer(const Config& config)
 {
-  _config = config;
+  uint32 flags = SDL_WINDOW_OPENGL;
+  if(config._fullscreen)
+    flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
   _window = SDL_CreateWindow(
       _config._windowTitle.c_str(), 
@@ -478,25 +626,32 @@ Renderer::Renderer(const Config& config)
       SDL_WINDOWPOS_UNDEFINED,
       _config._windowWidth,
       _config._windowHeight,
-      SDL_WINDOW_OPENGL
+      flags
   );
 
   if(_window == nullptr){
-    // TODO: log error
+    ::log.log(Log::fatal, Log.failed_to_create_window, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   _glContext = SDL_GL_CreateContext(_window);
   if(_glContext == nullptr){
-    // TODO: log error
+    ::log.log(Log::fatal, Log.failed_to_create_opengl_context, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config.openglVersionMajor);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config.openglVersionMinor);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
+    ::log.log(Log::fatal, Log.opengl_set_attribute_fail, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
+    ::log.log(Log::fatal, Log.opengl_set_attribute_fail, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
 
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   setViewport(iRect{0, 0, _config._windowWidth, _config._windowHeight});
+  _config = config;
 }
 
 Renderer::~Renderer()
@@ -545,6 +700,13 @@ void Renderer::clearViewport(const Color3f& color)
 void Renderer::show()
 {
   SDL_GL_SwapWindow(_window);
+}
+
+Vector2i getWindowSize() const
+{
+  Vector2i size;
+  SDL_GL_GetDrawableSize(_window, &size.x, &size.y);
+  return size;
 }
 
 //===============================================================================================//
@@ -671,29 +833,31 @@ public:
     int32 _tps;
   };
 
-  enum class ApplicationStates {MENU, GAME};
-
   class ApplicationState
   {
   public:
-    ApplicationState(Application* app) : _app(app) {}
+    ApplicationState(Application* app) : _app(app), _viewport{0, 0, 0, 0} {}
     virtual ~ApplicationState() = default;
+    virtual void initialize(int32 windowWidth, int32 windowHeight) = 0;
     virtual void onUpdate(double now, float dt) = 0;
     virtual void onDraw(double now, float dt) = 0;
     virtual void onReset() = 0;
+    virtual const std::string& getApplicationName() = 0;
+    virtual const std::string& getStateName() = 0;
+    virtual int32 getVersionMajor() = 0;
+    virtual int32 getVersionMinor() = 0;
+
+    void updateViewport(int32 stateWidth, int32 stateHeight, int32 windowWidth, int32 windowHeight)
+    {
+      _viewport._x = (windowWidth - stateWidth) / 2;
+      _viewport._y = (windowHeight - stateHeight) / 2;
+      _viewport._w = stateWidth;
+      _viewport._h = stateHeight;
+    }
 
   protected:
     Application* _app;
-  };
-
-  class GameState : public ApplicationState
-  {
-  public:
-    GameState(Application* app) : ApplicationState{app}{}
-    virtual ~GameState() = default;
-    virtual const std::string& getName() = 0;
-    virtual int32 getVersionMajor() = 0;
-    virtual int32 getVersionMinor() = 0;
+    iRect _viewport;
   };
 
   enum LoopTicks {LOOPTICK_UPDATE, LOOPTICK_DRAW, LOOPTICK_COUNT};
@@ -719,36 +883,77 @@ public:
     static constexpr const char comment {'#'};
     static constexpr const char seperator {'='};
 
-    enum PID : int32 { PID_WND_WIDTH, PID_WND_HEIGHT, PID_FULLSCREEN, PID_COUNT };
-
-    struct Property
-    {
-      std::string _key;
-      int32 _value;
-      int32 _default;
-    };
+    static constexpr const char* key_window_width {"window_width"};
+    static constexpr const char* key_window_height {"window_height"};
+    static constexpr const char* key_fullscreen {"fullscreen"};
+    static constexpr const char* key_opengl_major {"opengl_major"};
+    static constexpr const char* key_opengl_minor {"opengl_minor"};
 
   public:
     AppConfig()
     {
-      _properties[PID_WND_WIDTH] = {"wndwidth", 800, 800};
-      _properties[PID_WND_HEIGHT] = {"wndheight", 600, 600};
-      _properties[PID_FULLSCREEN] = {"fullscreen", 0, 0};
+      _properties.insert(std::make_pair{key_window_width, 800});
+      _properties.insert(std::make_pair{key_window_height, 600});
+      _properties.insert(std::make_pair{key_fullscreen, 0});
+      _properties.insert(std::make_pair{key_opengl_major, 2});
+      _properties.insert(std::make_pair{key_opengl_minor, 1});
     }
 
-    PID searchPid(const std::string& key)
+    void load()
     {
-      for(int32 pid = PID_WND_WIDTH; pid < PID_COUNT; ++pid)
-        if(_properties[pid]._key == key)
-          return static_cast<PID>(pid);
-      return PID_COUNT;
+      std::ifstream config {filename};
+      if(!config){
+        ::log->log(Log::error, Log::failed_to_open_config_file, std::string{filename});
+        return;
+      }
+    
+      auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
+      auto isDigit = [](unsigned char c){return std::isdigit(c);};
+    
+      for(std::string line; std::getline(config, line);){
+        line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
+    
+        if(line.front() == comment) 
+          continue;
+         
+        int32 count {0};
+        count = std::count(line.begin(), line.end(), seperator);
+        if(count != 1){
+          ::log->log(Log::warning, Log::malformed_config_line, line);
+          continue;
+        }
+    
+        std::size_t pos = line.find_first_of(seperator);
+        std::string key {line.substr(0, pos)};
+        std::string value {line.substr(pos + 1)};
+    
+        if(key.empty() || value.empty()){
+          ::log->log(Log::warning, Log::malformed_config_line, line);
+          continue; 
+        }
+
+        auto iter = _properties.find();
+        if(iter == _properties.end()){
+          ::log->log(Log::warning, Log::unkown_config_key, key);
+          continue;
+        }
+         
+        count = std::count_if(value.begin(), value.end(), isDigit);
+        if(count != value.length()){
+          ::log->log(Log::warning, Log::malformed_config_value, value);
+          continue;
+        }
+
+        iter->second = std::stoi(value);
+        ::log->log(Log::info, Log::set_config_property, line);
+      }
     }
 
-    void setProperty(PID pid, int32 value){_properties[pid]._value = value;}
-    int32 getProperty(PID pid){return _properties[pid]._value;}
+    void setProperty(const char* key, int32 value){_properties[key]._value = value;}
+    int32 getProperty(const char* key){return _properties[key]._value;}
 
   private:
-    std::array<Property, PID_COUNT> _properties;
+    std::unordered_map<const char*, int32> _properties;
   };
 
 public:
@@ -771,18 +976,22 @@ private:
   void loadConfig();
 
 private:
-  AppConfig _appcfg;
+  AppConfig _appconfig;
 
   RealClock _realClock;
   GameClock _gameClock;
 
-  ApplicationStates _activeAppState;
-  std::unique_ptr<ApplicationState> _menu;
-  std::unique_ptr<GameState> _game;
+  //
+  //
+  //
+  // TODO - implement this!
+  //
+  //
+  std::unique_ptr<ApplicationState>* _activeState;
+  std::vector<std::unique_ptr<ApplicationState>> _states;
 
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
 
-  std::unique_ptr<Log> _log;
   std::unique_ptr<Input> _input;
   std::unique_ptr<Renderer> _renderer;
 
@@ -791,14 +1000,12 @@ private:
   bool _isDone;
 };
 
-void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::unique_ptr<GameState>&& game)
+void Application::initialize(std::vector<std::unique_ptr<ApplicationState>>&& states)
 {
-  _log = std::move(std::unique_ptr<Log>{new Log()});
-
-  loadConfig();
+  _appconfig.load();
 
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
-    _log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
+    ::log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -825,12 +1032,17 @@ void Application::initialize(std::unique_ptr<ApplicationState>&& menu, std::uniq
   ss << _game->getName() << " version:" << _game->getVersionMajor() << "." << _game->getVersionMinor();
   Renderer::Config rencfg {
     std::string{ss.str()},
-    800,
-    600,   // TODO: load from config file? or something
-    2,
-    1
+    _appconfig.getProperty(AppConfig::key_window_width),
+    _appconfig.getProperty(AppConfig::key_window_height),
+    _appconfig.getProperty(AppConfig::key_opengl_major),
+    _appconfig.getProperty(AppConfig::key_opengl_minor),
+    _appconfig.getProperty(AppConfig::fullscreen),
   };
   _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
+
+  Vector2i windowSize = _renderer->getWindowSize();
+  _menu->initialize(windowSize._x, windowSize._y);
+  _game->initialize(windowSize._x, windowSize._y);
 
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
@@ -934,57 +1146,33 @@ void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t r
   _renderer->show();
 }
 
-void Application::loadConfig()
+//===============================================================================================//
+//                                                                                               //
+// ##>SPACE INVADERS STATE                                                                       //
+//                                                                                               //
+//===============================================================================================//
+
+class SpaceInvaders : public Application::ApplicationState
 {
-  std::ifstream cfile {AppConfig::filename};
-  if(!cfile){
-    _log->log(Log::error, Log::failed_to_open_config_file);
-    return;
+public:
+  static constexpr char* app_name {"space invaders"};
+  static constexpr int32 version_major {0};
+  static constexpr int32 version_minor {1};
+
+public:
+  SpaceInvaders(Application* app) : Application {app}{}
+
+  virtual void initialize(int32 windowWidth, int32 windowHeight)
+  {
+    // pass the asset manifest to the assets instance. - will have to access the 
+    // application pointer which it should already have as it inherits from app state.
+    _app->getAssets()->load(/*manifest vector*/);
   }
 
-  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
-  auto isNotDigit = [](char ch){return !('0' <= ch && ch <= '9');};
-
-  for(std::string line; std::getline(cfile, line);){
-    line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
-
-    if(line.front() == AppConfig::comment) 
-      continue;
-     
-    int32 count {0};
-    count = std::count(line.begin(), line.end(), AppConfig::seperator);
-    if(count != 1){
-      _log->log(Log::warning, Log::malformed_config_line, line);
-      continue;
-    }
-
-    std::size_t pos = line.find_first_of(AppConfig::seperator);
-    std::string key {line.substr(0, pos)};
-    std::string value {line.substr(pos + 1)};
-
-    if(key.empty() || value.empty()){
-      _log->log(Log::warning, Log::malformed_config_line, line);
-      continue; 
-    }
-     
-    AppConfig::PID pid = _appcfg.searchPid(key);
-    if(pid == AppConfig::PID_COUNT){
-      _log->log(Log::warning, Log::unkown_config_key, key);
-      continue;
-    }
-    
-    count = std::count_if(value.begin(), value.end(), isNotDigit);
-    if(count != 0){
-      _log->log(Log::warning, Log::malformed_config_value, value);
-      continue;
-    }
-
-    _appcfg.setProperty(pid, std::stoi(value));
-    _log->log(Log::info, Log::set_config_property, line);
-  }
-
-  cfile.close();
-}
+  final const std::string& getApplicationName() {return app_name;}
+  final int32 getVersionMajor() const {return version_major;}
+  final int32 getVersionMinor() const {return version_minor;}
+};
 
 //===============================================================================================//
 //                                                                                               //
@@ -992,24 +1180,15 @@ void Application::loadConfig()
 //                                                                                               //
 //===============================================================================================//
 
-class Game final : public Application::GameState
+class Game final : public SpaceInvaders
 {
-  constexpr static int32 versionMajor {0};
-  constexpr static int32 versionMinor {1};
-
-  const static std::string name;
-
 public:
-  Game(Application* app) : Application::GameState{app}{}
+  Game(Application* app) : SpaceInvaders{app}{}
   ~Game() = default;
 
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
-
-  const std::string& getName() {return name;}
-  int32 getVersionMajor() {return versionMajor;}
-  int32 getVersionMinor() {return versionMinor;}
 
 private:
 };
@@ -1035,10 +1214,10 @@ void Game::onReset()
 //                                                                                               //
 //===============================================================================================//
 
-class Menu final : public Application::ApplicationState
+class Menu final : public SpaceInvaders
 {
 public:
-  Menu(Application* app) : Application::ApplicationState{app}{}
+  Menu(Application* app) : SpaceInvaders{app}{}
   ~Menu() = default;
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
