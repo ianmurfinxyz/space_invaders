@@ -157,6 +157,7 @@ public:
   static constexpr const char* failed_to_open_asset_manifest {"failed to open assets manifest"};
   static constexpr const char* missing_asset {"missing asset"};
   static constexpr const char* malformed_bitmap {"malformed bitmap : expected 1's and 0's"};
+  static constexpr const char* failed_to_initialize_app_state {"failed to initialize app state"};
 
 public:
   Log();
@@ -836,28 +837,21 @@ public:
   class ApplicationState
   {
   public:
-    ApplicationState(Application* app) : _app(app), _viewport{0, 0, 0, 0} {}
+    ApplicationState(Application* app) : _app(app) {}
     virtual ~ApplicationState() = default;
-    virtual void initialize(int32 windowWidth, int32 windowHeight) = 0;
+    virtual bool initialize(int32 windowWidth, int32 windowHeight) = 0;
+    virtual void onWindowResize(int32 windowWidth, int32 windowHeight) = 0;
     virtual void onUpdate(double now, float dt) = 0;
     virtual void onDraw(double now, float dt) = 0;
     virtual void onReset() = 0;
-    virtual const std::string& getApplicationName() = 0;
-    virtual const std::string& getStateName() = 0;
+    virtual const char* getApplicationName() = 0;
+    virtual const char* getBootStateName() = 0;
+    virtual const char* getStateName() = 0;
     virtual int32 getVersionMajor() = 0;
     virtual int32 getVersionMinor() = 0;
 
-    void updateViewport(int32 stateWidth, int32 stateHeight, int32 windowWidth, int32 windowHeight)
-    {
-      _viewport._x = (windowWidth - stateWidth) / 2;
-      _viewport._y = (windowHeight - stateHeight) / 2;
-      _viewport._w = stateWidth;
-      _viewport._h = stateHeight;
-    }
-
   protected:
     Application* _app;
-    iRect _viewport;
   };
 
   enum LoopTicks {LOOPTICK_UPDATE, LOOPTICK_DRAW, LOOPTICK_COUNT};
@@ -959,11 +953,11 @@ public:
 public:
   Application() = default;
   ~Application() = default;
-  void initialize(std::unique_ptr<ApplicationState>&& menu, std::unique_ptr<GameState>&& game);
+  void initialize(std::vector<std::unique_ptr<ApplicationState>>&& states);
   void shutdown();
   void run();
 
-  void transitionToAppState(ApplicationStates newState);
+  void transitionToAppState(const char* stateName);
 
   std::unique_ptr<Renderer>& getRenderer() {return _renderer;}
   std::unique_ptr<Input>& getInput() {return _input;}
@@ -975,20 +969,16 @@ private:
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void loadConfig();
 
+  inline double durationToSeconds(Duration_t d);
+
 private:
   AppConfig _appconfig;
 
   RealClock _realClock;
   GameClock _gameClock;
 
-  //
-  //
-  //
-  // TODO - implement this!
-  //
-  //
   std::unique_ptr<ApplicationState>* _activeState;
-  std::vector<std::unique_ptr<ApplicationState>> _states;
+  std::unordered_map<const char*, std::unique_ptr<ApplicationState>> _states;
 
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
 
@@ -1008,11 +998,6 @@ void Application::initialize(std::vector<std::unique_ptr<ApplicationState>>&& st
     ::log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
-
-  _menu = std::move(menu);
-  _game = std::move(game);
-
-  _activeAppState = ApplicationStates::MENU;
 
   LoopTick* tick = &_loopTicks[LOOPTICK_UPDATE];
   tick->_onTick = &Application::onUpdateTick;
@@ -1036,13 +1021,25 @@ void Application::initialize(std::vector<std::unique_ptr<ApplicationState>>&& st
     _appconfig.getProperty(AppConfig::key_window_height),
     _appconfig.getProperty(AppConfig::key_opengl_major),
     _appconfig.getProperty(AppConfig::key_opengl_minor),
-    _appconfig.getProperty(AppConfig::fullscreen),
+    _appconfig.getProperty(AppConfig::key_fullscreen),
   };
   _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
 
   Vector2i windowSize = _renderer->getWindowSize();
-  _menu->initialize(windowSize._x, windowSize._y);
-  _game->initialize(windowSize._x, windowSize._y);
+
+  assert(states.size() > 0);
+
+  const char* bootName = states[0].getBootStateName();
+  bool fail {false};
+  for(auto& state : states){
+    fail = state->initialize(windowSize._x, windowSize._y);
+    if(fail){
+      ::log->log(Log::fatal, Log::failed_to_initialize_app_state, std::string{state->getStateName()});
+      exit(EXIT_FAILURE);
+    }
+    _states.emplace(std::make_pair(state->getName(), std::move(state)));
+  }
+  _activeState = _states[bootName];
 
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
@@ -1109,17 +1106,8 @@ void Application::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
 
 void Application::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
 {
-  double now = static_cast<double>(gameNow.count()) / static_cast<double>(oneSecond.count());
-
-  switch(_activeAppState){
-    case ApplicationStates::MENU:
-      _menu->onUpdate(now, tickDt);
-      break;
-
-    case ApplicationStates::GAME:
-      _game->onUpdate(now, tickDt);
-      break;
-  }
+  double now = durationToSeconds(gameNow);
+  (*_activeState)->onUpdate(now, tickDt);
 }
 
 void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
@@ -1127,23 +1115,16 @@ void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t r
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
   _renderer->clearWindow(colors::red);
-
-  double now = static_cast<double>(gameNow.count()) / static_cast<double>(oneSecond.count());
-
-  switch(_activeAppState){
-    case ApplicationStates::MENU:
-      _menu->onDraw(now, tickDt);
-      break;
-
-    case ApplicationStates::GAME:
-      _game->onDraw(now, tickDt);
-      break;
-  }
-
+  double now = durationToSeconds(gameNow);
+  (*_activeState)->onUpdate(now, tickDt);
   if(_isDrawingPerformanceStats)
     drawPerformanceStats(realDt, gameDt);
-
   _renderer->show();
+}
+
+double Application::durationToSeconds(Duration_t d)
+{
+  return static_cast<double>(d.count()) / static_cast<double>(oneSecond.count());
 }
 
 //===============================================================================================//
@@ -1152,27 +1133,59 @@ void Application::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t r
 //                                                                                               //
 //===============================================================================================//
 
+// implement app pausing so can pause the game if window is too small - put in app and provide
+// functions for the states to use to pause and upause - pause can simply stop updates for the
+// update tick
+
+
 class SpaceInvaders : public Application::ApplicationState
 {
 public:
-  static constexpr char* app_name {"space invaders"};
+  static constexpr const char* app_name {"space invaders"};
+  static constexpr const char* boot_name {"menu"};
   static constexpr int32 version_major {0};
   static constexpr int32 version_minor {1};
+  static constexpr Vector2i baseWorldSize {300, 300};
 
 public:
   SpaceInvaders(Application* app) : Application {app}{}
-
-  virtual void initialize(int32 windowWidth, int32 windowHeight)
-  {
-    // pass the asset manifest to the assets instance. - will have to access the 
-    // application pointer which it should already have as it inherits from app state.
-    _app->getAssets()->load(/*manifest vector*/);
-  }
-
   final const std::string& getApplicationName() {return app_name;}
   final int32 getVersionMajor() const {return version_major;}
   final int32 getVersionMinor() const {return version_minor;}
+  final const char* getBootStateName() {return boot_name;}
+
+  bool initialize(int32 windowWidth, int32 windowHeight)
+  {
+    // calc world size and scale
+    // set window too small if too small
+  }
+
+  void onWindowResize(int32 windowWidth, int32 windowHeight)
+  {
+    // check if window too small and set flag accordingly - and check if window no longer too
+    // small and set flag accordingly
+
+    _viewport._x = (windowWidth - worldWidth) / 2;
+    _viewport._y = (windowHeight - worldHeight) / 2;
+    _viewport._w = worldWidth;
+    _viewport._h = worldHeight;
+  }
+
+protected:
+  void drawWindowTooSmall()
+  {
+
+  }
+
+protected:
+  static iRect _viewport;
+  static int32 _worldWidth;
+  static int32 _worldHeight;
+  static int32 _worldScale;
+  static bool _isWindowTooSmall;
 };
+
+// define state members here
 
 //===============================================================================================//
 //                                                                                               //
@@ -1183,17 +1196,27 @@ public:
 class Game final : public SpaceInvaders
 {
 public:
+  static constexpr const char* game_name {"game"};
+
+public:
   Game(Application* app) : SpaceInvaders{app}{}
   ~Game() = default;
 
+  bool initialize(int32 windowWidth, int32 windowHeight);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
+  const char* getStateName() {return game;}
 
 private:
 };
 
-const std::string Game::name {"Space Invaders"};
+void Game::initialize(int32 windowWidth, int32 windowHeight)
+{
+  // pass the asset manifest to the assets instance. - will have to access the 
+  // application pointer which it should already have as it inherits from app state.
+  _app->getAssets()->load(/*manifest vector*/);
+}
 
 void Game::onUpdate(double now, float dt)
 {
