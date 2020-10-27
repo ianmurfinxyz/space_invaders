@@ -155,6 +155,7 @@ public:
   static constexpr const char* info {"info"};
   static constexpr const char* sdl2_init_failed {"failed to initialize SDL2"};
   static constexpr const char* failed_to_create_window {"failed to create sdl window"};
+  static constexpr const char* creating_window {"creating window"};
   static constexpr const char* failed_to_create_opengl_context {"failed to create opengl context"};
   static constexpr const char* failed_to_open_log_file {"failed to open log file : redirecting to standard error"};
   static constexpr const char* failed_to_open_config_file {"failed to open config file : using default configuration"};
@@ -318,14 +319,14 @@ public:
 public:
   Assets() = default;
   ~Assets() = default;
-  void loadBitmaps(const std::vector<const char*>& manifest, int32 scale);
-  void loadFonts(const std::vector<const char*>& manifest, const std::vector<int32>& scales);
-  const Bitmap& getBitmap(const char* key) {return _bitmaps[key];}
-  const Font& getFont(const char* key, int32 scale) const;
+  void loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
+  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32>& scales);
+  const Bitmap& getBitmap(const std::string& key) {return _bitmaps[key];}
+  const Font& getFont(const std::string& key, int32 scale) const;
 
 private:
-  std::unordered_map<const char*, Bitmap> _bitmaps;
-  std::unordered_map<const char*, std::pair<Font, int32>> _fonts;
+  std::unordered_map<std::string, Bitmap> _bitmaps;
+  std::unordered_map<std::string, std::pair<Font, int32>> _fonts;
 };
 
 extern std::unique_ptr<Assets> assets;
@@ -388,7 +389,7 @@ public:
   virtual void onUpdate(double now, float dt) = 0;
   virtual void onDraw(double now, float dt) = 0;
   virtual void onReset() = 0;
-  virtual const char* getName() = 0;
+  virtual const std::string& getName() = 0;
 
 protected:
   Application* _app;
@@ -407,7 +408,7 @@ public:
   
   virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight);
 
-  virtual const char* getName() const = 0;
+  virtual const std::string& getName() const = 0;
   virtual int32 getVersionMajor() const = 0;
   virtual int32 getVersionMinor() const = 0;
 
@@ -415,7 +416,7 @@ public:
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
 
-  void switchState(const char* name);
+  void switchState(const std::string& name);
 
 protected:
   virtual Vector2i getWorldSize() const = 0;
@@ -426,7 +427,7 @@ private:
   void drawWindowTooSmall();
 
 private:
-  std::unordered_map<const char*, std::unique_ptr<ApplicationState>> _states;
+  std::unordered_map<std::string, std::unique_ptr<ApplicationState>> _states;
   std::unique_ptr<ApplicationState>* _activeState;
   iRect _viewport;
   Engine* _engine;
@@ -535,23 +536,30 @@ public:
   class Config
   {
   public:
-    static constexpr const char* filename {"config"};
-    static constexpr const char comment {'#'};
-    static constexpr const char seperator {'='};
-    static constexpr const char* key_window_width {"window_width"};
-    static constexpr const char* key_window_height {"window_height"};
-    static constexpr const char* key_fullscreen {"fullscreen"};
-    static constexpr const char* key_opengl_major {"opengl_major"};
-    static constexpr const char* key_opengl_minor {"opengl_minor"};
+    static constexpr char comment {'#'};
+    static constexpr char seperator {'='};
+
+    static const std::string filename;
+    static const std::string key_window_width;
+    static const std::string key_window_height;
+    static const std::string key_fullscreen;
+    static const std::string key_opengl_major;
+    static const std::string key_opengl_minor;
+
+    static constexpr int32 defaultWindowWidth {800};
+    static constexpr int32 defaultWindowHeight {600};
+    static constexpr int32 defaultFullscreen {0};
+    static constexpr int32 defaultOpenglMajor {2};
+    static constexpr int32 defaultOpenglMinor {1};
 
   public:
-    Config() = default;
+    Config();
     void load();
-    void setProperty(const char* key, int32 value){_properties[key] = value;}
-    int32 getProperty(const char* key){return _properties[key];}
+    void setProperty(const std::string& key, int32 value){_properties[key] = value;}
+    int32 getProperty(const std::string& key){return _properties[key];}
 
   private:
-    std::unordered_map<const char*, int32> _properties;
+    std::unordered_map<std::string, int32> _properties;
   };
 
 public:

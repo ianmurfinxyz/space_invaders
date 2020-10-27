@@ -7,6 +7,8 @@
 //                                                                                               //
 //===============================================================================================//
 
+const std::string GameState::name {"game"};
+
 void GameState::initialize(Vector2i worldSize)
 {
 }
@@ -33,6 +35,8 @@ void GameState::onReset()
 // ##>MENU STATE                                                                                 //
 //                                                                                               //
 //===============================================================================================//
+
+const std::string MenuState::name {"menu"};
 
 void MenuState::initialize(Vector2i worldSize)
 {
@@ -61,6 +65,8 @@ void MenuState::onReset()
 //                                                                                               //
 //===============================================================================================//
 
+const std::string SpaceInvaders::name {"Space Invaders"};
+
 bool SpaceInvaders::initialize(Engine* engine, int32 windowWidth, int32 windowHeight)
 {
   Application::initialize(engine, windowWidth, windowHeight);
@@ -77,7 +83,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32 windowWidth, int32 windowHe
 
   Application::onWindowResize(windowWidth, windowHeight);
 
-  std::vector<const char*> manifest {
+  std::vector<std::string> manifest {
     bmk::cannon0, bmk::squid0, bmk::squid1, bmk::crab0, bmk::crab1, bmk::octopus0, bmk::octopus1, 
     bmk::saucer0, bmk::cross0, bmk::cross1, bmk::cross2, bmk::cross3, bmk::zigzag0, bmk::zigzag1, 
     bmk::zigzag2, bmk::zigzag3, bmk::zagzig0, bmk::zagzig1, bmk::zagzig2, bmk::zagzig3, bmk::laser0
@@ -94,4 +100,6 @@ bool SpaceInvaders::initialize(Engine* engine, int32 windowWidth, int32 windowHe
   addState(std::move(menu));
 
   switchState(MenuState::name);
+
+  return true;
 }

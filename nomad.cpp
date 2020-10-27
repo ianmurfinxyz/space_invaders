@@ -243,15 +243,15 @@ Font::Font(const std::vector<Glyph>& glyphs, Meta meta) :
 //                                                                                               //
 //===============================================================================================//
 
-void Assets::loadBitmaps(const std::vector<const char*>& manifest, int32 scale)
+void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
 {
   auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
   auto isBinary = [](char ch){return ch == '0' || ch == '1';};
 
   bool fail {false};
   std::string path {};
-  for(const char* key : manifest){
-    if(_bitmaps.find(key) == _bitmaps.end())
+  for(const auto& key : manifest){
+    if(_bitmaps.find(key) != _bitmaps.end())
       continue;
 
     path.clear();
@@ -287,7 +287,7 @@ void Assets::loadBitmaps(const std::vector<const char*>& manifest, int32 scale)
     exit(EXIT_FAILURE);
 }
 
-const Font& Assets::getFont(const char* key, int32 scale) const
+const Font& Assets::getFont(const std::string& key, int32 scale) const
 {
 
 }
@@ -302,9 +302,15 @@ std::unique_ptr<Assets> assets {nullptr};
 
 Renderer::Renderer(const Config& config)
 {
+  _config = config;
+
   uint32 flags = SDL_WINDOW_OPENGL;
-  if(config._fullscreen)
+  if(_config._fullscreen)
     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+  std::stringstream ss {};
+  ss << "{w:" << _config._windowWidth << ",h:" << _config._windowHeight << "}";
+  nomad::log->log(Log::info, Log::creating_window, std::string{ss.str()});
 
   _window = SDL_CreateWindow(
       _config._windowTitle.c_str(), 
@@ -337,7 +343,6 @@ Renderer::Renderer(const Config& config)
 
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   setViewport(iRect{0, 0, _config._windowWidth, _config._windowHeight});
-  _config = config;
 }
 
 Renderer::~Renderer()
@@ -420,8 +425,8 @@ void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
     _engine->unpause();
     _viewport._x = (windowWidth - worldSize._x) / 2;
     _viewport._y = (windowHeight - worldSize._y) / 2;
-    _viewport._x = worldSize._x;
-    _viewport._y = worldSize._y;
+    _viewport._w = worldSize._x;
+    _viewport._h = worldSize._y;
   }
 }
 
@@ -458,7 +463,7 @@ void Application::addState(std::unique_ptr<ApplicationState>&& state)
   _states.emplace(std::make_pair(state->getName(), std::move(state)));
 }
 
-void Application::switchState(const char* name)
+void Application::switchState(const std::string& name)
 {
   assert(_states.find(name) != _states.end());
   _activeState = &_states[name];
@@ -513,6 +518,22 @@ void Engine::TPSMeter::recordTicks(Duration_t realDt, int32 ticks)
   }
 }
 
+const std::string Engine::Config::filename {"config"};
+const std::string Engine::Config::key_window_width {"window_width"};
+const std::string Engine::Config::key_window_height {"window_height"};
+const std::string Engine::Config::key_fullscreen {"fullscreen"};
+const std::string Engine::Config::key_opengl_major {"opengl_major"};
+const std::string Engine::Config::key_opengl_minor {"opengl_minor"};
+
+Engine::Config::Config()
+{
+  _properties.emplace(std::make_pair(key_window_width, defaultWindowWidth));
+  _properties.emplace(std::make_pair(key_window_height, defaultWindowHeight));
+  _properties.emplace(std::make_pair(key_fullscreen, defaultFullscreen));
+  _properties.emplace(std::make_pair(key_opengl_major, defaultOpenglMajor));
+  _properties.emplace(std::make_pair(key_opengl_minor, defaultOpenglMinor));
+}
+
 void Engine::Config::load()
 {
   std::ifstream config {filename};
@@ -546,7 +567,7 @@ void Engine::Config::load()
       continue; 
     }
 
-    auto iter = _properties.find(key.c_str());
+    auto iter = _properties.find(key);
     if(iter == _properties.end()){
       nomad::log->log(Log::warning, Log::unkown_config_key, key);
       continue;
@@ -614,6 +635,16 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
   nomad::renderer = std::make_unique<Renderer>(rconfig);
 
   Vector2i windowSize = nomad::renderer->getWindowSize();
+
+  //
+  //
+  // TODO - remove this -- temp!!!
+  //
+  //
+  //
+  //
+  std::cout << "w: " << windowSize._x << " h: " << windowSize._y << std::endl;
+
   _app->initialize(this, windowSize._x, windowSize._y);
 
   _isSleeping = true;
@@ -709,7 +740,7 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
 {
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
-  nomad::renderer->clearWindow(colors::red);
+  nomad::renderer->clearWindow(colors::black);
 
   double now = durationToSeconds(gameNow);
 
