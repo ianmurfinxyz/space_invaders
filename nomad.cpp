@@ -62,7 +62,7 @@ void Input::onKeyEvent(const SDL_Event& event)
     _keyStates[key] = KeyState::RELEASED;
 }
 
-void Input::update()
+void Input::onUpdate()
 {
   for(auto& state : _keyStates){
     if(state == KeyState::PRESSED)
@@ -233,7 +233,7 @@ Font::Font(const std::vector<Glyph>& glyphs, Meta meta) :
     sum += g._asciiCode;
   assert(sum == checkSum);
 
-  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0.asciiCode < g1.asciiCode;};
+  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0._asciiCode < g1._asciiCode;};
   std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
 }
 
@@ -243,14 +243,14 @@ Font::Font(const std::vector<Glyph>& glyphs, Meta meta) :
 //                                                                                               //
 //===============================================================================================//
 
-void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
+void Assets::loadBitmaps(const std::vector<const char*>& manifest, int32 scale)
 {
   auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
   auto isBinary = [](char ch){return ch == '0' || ch == '1';};
 
   bool fail {false};
   std::string path {};
-  for(const auto& key : manifest){
+  for(const char* key : manifest){
     if(_bitmaps.find(key) == _bitmaps.end())
       continue;
 
@@ -260,7 +260,7 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
     path += bitmaps_extension;
     std::ifstream bitmap {path};
     if(!bitmap){
-      ::log.log(Log::fatal, Log::missing_asset, path);
+      nomad::log->log(Log::fatal, Log::missing_asset, path);
       fail = true;
       continue;
     }
@@ -269,9 +269,9 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
     std::vector<std::string> rows {};
     for(std::string row; std::getline(bitmap, row);){
       row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-      int32 count = std::count(row.begin(), row.end(), isBinary);
+      int32 count = std::count_if(row.begin(), row.end(), isBinary);
       if(count != row.length()){
-        ::log.log(Log::fatal, Log::malformed_bitmap, path);
+        nomad::log->log(Log::fatal, Log::malformed_bitmap, path);
         malformed = true;
         break;
       }
@@ -287,7 +287,7 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
     exit(EXIT_FAILURE);
 }
 
-const Font& Assets::getFont(std::string key, int32 scale) const
+const Font& Assets::getFont(const char* key, int32 scale) const
 {
 
 }
@@ -316,22 +316,22 @@ Renderer::Renderer(const Config& config)
   );
 
   if(_window == nullptr){
-    ::log.log(Log::fatal, Log.failed_to_create_window, std::string{SDL_GetError()});
+    nomad::log->log(Log::fatal, Log::failed_to_create_window, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   _glContext = SDL_GL_CreateContext(_window);
   if(_glContext == nullptr){
-    ::log.log(Log::fatal, Log.failed_to_create_opengl_context, std::string{SDL_GetError()});
+    nomad::log->log(Log::fatal, Log::failed_to_create_opengl_context, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
-    ::log.log(Log::fatal, Log.opengl_set_attribute_fail, std::string{SDL_GetError()});
+    nomad::log->log(Log::fatal, Log::opengl_set_attribute_fail, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
-    ::log.log(Log::fatal, Log.opengl_set_attribute_fail, std::string{SDL_GetError()});
+    nomad::log->log(Log::fatal, Log::opengl_set_attribute_fail, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -388,10 +388,10 @@ void Renderer::show()
   SDL_GL_SwapWindow(_window);
 }
 
-Vector2i getWindowSize() const
+Vector2i Renderer::getWindowSize() const
 {
   Vector2i size;
-  SDL_GL_GetDrawableSize(_window, &size.x, &size.y);
+  SDL_GL_GetDrawableSize(_window, &size._x, &size._y);
   return size;
 }
 
@@ -410,26 +410,32 @@ void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
   if((windowWidth < worldSize._x) || (windowHeight < worldSize._y)){
     _isWindowTooSmall = true;
     _engine->pause();
-    viewport._x = 0;
-    viewport._y = 0;
-    viewport.w = worldSize._x;
-    viewport.h = worldSize._y;
+    _viewport._x = 0;
+    _viewport._y = 0;
+    _viewport._w = worldSize._x;
+    _viewport._h = worldSize._y;
   }
   else{
     _isWindowTooSmall = false;
     _engine->unpause();
-    viewport._x = (windowWidth - worldSize._x) / 2;
-    viewport._y = (windowHeight - worldSize._y) / 2;
-    viewport._x = worldSize._x;
-    viewport._y = worldSize._y;
+    _viewport._x = (windowWidth - worldSize._x) / 2;
+    _viewport._y = (windowHeight - worldSize._y) / 2;
+    _viewport._x = worldSize._x;
+    _viewport._y = worldSize._y;
   }
+}
+
+bool Application::initialize(Engine* engine, int32 windowWidth, int32 windowHeight)
+{
+  _engine = engine;
+  return true;
 }
 
 void Application::onUpdate(double now, float dt)
 {
   assert(_activeState != nullptr);
 
-  if(::input->getKeyState(pauseKey) == Input::KeyState::PRESSED)
+  if(nomad::input->getKeyState(pauseKey) == Input::KeyState::PRESSED)
     _engine->togglePause();
 
   (*_activeState)->onUpdate(now, dt);
@@ -439,7 +445,7 @@ void Application::onDraw(double now, float dt)
 {
   assert(_activeState != nullptr);
 
-  ::renderer->setViewport(_viewport);
+  nomad::renderer->setViewport(_viewport);
 
   if(_isWindowTooSmall)
     drawWindowTooSmall();
@@ -449,7 +455,7 @@ void Application::onDraw(double now, float dt)
 
 void Application::addState(std::unique_ptr<ApplicationState>&& state)
 {
-  _states.emplace(std::make_pair(state.getName(), std::move(state)));
+  _states.emplace(std::make_pair(state->getName(), std::move(state)));
 }
 
 void Application::switchState(const char* name)
@@ -460,7 +466,7 @@ void Application::switchState(const char* name)
 
 void Application::drawWindowTooSmall()
 {
-  ::renderer->clearViewport(colors::red);
+  nomad::renderer->clearViewport(colors::red);
 }
 
 //===============================================================================================//
@@ -511,7 +517,7 @@ void Engine::Config::load()
 {
   std::ifstream config {filename};
   if(!config){
-    ::log->log(Log::error, Log::failed_to_open_config_file, std::string{filename});
+    nomad::log->log(Log::error, Log::failed_to_open_config_file, std::string{filename});
     return;
   }
 
@@ -527,7 +533,7 @@ void Engine::Config::load()
     int32 count {0};
     count = std::count(line.begin(), line.end(), seperator);
     if(count != 1){
-      ::log->log(Log::warning, Log::malformed_config_line, line);
+      nomad::log->log(Log::warning, Log::malformed_config_line, line);
       continue;
     }
 
@@ -536,42 +542,42 @@ void Engine::Config::load()
     std::string value {line.substr(pos + 1)};
 
     if(key.empty() || value.empty()){
-      ::log->log(Log::warning, Log::malformed_config_line, line);
+      nomad::log->log(Log::warning, Log::malformed_config_line, line);
       continue; 
     }
 
-    auto iter = _properties.find();
+    auto iter = _properties.find(key.c_str());
     if(iter == _properties.end()){
-      ::log->log(Log::warning, Log::unkown_config_key, key);
+      nomad::log->log(Log::warning, Log::unkown_config_key, key);
       continue;
     }
      
     count = std::count_if(value.begin(), value.end(), isDigit);
     if(count != value.length()){
-      ::log->log(Log::warning, Log::malformed_config_value, value);
+      nomad::log->log(Log::warning, Log::malformed_config_value, value);
       continue;
     }
 
     iter->second = std::stoi(value);
-    ::log->log(Log::info, Log::set_config_property, line);
+    nomad::log->log(Log::info, Log::set_config_property, line);
   }
 }
 
 void Engine::initialize(std::unique_ptr<Application>&& app)
 {
-  ::log = std::make_unique<Log>(new Log{});
+  nomad::log = std::make_unique<Log>();
 
   _app = std::move(app);
 
   _config.load();
 
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
-    ::log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
+    nomad::log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   LoopTick* tick = &_loopTicks[LOOPTICK_UPDATE];
-  tick->_onTick = &Application::onUpdateTick;
+  tick->_onTick = &Engine::onUpdateTick;
   tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
   tick->_ticksAccumulated = 0;
   tick->_ticksDoneThisFrame = 0;
@@ -579,15 +585,15 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
   tick = &_loopTicks[LOOPTICK_DRAW];
-  tick->_onTick = &Application::onDrawTick;
+  tick->_onTick = &Engine::onDrawTick;
   tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
   tick->_ticksAccumulated = 0;
   tick->_ticksDoneThisFrame = 0;
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  ::input = std::make_unique<Input>(new Input{});
-  ::assets = std::make_unique<Assets>(new Assets{});
+  nomad::input = std::make_unique<Input>();
+  nomad::assets = std::make_unique<Assets>();
 
   std::stringstream ss {};
   ss << _app->getName() 
@@ -605,9 +611,9 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
     _config.getProperty(Config::key_fullscreen),
   };
 
-  ::renderer = std::make_unique<Renderer>(new Renderer{rconfig});
+  nomad::renderer = std::make_unique<Renderer>(rconfig);
 
-  Vector2i windowSize = ::renderer->getWindowSize();
+  Vector2i windowSize = nomad::renderer->getWindowSize();
   _app->initialize(this, windowSize._x, windowSize._y);
 
   _isSleeping = true;
@@ -656,7 +662,7 @@ void Engine::mainloop()
           break;
         }
       case SDL_KEYUP:
-        ::input->onKeyEvent(event);
+        nomad::input->onKeyEvent(event);
         break;
     }
   }
@@ -673,7 +679,7 @@ void Engine::mainloop()
     tick._tpsMeter.recordTicks(realDt, tick._ticksDoneThisFrame);
   }
 
-  ::input->update();
+  nomad::input->onUpdate();
   
   if(_isSleeping){
     auto now1 {Clock_t::now()};
@@ -703,7 +709,7 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
 {
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
-  _renderer->clearWindow(colors::red);
+  nomad::renderer->clearWindow(colors::red);
 
   double now = durationToSeconds(gameNow);
 
@@ -715,7 +721,7 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
   if(_isDrawingPerformanceStats)
     drawPerformanceStats(realDt, gameDt);
 
-  _renderer->show();
+  nomad::renderer->show();
 }
 
 double Engine::durationToSeconds(Duration_t d)

@@ -20,9 +20,6 @@
 namespace nomad
 {
 
-namespace types
-{
-
 using int8 = std::int8_t;
 using int16 = std::int16_t;
 using int32 = std::int32_t;
@@ -32,16 +29,11 @@ using uint16 = std::uint16_t;
 using uint32 = std::uint32_t;
 using uint64 = std::uint64_t;
 
-} // namespace nomad::types
-
 //===============================================================================================//
 //                                                                                               //
 // ##>MATH                                                                                       //
 //                                                                                               //
 //===============================================================================================//
-
-namespace math
-{
 
 constexpr long double operator"" _hz(long double hz){return hz;}
 
@@ -51,8 +43,8 @@ struct Vector2
   T _x;
   T _y;
 
-  Vector2() : _x{0}, _y{0} {}
-  Vector2(T x, T y) : _x{x}, _y{y} {}
+  constexpr Vector2() : _x{0}, _y{0} {}
+  constexpr Vector2(T x, T y) : _x{x}, _y{y} {}
   void zero() {_x = _y = 0;}
   bool isZero() {return _x == 0 && _y == 0;}
   Vector2 operator+(const Vector2& v) const {return Vector2{_x + v._x, _y + v._y};}
@@ -100,8 +92,6 @@ struct Rect
 
 using iRect = Rect<int32>;
 using fRect = Rect<float>;
-
-} // namespace nomad::math
 
 //===============================================================================================//
 //                                                                                               //
@@ -211,7 +201,7 @@ public:
   ~Input() = default;
   void onKeyEvent(const SDL_Event& event);
   void onUpdate();
-  KeyState getKeyState(KeyCode key);
+  KeyState getKeyState(KeyCode key){return _keyStates[key];}
 
 private:
   KeyCode convertSdlKeyCode(int sdlCode);
@@ -220,7 +210,7 @@ private:
   std::array<KeyState, KEY_COUNT> _keyStates;
 };
 
-extern std::unique_ptr<Input> input {nullptr};
+extern std::unique_ptr<Input> input;
 
 //===============================================================================================//
 //                                                                                               //
@@ -248,11 +238,12 @@ class Bitmap
 public:
   constexpr static int32 scaleMax {8};
 
-  Bitmap(std::vector<std::string> bits, int32 scale = 1);
+  explicit Bitmap() = default;
+  explicit Bitmap(std::vector<std::string> bits, int32 scale = 1);
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
-  Bitmap(const Bitmap&&) = default;
-  Bitmap& operator=(const Bitmap&&) = default;
+  Bitmap(Bitmap&&) = default;
+  Bitmap& operator=(Bitmap&&) = default;
   bool getBit(int32 row, int32 col);
   void setBit(int32 row, int32 col, bool value, bool regen = true);
   int32 getWidth() const {return _width;}
@@ -327,17 +318,17 @@ public:
 public:
   Assets() = default;
   ~Assets() = default;
-  void loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
-  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32>& scales);
-  const Bitmap& getBitmap(const std::string& key) const {return _bitmaps[key];}
-  const Font& getFont(std::string key, int32 scale) const;
+  void loadBitmaps(const std::vector<const char*>& manifest, int32 scale);
+  void loadFonts(const std::vector<const char*>& manifest, const std::vector<int32>& scales);
+  const Bitmap& getBitmap(const char* key) {return _bitmaps[key];}
+  const Font& getFont(const char* key, int32 scale) const;
 
 private:
-  std::unordered_map<std::string, Bitmap> _bitmaps;
-  std::unordered_map<std::string, std::pair<Font, int32>> _fonts;
+  std::unordered_map<const char*, Bitmap> _bitmaps;
+  std::unordered_map<const char*, std::pair<Font, int32>> _fonts;
 };
 
-extern std::unique_ptr<Assets> assets {nullptr};
+extern std::unique_ptr<Assets> assets;
 
 //===============================================================================================//
 //                                                                                               //
@@ -378,7 +369,7 @@ private:
   iRect _viewport;
 };
 
-extern std::unique_ptr<Renderer> renderer {nullptr};
+extern std::unique_ptr<Renderer> renderer;
 
 //===============================================================================================//
 //                                                                                               //
@@ -414,21 +405,22 @@ public:
   Application() = default;
   virtual ~Application() = default;
   
-  virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight){_engine = engine;}
+  virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight);
 
-  virtual const char* getName() = 0;
-  virtual int32 getVersionMajor() = 0;
-  virtual int32 getVersionMinor() = 0;
+  virtual const char* getName() const = 0;
+  virtual int32 getVersionMajor() const = 0;
+  virtual int32 getVersionMinor() const = 0;
 
   void onWindowResize(int32 windowWidth, int32 windowHeight);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
 
+  void switchState(const char* name);
+
 protected:
   virtual Vector2i getWorldSize() const = 0;
 
   void addState(std::unique_ptr<ApplicationState>&& state);
-  void switchState(const char* name);
 
 private:
   void drawWindowTooSmall();
@@ -518,7 +510,7 @@ public:
   public:
     explicit TPSMeter() : _timer{}, _ticks{0}, _tps{0} {}
     ~TPSMeter() = default;
-    void recordTicks(Duration_t realDt, int32 ticks)
+    void recordTicks(Duration_t realDt, int32 ticks);
     int32 getTPS() const {return _tps;}
     
   private:
@@ -553,10 +545,10 @@ public:
     static constexpr const char* key_opengl_minor {"opengl_minor"};
 
   public:
-    Config();
+    Config() = default;
     void load();
-    void setProperty(const char* key, int32 value){_properties[key]._value = value;}
-    int32 getProperty(const char* key){return _properties[key]._value;}
+    void setProperty(const char* key, int32 value){_properties[key] = value;}
+    int32 getProperty(const char* key){return _properties[key];}
 
   private:
     std::unordered_map<const char*, int32> _properties;
@@ -593,3 +585,5 @@ private:
 };
 
 } // namespace nomad
+
+#endif
