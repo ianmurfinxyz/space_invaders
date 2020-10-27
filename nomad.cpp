@@ -33,7 +33,7 @@ void Log::log(const char* prefix, const char* error, const std::string& addendum
   o << std::endl;
 }
 
-Log* log {nullptr};
+std::unique_ptr<Log> log {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -108,7 +108,7 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
   }
 }
 
-Input* input {nullptr};
+std::unique_ptr<Input> input {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -292,7 +292,7 @@ const Font& Assets::getFont(std::string key, int32 scale) const
 
 }
 
-Assets* assets {nullptr};
+std::unique_ptr<Assets> assets {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -395,7 +395,7 @@ Vector2i getWindowSize() const
   return size;
 }
 
-Renderer* renderer {nullptr};
+std::unique_ptr<Renderer> renderer {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -409,12 +409,15 @@ void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
 
   if((windowWidth < worldSize._x) || (windowHeight < worldSize._y)){
     _isWindowTooSmall = true;
+    _engine->pause();
     viewport._x = 0;
     viewport._y = 0;
     viewport.w = worldSize._x;
     viewport.h = worldSize._y;
   }
   else{
+    _isWindowTooSmall = false;
+    _engine->unpause();
     viewport._x = (windowWidth - worldSize._x) / 2;
     viewport._y = (windowHeight - worldSize._y) / 2;
     viewport._x = worldSize._x;
@@ -424,17 +427,20 @@ void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
 
 void Application::onUpdate(double now, float dt)
 {
-  if(::input->getKeyState(pauseKey) == Input::KeyState::PRESSED){
-    _engine->togglePause();
-  }
+  assert(_activeState != nullptr);
 
-  assert((*_activeState) != nullptr);
+  if(::input->getKeyState(pauseKey) == Input::KeyState::PRESSED)
+    _engine->togglePause();
+
   (*_activeState)->onUpdate(now, dt);
 }
 
 void Application::onDraw(double now, float dt)
 {
-  assert((*_activeState) != nullptr);
+  assert(_activeState != nullptr);
+
+  ::renderer->setViewport(_viewport);
+
   if(_isWindowTooSmall)
     drawWindowTooSmall();
   else
@@ -450,6 +456,11 @@ void Application::switchState(const char* name)
 {
   assert(_states.find(name) != _states.end());
   _activeState = &_states[name];
+}
+
+void Application::drawWindowTooSmall()
+{
+  ::renderer->clearViewport(colors::red);
 }
 
 //===============================================================================================//
@@ -546,8 +557,12 @@ void Engine::Config::load()
   }
 }
 
-void Engine::initialize(std::vector<std::unique_ptr<ApplicationState>>&& states)
+void Engine::initialize(std::unique_ptr<Application>&& app)
 {
+  ::log = std::make_unique<Log>(new Log{});
+
+  _app = std::move(app);
+
   _config.load();
 
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
@@ -571,44 +586,33 @@ void Engine::initialize(std::vector<std::unique_ptr<ApplicationState>>&& states)
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  _input = std::move(std::unique_ptr<Input>{new Input()});
+  ::input = std::make_unique<Input>(new Input{});
+  ::assets = std::make_unique<Assets>(new Assets{});
 
   std::stringstream ss {};
-  ss << _game->getName() << " version:" << _game->getVersionMajor() << "." << _game->getVersionMinor();
-  Renderer::Config rencfg {
+  ss << _app->getName() 
+     << " version:" 
+     << _app->getVersionMajor() 
+     << "." 
+     << _app->getVersionMinor();
+
+  Renderer::Config rconfig {
     std::string{ss.str()},
-    _config.getProperty(AppConfig::key_window_width),
-    _config.getProperty(AppConfig::key_window_height),
-    _config.getProperty(AppConfig::key_opengl_major),
-    _config.getProperty(AppConfig::key_opengl_minor),
-    _config.getProperty(AppConfig::key_fullscreen),
+    _config.getProperty(Config::key_window_width),
+    _config.getProperty(Config::key_window_height),
+    _config.getProperty(Config::key_opengl_major),
+    _config.getProperty(Config::key_opengl_minor),
+    _config.getProperty(Config::key_fullscreen),
   };
-  _renderer = std::move(std::unique_ptr<Renderer>{new Renderer(rencfg)});
 
-  Vector2i windowSize = _renderer->getWindowSize();
+  ::renderer = std::make_unique<Renderer>(new Renderer{rconfig});
 
-  assert(states.size() > 0);
-
-  const char* bootName = states[0].getBootStateName();
-  bool fail {false};
-  for(auto& state : states){
-    fail = state->initialize(windowSize._x, windowSize._y);
-    if(fail){
-      ::log->log(Log::fatal, Log::failed_to_initialize_app_state, std::string{state->getStateName()});
-      exit(EXIT_FAILURE);
-    }
-    _states.emplace(std::make_pair(state->getName(), std::move(state)));
-  }
-  _activeState = _states[bootName];
+  Vector2i windowSize = ::renderer->getWindowSize();
+  _app->initialize(this, windowSize._x, windowSize._y);
 
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
   _isDone = false;
-}
-
-void Engine::shutdown()
-{
-
 }
 
 void Engine::run()
@@ -630,9 +634,29 @@ void Engine::mainloop()
       case SDL_QUIT:
         _isDone = true;
         return;
+      case SDL_WINDOWEVENT:
+        if(event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+          _app->onWindowResize(event.window.data1, event.window.data2);
+        break;
       case SDL_KEYDOWN:
+        if(event.key.keysym.sym == SDLK_LEFTBRACKET){
+          _gameClock.incrementScale(-0.1);
+          break;
+        }
+        else if(event.key.keysym.sym == SDLK_RIGHTBRACKET){
+          _gameClock.incrementScale(0.1);
+          break;
+        }
+        else if(event.key.keysym.sym == SDLK_KP_HASH){
+          _gameClock.setScale(1.f);
+          break;
+        }
+        else if(event.key.keysym.sym == SDLK_BACKQUOTE){
+          _isDrawingPerformanceStats = !_isDrawingPerformanceStats;
+          break;
+        }
       case SDL_KEYUP:
-        _input->onKeyEvent(event);
+        ::input->onKeyEvent(event);
         break;
     }
   }
@@ -649,7 +673,7 @@ void Engine::mainloop()
     tick._tpsMeter.recordTicks(realDt, tick._ticksDoneThisFrame);
   }
 
-  _input->update();
+  ::input->update();
   
   if(_isSleeping){
     auto now1 {Clock_t::now()};
@@ -664,10 +688,15 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
 
 }
 
+void Engine::drawPauseDialog()
+{
+
+}
+
 void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
 {
   double now = durationToSeconds(gameNow);
-  (*_activeState)->onUpdate(now, tickDt);
+  _app->onUpdate(now, tickDt);
 }
 
 void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
@@ -675,10 +704,17 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
   _renderer->clearWindow(colors::red);
+
   double now = durationToSeconds(gameNow);
-  (*_activeState)->onUpdate(now, tickDt);
+
+  _app->onDraw(now, tickDt);
+
+  if(_gameClock.isPaused())
+    drawPauseDialog();
+
   if(_isDrawingPerformanceStats)
     drawPerformanceStats(realDt, gameDt);
+
   _renderer->show();
 }
 
@@ -687,5 +723,5 @@ double Engine::durationToSeconds(Duration_t d)
   return static_cast<double>(d.count()) / static_cast<double>(oneSecond.count());
 }
 
-};
+} // namespace nomad
 

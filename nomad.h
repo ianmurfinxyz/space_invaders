@@ -60,7 +60,9 @@ struct Vector2
   Vector2 operator-(const Vector2& v) const {return Vector2{_x - v._x, _y - v._y};}
   void operator-=(const Vector2& v) {_x -= v._x; _y -= v._y;}
   Vector2 operator*(float scale) const {return Vector2{_x * scale, _y * scale};}
+  Vector2 operator*(int32 scale) const {return Vector2{_x * scale, _y * scale};}
   void operator*=(float scale) {_x *= scale; _y *= scale;}
+  void operator*=(int32 scale) {_x *= scale; _y *= scale;}
   float dot(const Vector2& v) {return (_x * v._x) + (_y * v._y);}
   float cross(const Vector2& v) const {return (_x * v._y) - (_y * v._x);}
   float length() const {return std::hypot(_x, _y);}
@@ -185,7 +187,7 @@ private:
   std::ofstream _os;
 };
 
-extern Log* log;
+extern std::unique_ptr<Log> log;
 
 //===============================================================================================//
 //                                                                                               //
@@ -218,7 +220,7 @@ private:
   std::array<KeyState, KEY_COUNT> _keyStates;
 };
 
-extern Input* input {nullptr};
+extern std::unique_ptr<Input> input {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -323,7 +325,7 @@ public:
   static constexpr const char* bitmaps_extension {".bitmap"};
 
 public:
-  Assets(int32 scale) = default;
+  Assets() = default;
   ~Assets() = default;
   void loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
   void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32>& scales);
@@ -334,6 +336,8 @@ private:
   std::unordered_map<std::string, Bitmap> _bitmaps;
   std::unordered_map<std::string, std::pair<Font, int32>> _fonts;
 };
+
+extern std::unique_ptr<Assets> assets {nullptr};
 
 //===============================================================================================//
 //                                                                                               //
@@ -374,20 +378,25 @@ private:
   iRect _viewport;
 };
 
+extern std::unique_ptr<Renderer> renderer {nullptr};
+
 //===============================================================================================//
 //                                                                                               //
 // ##>APPLICATION                                                                                //
 //                                                                                               //
 //===============================================================================================//
 
+class Application;
+
 class ApplicationState
 {
 public:
   ApplicationState(Application* app) : _app(app) {}
   virtual ~ApplicationState() = default;
-  virtual void onReset() = 0;
+  virtual void initialize(Vector2i worldSize) = 0;
   virtual void onUpdate(double now, float dt) = 0;
   virtual void onDraw(double now, float dt) = 0;
+  virtual void onReset() = 0;
   virtual const char* getName() = 0;
 
 protected:
@@ -404,9 +413,10 @@ public:
 public:
   Application() = default;
   virtual ~Application() = default;
-  virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight) = 0;
+  
+  virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight){_engine = engine;}
+
   virtual const char* getName() = 0;
-  virtual Vector2i getWorldSize() = 0;
   virtual int32 getVersionMajor() = 0;
   virtual int32 getVersionMinor() = 0;
 
@@ -414,9 +424,9 @@ public:
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
 
-  const iRect& getViewport() const {return _viewport;}
-
 protected:
+  virtual Vector2i getWorldSize() const = 0;
+
   void addState(std::unique_ptr<ApplicationState>&& state);
   void switchState(const char* name);
 
@@ -533,7 +543,7 @@ public:
   class Config
   {
   public:
-    static constexpr const char* filename {"appcfg"};
+    static constexpr const char* filename {"config"};
     static constexpr const char comment {'#'};
     static constexpr const char seperator {'='};
     static constexpr const char* key_window_width {"window_width"};
@@ -555,16 +565,16 @@ public:
 public:
   Engine() = default;
   ~Engine() = default;
-  void initialize(std::unique_ptr<Application> app);
-  void shutdown();
+  void initialize(std::unique_ptr<Application>&& app);
   void run();
-  void pause();
-  void unpause();
-  void togglePause();
+  void pause(){_gameClock.pause();}
+  void unpause(){_gameClock.unpause();}
+  void togglePause(){_gameClock.togglePause();}
 
 private:
   void mainloop();
   void drawPerformanceStats(Duration_t realDt, Duration_t gameDt);
+  void drawPauseDialog();
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void loadConfig();
