@@ -20,19 +20,8 @@
 namespace nomad
 {
 
-using int8 = std::int8_t;
-using int16 = std::int16_t;
-using int32 = std::int32_t;
-using int64 = std::int64_t;
-using uint8 = std::uint8_t;
-using uint16 = std::uint16_t;
-using uint32 = std::uint32_t;
-using uint64 = std::uint64_t;
-
 //===============================================================================================//
-//                                                                                               //
 // ##>MATH                                                                                       //
-//                                                                                               //
 //===============================================================================================//
 
 constexpr long double operator"" _hz(long double hz){return hz;}
@@ -52,9 +41,9 @@ struct Vector2
   Vector2 operator-(const Vector2& v) const {return Vector2{_x - v._x, _y - v._y};}
   void operator-=(const Vector2& v) {_x -= v._x; _y -= v._y;}
   Vector2 operator*(float scale) const {return Vector2{_x * scale, _y * scale};}
-  Vector2 operator*(int32 scale) const {return Vector2{_x * scale, _y * scale};}
+  Vector2 operator*(int32_t scale) const {return Vector2{_x * scale, _y * scale};}
   void operator*=(float scale) {_x *= scale; _y *= scale;}
-  void operator*=(int32 scale) {_x *= scale; _y *= scale;}
+  void operator*=(int32_t scale) {_x *= scale; _y *= scale;}
   float dot(const Vector2& v) {return (_x * v._x) + (_y * v._y);}
   float cross(const Vector2& v) const {return (_x * v._y) - (_y * v._x);}
   float length() const {return std::hypot(_x, _y);}
@@ -79,7 +68,7 @@ struct Vector2
 };
 
 using Vector2f = Vector2<float>;
-using Vector2i = Vector2<int32>;
+using Vector2i = Vector2<int32_t>;
 
 template<typename T>
 struct Rect
@@ -90,89 +79,56 @@ struct Rect
   T _h;
 };
 
-using iRect = Rect<int32>;
+using iRect = Rect<int32_t>;
 using fRect = Rect<float>;
 
 //===============================================================================================//
-//                                                                                               //
-// ##>COLORS                                                                                     //
-//                                                                                               //
-//===============================================================================================//
-
-class Color3f
-{
-  constexpr static float lo {0.f};
-  constexpr static float hi {1.f};
-
-public:
-  Color3f(float r, float g, float b) : 
-    _r{std::clamp(r, lo, hi)},
-    _g{std::clamp(g, lo, hi)},
-    _b{std::clamp(b, lo, hi)}
-  {}
-
-  float getRed() const {return _r;}
-  float getGreen() const {return _g;}
-  float getBlue() const {return _b;}
-  void setRed(float r){_r = std::clamp(r, lo, hi);}
-  void setGreen(float g){_g = std::clamp(g, lo, hi);}
-  void setBlue(float b){_b = std::clamp(b, lo, hi);}
-
-private:
-  float _r;
-  float _g;
-  float _b;
-};
-
-namespace colors
-{
-
-  const Color3f white {1.f, 1.f, 1.f};
-  const Color3f black {0.f, 0.f, 0.f};
-  const Color3f red {1.f, 0.f, 0.f};
-  const Color3f green {0.f, 1.f, 0.f};
-  const Color3f blue {0.f, 0.f, 1.f};
-  const Color3f cyan {0.f, 1.f, 1.f};
-  const Color3f magenta {1.f, 0.f, 1.f};
-  const Color3f yellow {1.f, 1.f, 0.f};
-
-} // namespace nomad::colors
-
-//===============================================================================================//
-//                                                                                               //
 // ##>LOG                                                                                        //
-//                                                                                               //
 //===============================================================================================//
+
+namespace logstr
+{
+  const char* fail_open_log = "failed to open log";
+  const char* fail_sdl_init = "failed to initialize SDL";
+  const char* fail_create_ogl_context = "failed to create opengl context";
+  const char* fail_set_ogl_attribute = "failed to set opengl attribute";
+  const char* fail_create_window = "failed to create window";
+  const char* fail_open_dataset = "failed to open data file";
+  const char* fail_malformed_dataset = "malformed data file";
+  const char* fail_unkown_dataset_key = "unrecognised data key";
+  const char* fail_missing_asset = "missing asset";
+  const char* fail_malformed_bitmap = "malformed bitmap";
+
+  const char* info_stderr_log = "logging to standard error";
+  const char* info_set_config_property = "set config property";
+  const char* info_created_window = "window created";
+  const char* info_surplus_seperators = "too many seperators";
+  const char* info_incomplete_property = "missing property key or value";
+  const char* info_expected_integer = "expected integer value";
+};
 
 class Log
 {
 public:
   static constexpr const char* filename {"log"};
   static constexpr const char* delim {" : "};
-  static constexpr const char* fatal {"fatal"};
-  static constexpr const char* error {"error"};
-  static constexpr const char* warning {"warning"};
-  static constexpr const char* info {"info"};
-  static constexpr const char* sdl2_init_failed {"failed to initialize SDL2"};
-  static constexpr const char* failed_to_create_window {"failed to create sdl window"};
-  static constexpr const char* creating_window {"creating window"};
-  static constexpr const char* failed_to_create_opengl_context {"failed to create opengl context"};
-  static constexpr const char* failed_to_open_log_file {"failed to open log file : redirecting to standard error"};
-  static constexpr const char* failed_to_open_config_file {"failed to open config file : using default configuration"};
-  static constexpr const char* opengl_set_attribute_fail {"failed to set opengl attribute"};
-  static constexpr const char* malformed_config_line {"malformed line in config file; expected key=value pair; ignoring line"};
-  static constexpr const char* malformed_config_value {"malformed config property value : integer expected"};
-  static constexpr const char* unkown_config_key {"unrecognised config property key"};
-  static constexpr const char* set_config_property {"set config property"};
-  static constexpr const char* failed_to_open_asset_manifest {"failed to open assets manifest"};
-  static constexpr const char* missing_asset {"missing asset"};
-  static constexpr const char* malformed_bitmap {"malformed bitmap : expected 1's and 0's"};
-  static constexpr const char* failed_to_initialize_app_state {"failed to initialize app state"};
+
+  static constexpr std::array<const char*, 4> lvlstr {"fatal", "error", "warning", "info"};
+
+public:
+  enum Level
+  {
+    FATAL,
+    ERROR,
+    WARNING,
+    INFO
+  };
 
 public:
   Log();
   ~Log();
-  void log(const char* prefix, const char* error, const std::string& addendum = std::string{});
+
+  void log(Level level, const char* error, const std::string& addendum = std::string{});
 
 private:
   std::ofstream _os;
@@ -180,10 +136,9 @@ private:
 
 extern std::unique_ptr<Log> log;
 
+
 //===============================================================================================//
-//                                                                                               //
-// ##>INPUT MANAGER                                                                              //
-//                                                                                               //
+// ##>INPUT                                                                                      //
 //===============================================================================================//
 
 class Input
@@ -214,9 +169,7 @@ private:
 extern std::unique_ptr<Input> input;
 
 //===============================================================================================//
-//                                                                                               //
-// ##>BITMAP                                                                                     //
-//                                                                                               //
+// ##>GRAPHICS                                                                                   //
 //===============================================================================================//
 
 // Bits in the bitmap are accessible via a [row][col] position mapped to screen space like:
@@ -237,18 +190,18 @@ extern std::unique_ptr<Input> input;
 class Bitmap
 {
 public:
-  constexpr static int32 scaleMax {8};
+  constexpr static int32_t scaleMax {8};
 
   explicit Bitmap() = default;
-  explicit Bitmap(std::vector<std::string> bits, int32 scale = 1);
+  explicit Bitmap(std::vector<std::string> bits, int32_t scale = 1);
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
   Bitmap(Bitmap&&) = default;
   Bitmap& operator=(Bitmap&&) = default;
-  bool getBit(int32 row, int32 col);
-  void setBit(int32 row, int32 col, bool value, bool regen = true);
-  int32 getWidth() const {return _width;}
-  int32 getHeight() const {return _height;}
+  bool getBit(int32_t row, int32_t col);
+  void setBit(int32_t row, int32_t col, bool value, bool regen = true);
+  int32_t getWidth() const {return _width;}
+  int32_t getHeight() const {return _height;}
   const std::vector<uint8>& getBytes() const {return _bytes;}
   void print(std::ostream& out) const;
 
@@ -258,15 +211,9 @@ private:
 private:
   std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
   std::vector<uint8> _bytes;             // used for rendering
-  int32 _width;
-  int32 _height;
+  int32_t _width;
+  int32_t _height;
 };
-
-//===============================================================================================//
-//                                                                                               //
-// ##>FONT                                                                                       //
-//                                                                                               //
-//===============================================================================================//
 
 class Font
 {
@@ -274,19 +221,19 @@ public:
   struct Glyph
   {
     Bitmap _bitmap;
-    int32 _asciiCode;
-    int32 _offsetX;
-    int32 _advance;
-    int32 _width;
-    int32 _height;
+    int32_t _asciiCode;
+    int32_t _offsetX;
+    int32_t _advance;
+    int32_t _width;
+    int32_t _height;
   };
 
   struct Meta
   {
-    int32 _lineSpace;
-    int32 _wordSpace;
-    int32 _glyphSpace;
-    int32 _size;
+    int32_t _lineSpace;
+    int32_t _wordSpace;
+    int32_t _glyphSpace;
+    int32_t _size;
   };
 
 public:
@@ -294,48 +241,49 @@ public:
   Font(const Font&) = default;
   Font& operator=(const Font&) = default;
   const Glyph& getGlyph(char c) const;
-  int32 getLineSpace() const {return _meta._lineSpace;}
-  int32 getWordSpace() const {return _meta._wordSpace;}
-  int32 getGlyphSpace() const {return _meta._glyphSpace;}
-  int32 getSize() const {return _meta._size;}
+  int32_t getLineSpace() const {return _meta._lineSpace;}
+  int32_t getWordSpace() const {return _meta._wordSpace;}
+  int32_t getGlyphSpace() const {return _meta._glyphSpace;}
+  int32_t getSize() const {return _meta._size;}
 
 private:
   std::vector<Glyph> _glyphs;
   Meta _meta;
 };
 
-//===============================================================================================//
-//                                                                                               //
-// ##>ASSETS                                                                                     //
-//                                                                                               //
-//===============================================================================================//
-
-class Assets
+class Color3f
 {
-public:
-  static constexpr const char* bitmaps_path {"assets/bitmaps/"};
-  static constexpr const char* bitmaps_extension {".bitmap"};
+  constexpr static float lo {0.f};
+  constexpr static float hi {1.f};
 
 public:
-  Assets() = default;
-  ~Assets() = default;
-  void loadBitmaps(const std::vector<std::string>& manifest, int32 scale);
-  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32>& scales);
-  const Bitmap& getBitmap(const std::string& key) {return _bitmaps[key];}
-  const Font& getFont(const std::string& key, int32 scale) const;
+  Color3f(float r, float g, float b) : 
+    _r{std::clamp(r, lo, hi)},
+    _g{std::clamp(g, lo, hi)},
+    _b{std::clamp(b, lo, hi)}
+  {}
+
+  float getRed() const {return _r;}
+  float getGreen() const {return _g;}
+  float getBlue() const {return _b;}
+  void setRed(float r){_r = std::clamp(r, lo, hi);}
+  void setGreen(float g){_g = std::clamp(g, lo, hi);}
+  void setBlue(float b){_b = std::clamp(b, lo, hi);}
 
 private:
-  std::unordered_map<std::string, Bitmap> _bitmaps;
-  std::unordered_map<std::string, std::pair<Font, int32>> _fonts;
+  float _r;
+  float _g;
+  float _b;
 };
 
-extern std::unique_ptr<Assets> assets;
-
-//===============================================================================================//
-//                                                                                               //
-// ##>RENDERER                                                                                   //
-//                                                                                               //
-//===============================================================================================//
+constexpr Color3f white {1.f, 1.f, 1.f};
+constexpr Color3f black {0.f, 0.f, 0.f};
+constexpr Color3f red {1.f, 0.f, 0.f};
+constexpr Color3f green {0.f, 1.f, 0.f};
+constexpr Color3f blue {0.f, 0.f, 1.f};
+constexpr Color3f cyan {0.f, 1.f, 1.f};
+constexpr Color3f magenta {1.f, 0.f, 1.f};
+constexpr Color3f yellow {1.f, 1.f, 0.f};
 
 class Renderer
 {
@@ -343,10 +291,10 @@ public:
   struct Config
   {
     std::string _windowTitle;
-    int32 _windowWidth;
-    int32 _windowHeight;
-    int32 _openglVersionMajor;
-    int32 _openglVersionMinor;
+    int32_t _windowWidth;
+    int32_t _windowHeight;
+    int32_t _openglVersionMajor;
+    int32_t _openglVersionMinor;
     bool _fullscreen;
   };
   
@@ -373,9 +321,63 @@ private:
 extern std::unique_ptr<Renderer> renderer;
 
 //===============================================================================================//
-//                                                                                               //
+// ##>RESOURCES                                                                                  //
+//===============================================================================================//
+
+class Dataset
+{
+public:
+  using Key_t = std::string;
+  using Value_t = int32_t;
+
+public:
+  static constexpr char comment {'#'};
+  static constexpr char seperator {'='};
+
+public:
+  Dataset() = default;
+  explicit Dataset(const std::vector<std::pair<Key_t, Value_t>>& properties);
+
+  bool load(const std::string& filename);
+  bool write(const std::string& filename);
+  bool append(const std::string& filename);
+
+  bool hasProperty(const Key_t& key) const;
+  bool hasProperties(const std::vector<Key_t>& keys) const;
+
+  std::unordered_map<Key_t, Value_t> getProperties() const {return _properties;}
+  int32_t getProperty(const std::string& key) const;
+
+  void setProperties(const std::vector<std::pair<Key_t, Value_t>> properties);
+  void setProperty(const Key_t& key, const Value_t& value);
+
+private:
+  std::unordered_map<Key_t, Value_t> _properties;
+};
+
+class Assets
+{
+public:
+  static constexpr const char* bitmaps_path {"assets/bitmaps/"};
+  static constexpr const char* bitmaps_extension {".bitmap"};
+
+public:
+  Assets() = default;
+  ~Assets() = default;
+  void loadBitmaps(const std::vector<std::string>& manifest, int32_t scale);
+  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32_t>& scales);
+  const Bitmap& getBitmap(const std::string& key) {return _bitmaps[key];}
+  const Font& getFont(const std::string& key, int32_t scale) const;
+
+private:
+  std::unordered_map<std::string, Bitmap> _bitmaps;
+  std::unordered_map<std::string, std::pair<Font, int32_t>> _fonts;
+};
+
+extern std::unique_ptr<Assets> assets;
+
+//===============================================================================================//
 // ##>APPLICATION                                                                                //
-//                                                                                               //
 //===============================================================================================//
 
 class Application;
@@ -406,13 +408,13 @@ public:
   Application() = default;
   virtual ~Application() = default;
   
-  virtual bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight);
+  virtual bool initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight);
 
   virtual const std::string& getName() const = 0;
-  virtual int32 getVersionMajor() const = 0;
-  virtual int32 getVersionMinor() const = 0;
+  virtual int32_t getVersionMajor() const = 0;
+  virtual int32_t getVersionMinor() const = 0;
 
-  void onWindowResize(int32 windowWidth, int32 windowHeight);
+  void onWindowResize(int32_t windowWidth, int32_t windowHeight);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
 
@@ -435,9 +437,7 @@ private:
 };
 
 //===============================================================================================//
-//                                                                                               //
 // ##>ENGINE                                                                                     //
-//                                                                                               //
 //===============================================================================================//
 
 class Engine
@@ -511,13 +511,13 @@ public:
   public:
     explicit TPSMeter() : _timer{}, _ticks{0}, _tps{0} {}
     ~TPSMeter() = default;
-    void recordTicks(Duration_t realDt, int32 ticks);
-    int32 getTPS() const {return _tps;}
+    void recordTicks(Duration_t realDt, int32_t ticks);
+    int32_t getTPS() const {return _tps;}
     
   private:
     Duration_t _timer;
-    int32 _ticks;
-    int32 _tps;
+    int32_t _ticks;
+    int32_t _tps;
   };
 
   enum LoopTicks {LOOPTICK_UPDATE, LOOPTICK_DRAW, LOOPTICK_COUNT};
@@ -528,8 +528,8 @@ public:
     TPSMeter _tpsMeter;
     Metronome _metronome;
     int64 _ticksAccumulated;
-    int32 _ticksDoneThisFrame;
-    int32 _maxTicksPerFrame;
+    int32_t _ticksDoneThisFrame;
+    int32_t _maxTicksPerFrame;
     float _tickPeriod;
   };
 
@@ -546,20 +546,20 @@ public:
     static const std::string key_opengl_major;
     static const std::string key_opengl_minor;
 
-    static constexpr int32 defaultWindowWidth {800};
-    static constexpr int32 defaultWindowHeight {600};
-    static constexpr int32 defaultFullscreen {0};
-    static constexpr int32 defaultOpenglMajor {2};
-    static constexpr int32 defaultOpenglMinor {1};
+    static constexpr int32_t defaultWindowWidth {800};
+    static constexpr int32_t defaultWindowHeight {600};
+    static constexpr int32_t defaultFullscreen {0};
+    static constexpr int32_t defaultOpenglMajor {2};
+    static constexpr int32_t defaultOpenglMinor {1};
 
   public:
     Config();
     void load();
-    void setProperty(const std::string& key, int32 value){_properties[key] = value;}
-    int32 getProperty(const std::string& key){return _properties[key];}
+    void setProperty(const std::string& key, int32_t value){_properties[key] = value;}
+    int32_t getProperty(const std::string& key){return _properties[key];}
 
   private:
-    std::unordered_map<std::string, int32> _properties;
+    std::unordered_map<std::string, int32_t> _properties;
   };
 
 public:
@@ -578,6 +578,7 @@ private:
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void loadConfig();
+  void generateDefaultConfig();
   double durationToSeconds(Duration_t d);
 
 private:
@@ -585,7 +586,7 @@ private:
   std::unique_ptr<Application> _app;
   RealClock _realClock;
   GameClock _gameClock;
-  Config _config;
+  Configuration<std::string, int32_t> _config;
   bool _isPaused;
   bool _isSleeping;
   bool _isDrawingPerformanceStats;

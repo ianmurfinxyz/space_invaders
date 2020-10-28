@@ -6,16 +6,16 @@ namespace nomad
 {
 
 //===============================================================================================//
-//                                                                                               //
 // ##>LOG                                                                                        //
-//                                                                                               //
 //===============================================================================================//
 
 Log::Log()
 {
   _os.open(filename, std::ios_base::trunc);
-  if(!_os)
-    log(error, failed_to_open_log_file);
+  if(!_os){
+    log(ERROR, logstr::fail_open_log);
+    log(INFO, logstr::info_stderr_log);
+  }
 }
 
 Log::~Log()
@@ -24,10 +24,10 @@ Log::~Log()
     _os.close();
 }
 
-void Log::log(const char* prefix, const char* error, const std::string& addendum)
+void Log::log(Level level, const char* error, const std::string& addendum)
 {
   std::ostream& o {_os ? _os : std::cerr}; 
-  o << prefix << delim << error;
+  o << lvlstr[level] << delim << error;
   if(!addendum.empty())
     o << delim << addendum;
   o << std::endl;
@@ -36,9 +36,7 @@ void Log::log(const char* prefix, const char* error, const std::string& addendum
 std::unique_ptr<Log> log {nullptr};
 
 //===============================================================================================//
-//                                                                                               //
-// ##>INPUT MANAGER                                                                              //
-//                                                                                               //
+// ##>INPUT                                                                                      //
 //===============================================================================================//
 
 Input::Input()
@@ -110,10 +108,9 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
 
 std::unique_ptr<Input> input {nullptr};
 
+
 //===============================================================================================//
-//                                                                                               //
-// ##>BITMAP                                                                                     //
-//                                                                                               //
+// ##>GRAPHICS                                                                                   //
 //===============================================================================================//
 
 Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
@@ -217,12 +214,6 @@ void Bitmap::print(std::ostream& out) const
   out << std::endl;
 }
 
-//===============================================================================================//
-//                                                                                               //
-// ##>FONT                                                                                       //
-//                                                                                               //
-//===============================================================================================//
-
 Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
   _glyphs{glyphs}, _meta{meta}
 {
@@ -236,69 +227,6 @@ Font::Font(const std::vector<Glyph>& glyphs, Meta meta) :
   auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0._asciiCode < g1._asciiCode;};
   std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
 }
-
-//===============================================================================================//
-//                                                                                               //
-// ##>ASSETS                                                                                     //
-//                                                                                               //
-//===============================================================================================//
-
-void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
-{
-  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
-  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
-
-  bool fail {false};
-  std::string path {};
-  for(const auto& key : manifest){
-    if(_bitmaps.find(key) != _bitmaps.end())
-      continue;
-
-    path.clear();
-    path += bitmaps_path;
-    path += key;
-    path += bitmaps_extension;
-    std::ifstream bitmap {path};
-    if(!bitmap){
-      nomad::log->log(Log::fatal, Log::missing_asset, path);
-      fail = true;
-      continue;
-    }
-
-    bool malformed {false};
-    std::vector<std::string> rows {};
-    for(std::string row; std::getline(bitmap, row);){
-      row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-      int32 count = std::count_if(row.begin(), row.end(), isBinary);
-      if(count != row.length()){
-        nomad::log->log(Log::fatal, Log::malformed_bitmap, path);
-        malformed = true;
-        break;
-      }
-      rows.push_back(row);
-    }
-    if(malformed) continue;
-    std::reverse(rows.begin(), rows.end()); 
-    
-    _bitmaps.emplace(std::make_pair(key, Bitmap{rows, scale}));
-  }
-
-  if(fail)
-    exit(EXIT_FAILURE);
-}
-
-const Font& Assets::getFont(const std::string& key, int32 scale) const
-{
-
-}
-
-std::unique_ptr<Assets> assets {nullptr};
-
-//===============================================================================================//
-//                                                                                               //
-// ##>RENDERER                                                                                   //
-//                                                                                               //
-//===============================================================================================//
 
 Renderer::Renderer(const Config& config)
 {
@@ -403,9 +331,151 @@ Vector2i Renderer::getWindowSize() const
 std::unique_ptr<Renderer> renderer {nullptr};
 
 //===============================================================================================//
-//                                                                                               //
+// ##>RESOURCES                                                                                  //
+//===============================================================================================//
+
+Dataset::Dataset(std::vector<std::pair<Key_t, Value_t>> properties)
+{
+  for(const auto& property : properties)
+    _properties.emplace(std::pair{property});
+}
+
+bool Dataset::load(const std::string& filename)
+{
+  std::ifstream file {filename};
+  if(!file){
+    log->log(Log::ERROR, logstr::fail_open_dataset, std::string{filename});
+    return;
+  }
+
+  auto lineNoToString [](int32_t l){return std::string{"["} + std::to_string(l) + "]";}
+  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
+  auto isDigit = [](unsigned char c){return std::isdigit(c);};
+
+  int32_t lineNo {0};
+
+  for(std::string line; std::getline(file, line);){
+    ++lineNo;
+
+    line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
+
+    if(line.front() == comment) 
+      continue;
+     
+    int32 count {0};
+    count = std::count(line.begin(), line.end(), seperator);
+    if(count != 1){
+      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+      log->log(Log::INFO, logstr::info_surplus_seperators);
+      continue;
+    }
+
+    std::size_t pos = line.find_first_of(seperator);
+    std::string key {line.substr(0, pos)};
+    std::string value {line.substr(pos + 1)};
+
+    if(key.empty() || value.empty()){
+      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+      log->log(Log::INFO, logstr::info_incomplete_property);
+      continue; 
+    }
+
+    count = std::count_if(value.begin(), value.end(), isDigit);
+    if(count != value.length()){
+      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+      log->log(Log::INFO, logstr::expected_integer, value);
+      continue;
+    }
+
+    _properties[key] = std::stoi(value);
+  }
+}
+
+bool Dataset::write(const std::string& filename)
+{
+}
+
+bool Dataset::append(const std::string& filename)
+{
+}
+
+bool Dataset::hasProperty(const Key_t& key) const
+{
+  return _properties.find(key) == _properties.end();
+}
+
+bool Dataset::hasProperties(const std::vector<Key_t>& keys) const
+{
+  for(const auto& key : keys)
+    if(_properties.find(key) == _properties.end())
+      return false;
+  return true;
+}
+
+int32_t Dataset::getProperty(const std::string& key) const
+{
+  return _properties[key];
+}
+
+void setProperties(const std::vector<std::pair<Key_t, Value_t>> properties)
+{
+  for(const auto& property : properties)
+    _properties[property.first] = property.second;
+}
+
+void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
+{
+  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
+  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+
+  bool fail {false};
+  std::string path {};
+  for(const auto& key : manifest){
+    if(_bitmaps.find(key) != _bitmaps.end())
+      continue;
+
+    path.clear();
+    path += bitmaps_path;
+    path += key;
+    path += bitmaps_extension;
+    std::ifstream bitmap {path};
+    if(!bitmap){
+      nomad::log->log(Log::fatal, Log::missing_asset, path);
+      fail = true;
+      continue;
+    }
+
+    bool malformed {false};
+    std::vector<std::string> rows {};
+    for(std::string row; std::getline(bitmap, row);){
+      row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
+      int32 count = std::count_if(row.begin(), row.end(), isBinary);
+      if(count != row.length()){
+        nomad::log->log(Log::fatal, Log::malformed_bitmap, path);
+        malformed = true;
+        break;
+      }
+      rows.push_back(row);
+    }
+    if(malformed) continue;
+    std::reverse(rows.begin(), rows.end()); 
+    
+    _bitmaps.emplace(std::make_pair(key, Bitmap{rows, scale}));
+  }
+
+  if(fail)
+    exit(EXIT_FAILURE);
+}
+
+const Font& Assets::getFont(const std::string& key, int32 scale) const
+{
+
+}
+
+std::unique_ptr<Assets> assets {nullptr};
+
+//===============================================================================================//
 // ##>APPLICATION                                                                                //
-//                                                                                               //
 //===============================================================================================//
 
 void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
@@ -475,9 +545,7 @@ void Application::drawWindowTooSmall()
 }
 
 //===============================================================================================//
-//                                                                                               //
 // ##>ENGINE                                                                                     //
-//                                                                                               //
 //===============================================================================================//
 
 Engine::Duration_t Engine::RealClock::update()
@@ -536,52 +604,6 @@ Engine::Config::Config()
 
 void Engine::Config::load()
 {
-  std::ifstream config {filename};
-  if(!config){
-    nomad::log->log(Log::error, Log::failed_to_open_config_file, std::string{filename});
-    return;
-  }
-
-  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
-  auto isDigit = [](unsigned char c){return std::isdigit(c);};
-
-  for(std::string line; std::getline(config, line);){
-    line.erase(std::remove_if(line.begin(), line.end(), isSpace), line.end());
-
-    if(line.front() == comment) 
-      continue;
-     
-    int32 count {0};
-    count = std::count(line.begin(), line.end(), seperator);
-    if(count != 1){
-      nomad::log->log(Log::warning, Log::malformed_config_line, line);
-      continue;
-    }
-
-    std::size_t pos = line.find_first_of(seperator);
-    std::string key {line.substr(0, pos)};
-    std::string value {line.substr(pos + 1)};
-
-    if(key.empty() || value.empty()){
-      nomad::log->log(Log::warning, Log::malformed_config_line, line);
-      continue; 
-    }
-
-    auto iter = _properties.find(key);
-    if(iter == _properties.end()){
-      nomad::log->log(Log::warning, Log::unkown_config_key, key);
-      continue;
-    }
-     
-    count = std::count_if(value.begin(), value.end(), isDigit);
-    if(count != value.length()){
-      nomad::log->log(Log::warning, Log::malformed_config_value, value);
-      continue;
-    }
-
-    iter->second = std::stoi(value);
-    nomad::log->log(Log::info, Log::set_config_property, line);
-  }
 }
 
 void Engine::initialize(std::unique_ptr<Application>&& app)
@@ -635,15 +657,6 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
   nomad::renderer = std::make_unique<Renderer>(rconfig);
 
   Vector2i windowSize = nomad::renderer->getWindowSize();
-
-  //
-  //
-  // TODO - remove this -- temp!!!
-  //
-  //
-  //
-  //
-  std::cout << "w: " << windowSize._x << " h: " << windowSize._y << std::endl;
 
   _app->initialize(this, windowSize._x, windowSize._y);
 
