@@ -334,23 +334,47 @@ std::unique_ptr<Renderer> renderer {nullptr};
 // ##>RESOURCES                                                                                  //
 //===============================================================================================//
 
-Dataset::Dataset(std::vector<std::pair<Key_t, Value_t>> properties)
+Configuration::Configuration(std::initializer_list<Property> properties)
 {
   for(const auto& property : properties)
-    _properties.emplace(std::pair{property});
+    _properties.emplace(std::make_pair(property.key, property));
 }
 
-bool Dataset::load(const std::string& filename)
+void Configuration::clearProperties()
+{
+  _properties.clear();
+}
+
+bool removeProperty(int32_t key)
+{
+  return _properties.erase(key);
+}
+
+void Configuration::addProperty(const Property& property)
+{
+  auto& search = _properties.find(property.key);
+  if(search == _properties.end()){
+    _properties.emplace(std::make_pair(property.key, property));
+    return true;
+  }
+  return false;
+}
+
+bool Configuration::hasProperty(int32_t key) const
+{
+  return _properties.find(key) == _properties.end();
+}
+
+bool Configuration::load(const std::string& filename, bool loadComments)
 {
   std::ifstream file {filename};
   if(!file){
-    log->log(Log::ERROR, logstr::fail_open_dataset, std::string{filename});
-    return;
+    log->log(Log::ERROR, logstr::fail_open_config, std::string{filename});
+    return false;
   }
 
   auto lineNoToString [](int32_t l){return std::string{"["} + std::to_string(l) + "]";}
   auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
-  auto isDigit = [](unsigned char c){return std::isdigit(c);};
 
   int32_t lineNo {0};
 
@@ -365,62 +389,222 @@ bool Dataset::load(const std::string& filename)
     int32 count {0};
     count = std::count(line.begin(), line.end(), seperator);
     if(count != 1){
-      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
-      log->log(Log::INFO, logstr::info_surplus_seperators);
+      log->log(Log::ERROR, logstr::fail_malformed_config, lineNoToString(lineNo) + line);
+      log->log(Log::INFO, logstr::info_unexpected_seperators, std::string{seperator});
       continue;
     }
 
     std::size_t pos = line.find_first_of(seperator);
-    std::string key {line.substr(0, pos)};
+    std::string keyword {line.substr(0, pos)};
     std::string value {line.substr(pos + 1)};
 
-    if(key.empty() || value.empty()){
-      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+    if(keyword.empty() || value.empty()){
+      log->log(Log::ERROR, logstr::fail_malformed_config, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_incomplete_property);
-      continue; 
-    }
-
-    count = std::count_if(value.begin(), value.end(), isDigit);
-    if(count != value.length()){
-      log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
-      log->log(Log::INFO, logstr::expected_integer, value);
       continue;
     }
 
-    _properties[key] = std::stoi(value);
+    Property* p {nullptr};
+    for(auto& pair : _properties){
+      if(pair.second._keyword == keyword){
+        p = &pair.second;
+        break;
+      }
+    }
+
+    if(p == nullptr){
+      log->log(Log::ERROR, logstr::unkown_config_property, lineNoToString(lineNo) + keyword);
+      continue;
+    }
+
+    switch(p->_type){
+      case INT_PROPERTY:
+        {
+          int32_t result {0};
+          if(!parseInt(value, result)){
+            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::expected_integer, value);
+            continue;
+          }
+          p->_value = result;
+          break;
+        }
+      case FLOAT_PROPERTY:
+        {
+          float result {0.f};
+          if(!parseFloat(value, result)){
+            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::expected_float, value);
+            continue;
+          }
+          p->_value = result;
+          break;
+        }
+      case BOOL_PROPERTY:
+        {
+          bool result {0.f};
+          if(!parseBool(value, result)){
+            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::expected_bool, value);
+            continue;
+          }
+          p->_value = result;
+          break;
+        }
+    };
+
   }
-}
 
-bool Dataset::write(const std::string& filename)
-{
-}
-
-bool Dataset::append(const std::string& filename)
-{
-}
-
-bool Dataset::hasProperty(const Key_t& key) const
-{
-  return _properties.find(key) == _properties.end();
-}
-
-bool Dataset::hasProperties(const std::vector<Key_t>& keys) const
-{
-  for(const auto& key : keys)
-    if(_properties.find(key) == _properties.end())
-      return false;
   return true;
 }
 
-int32_t Dataset::getProperty(const std::string& key) const
+bool Configuration::write(const std::string& filename)
 {
-  return _properties[key];
 }
 
-void setProperties(const std::vector<std::pair<Key_t, Value_t>> properties)
+int32_t Configuration::lookupIntValue(int32_t key) const
 {
-  for(const auto& property : properties)
-    _properties[property.first] = property.second;
+}
+
+int32_t Configuration::lookupIntDefault(int32_t key) const
+{
+}
+
+int32_t Configuration::lookupIntMax(int32_t key) const
+{
+}
+
+int32_t Configuration::lookupIntMin(int32_t key) const
+{
+}
+
+float Configuration::lookupFloatValue(int32_t key) const
+{
+}
+
+float Configuration::lookupFloatDefault(int32_t key) const
+{
+}
+
+float Configuration::lookupFloatMax(int32_t key) const
+{
+}
+
+float Configuration::lookupFloatMin(int32_t key) const
+{
+}
+
+bool Configuration::lookupBoolValue(int32_t key) const
+{
+}
+
+bool Configuration::lookupBoolDefault(int32_t key) const
+{
+}
+
+void Configuration::setComment(int32_t key, const std::string& comment)
+{
+}
+
+void Configuration::setIntValue(int32_t key)
+{
+}
+
+void Configuration::setIntDefault(int32_t key)
+{
+}
+
+void Configuration::setIntMax(int32_t key)
+{
+}
+
+void Configuration::setIntMin(int32_t key)
+{
+}
+
+void Configuration::setFloatValue(int32_t key)
+{
+}
+
+void Configuration::setFloatDefault(int32_t key)
+{
+}
+
+void Configuration::setFloatMax(int32_t key)
+{
+}
+
+void Configuration::setFloatMin(int32_t key)
+{
+}
+
+void Configuration::setBoolValue(int32_t key)
+{
+}
+
+void Configuration::setBoolDefault(int32_t key)
+{
+}
+
+bool Configuration::parseInt(const std::string& value, int32_t& result)
+{
+  auto isDigit = [](unsigned char c){return std::isdigit(c);};
+  auto isSign = [](unsigned char c){return c == '+' || c == '-';}
+
+  int32_t nSigns = std::count_if(value.begin(), value.end(), isSign);
+  if(nSigns > 1){
+    return false;
+  }
+  else if(nSigns == 1 && isSign(value.front()) == false){
+      return false;
+  }
+
+  int32_t count = std::count_if(value.begin(), value.end(), isDigit);
+  if(count != value.length() - nSigns){
+    return false;
+  }
+
+  result = std::stoi(value);
+  return true;
+}
+
+bool Configuration::parseFloat(const std::string& value, float& result)
+{
+  auto isDigit = [](unsigned char c){return std::isdigit(c);};
+  auto isSign = [](unsigned char c){return c == '+' || c == '-';}
+
+  int32_t nSigns = std::count_if(value.begin(), value.end(), isSign);
+  if(nSigns > 1){
+    return false;
+  }
+  else if(nSigns == 1 && isSign(value.front()) == false){
+      return false;
+  }
+
+  int32_t nPoints = std::count(value.begin(), value.end(), '.');
+  if(nPoints > 1)
+    return false;
+
+  count = std::count_if(value.begin(), value.end(), isDigit);
+  if(count != value.length() - nPoints - nSigns)
+    return false;
+
+  result = std::stof(value);
+  return true;
+}
+
+bool Configuration::parseBool(const std::string& value, bool& result)
+{
+  if(value == "true"){
+    result = true;
+    return true;
+  }
+  else if(value == "false"){
+    result = false;
+    return true;
+  }
+
+  return false;
 }
 
 void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
@@ -586,24 +770,28 @@ void Engine::TPSMeter::recordTicks(Duration_t realDt, int32 ticks)
   }
 }
 
-const std::string Engine::Config::filename {"config"};
-const std::string Engine::Config::key_window_width {"window_width"};
-const std::string Engine::Config::key_window_height {"window_height"};
-const std::string Engine::Config::key_fullscreen {"fullscreen"};
-const std::string Engine::Config::key_opengl_major {"opengl_major"};
-const std::string Engine::Config::key_opengl_minor {"opengl_minor"};
-
-Engine::Config::Config()
-{
-  _properties.emplace(std::make_pair(key_window_width, defaultWindowWidth));
-  _properties.emplace(std::make_pair(key_window_height, defaultWindowHeight));
-  _properties.emplace(std::make_pair(key_fullscreen, defaultFullscreen));
-  _properties.emplace(std::make_pair(key_opengl_major, defaultOpenglMajor));
-  _properties.emplace(std::make_pair(key_opengl_minor, defaultOpenglMinor));
-}
-
 void Engine::Config::load()
 {
+  Dataset ds;
+  if(!ds.load(filename)){
+    log->log(Log::INFO, logstr::info_using_default_config);
+    return;
+  }
+
+  std::string key{};
+  for(auto& property : _properties){
+    key += property._key;
+    if(ds.hasProperty(key)){
+      property._value = ds.getProperty(key);
+      ds.eraseProperty(key);
+      log->log(Log::INFO, logstr::info_set_config_property, key);
+    }
+    key.clear();
+  }
+
+  for(const auto& pair : ds.getProperties()){
+    log->log(Log::INFO, logstr::info_unkown_config_property, pair.first);
+  }
 }
 
 void Engine::initialize(std::unique_ptr<Application>&& app)
@@ -647,11 +835,11 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
 
   Renderer::Config rconfig {
     std::string{ss.str()},
-    _config.getProperty(Config::key_window_width),
-    _config.getProperty(Config::key_window_height),
-    _config.getProperty(Config::key_opengl_major),
-    _config.getProperty(Config::key_opengl_minor),
-    _config.getProperty(Config::key_fullscreen),
+    _config[Config::WINDOW_WIDTH],
+    _config[Config::WINDOW_HEIGHT],
+    _config[Config::OPENGL_MAJOR],
+    _config[Config::OPENGL_MINOR],
+    _config[Config::FULLSCREEN]
   };
 
   nomad::renderer = std::make_unique<Renderer>(rconfig);
@@ -771,6 +959,18 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
 double Engine::durationToSeconds(Duration_t d)
 {
   return static_cast<double>(d.count()) / static_cast<double>(oneSecond.count());
+}
+
+void Engine::generateDefaultConfiguration()
+{
+  _config.clear();
+  _config.addProperties({
+    {CKEY_WINDOW_WIDTH, "windowWidth", "", {0}, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
+    {CKEY_WINDOW_HEIGHT, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
+    {CKEY_FULLSCREEN, {true}, {false}, {true}, Configuration::INT_PROPERTY},
+    {CKEY_WINDOW_WIDTH, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
+    {CKEY_WINDOW_WIDTH, {500}, {300}, {1000}, Configuration::INT_PROPERTY}
+  });
 }
 
 } // namespace nomad

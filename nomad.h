@@ -93,16 +93,17 @@ namespace logstr
   const char* fail_create_ogl_context = "failed to create opengl context";
   const char* fail_set_ogl_attribute = "failed to set opengl attribute";
   const char* fail_create_window = "failed to create window";
-  const char* fail_open_dataset = "failed to open data file";
-  const char* fail_malformed_dataset = "malformed data file";
-  const char* fail_unkown_dataset_key = "unrecognised data key";
+  const char* fail_open_config = "failed to open configuration file";
+  const char* fail_malformed_config = "malformed configuration file";
+  const char* fail_unknown_config_property = "unkown configuration property";
   const char* fail_missing_asset = "missing asset";
   const char* fail_malformed_bitmap = "malformed bitmap";
 
   const char* info_stderr_log = "logging to standard error";
   const char* info_set_config_property = "set config property";
+  const char* info_using_default_config = "using default engine configuration";
   const char* info_created_window = "window created";
-  const char* info_surplus_seperators = "too many seperators";
+  const char* info_unexpected_seperators = "expected one seperator character";
   const char* info_incomplete_property = "missing property key or value";
   const char* info_expected_integer = "expected integer value";
 };
@@ -324,35 +325,75 @@ extern std::unique_ptr<Renderer> renderer;
 // ##>RESOURCES                                                                                  //
 //===============================================================================================//
 
-class Dataset
+class Configuration
 {
 public:
-  using Key_t = std::string;
-  using Value_t = int32_t;
+  enum PropertyType {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
+
+  struct Property
+  {
+    int32_t _key;
+    std::string _keyword;
+    std::string _comment;
+    std::variant<int32_t, float, bool> _value;
+    std::variant<int32_t, float, bool> _default;
+    std::variant<int32_t, float, bool> _min;
+    std::variant<int32_t, float, bool> _max;
+    PropertyType _type;
+  };
 
 public:
   static constexpr char comment {'#'};
   static constexpr char seperator {'='};
 
 public:
-  Dataset() = default;
-  explicit Dataset(const std::vector<std::pair<Key_t, Value_t>>& properties);
+  Configuration() = default;
+  Configuration(std::initializer_list<Property> properties);
+  Configuration(const Configuration&) = default;
+  Configuration(Configuration&&) = default;
+
+  Configuration& operator=(const Configuration&) = default;
+  Configuration& operator=(Configuration&&) = default;
+
+  void clearProperties();
+  bool removeProperty(int32_t key);
+  bool addProperty(const Property& property);
+  bool hasProperty(int32_t key) const;
 
   bool load(const std::string& filename);
   bool write(const std::string& filename);
-  bool append(const std::string& filename);
 
-  bool hasProperty(const Key_t& key) const;
-  bool hasProperties(const std::vector<Key_t>& keys) const;
+  int32_t lookupIntValue(int32_t key) const;
+  int32_t lookupIntDefault(int32_t key) const;
+  int32_t lookupIntMax(int32_t key) const;
+  int32_t lookupIntMin(int32_t key) const;
+  float lookupFloatValue(int32_t key) const;
+  float lookupFloatDefault(int32_t key) const;
+  float lookupFloatMax(int32_t key) const;
+  float lookupFloatMin(int32_t key) const;
+  bool lookupBoolValue(int32_t key) const;
+  bool lookupBoolDefault(int32_t key) const;
 
-  std::unordered_map<Key_t, Value_t> getProperties() const {return _properties;}
-  int32_t getProperty(const std::string& key) const;
+  void setComment(int32_t key, const std::string& comment);
 
-  void setProperties(const std::vector<std::pair<Key_t, Value_t>> properties);
-  void setProperty(const Key_t& key, const Value_t& value);
+  void setIntValue(int32_t key);
+  void setIntDefault(int32_t key);
+  void setIntMax(int32_t key);
+  void setIntMin(int32_t key);
+  void setFloatValue(int32_t key);
+  void setFloatDefault(int32_t key);
+  void setFloatMax(int32_t key);
+  void setFloatMin(int32_t key);
+  void setBoolValue(int32_t key);
+  void setBoolDefault(int32_t key);
 
 private:
-  std::unordered_map<Key_t, Value_t> _properties;
+  bool parseInt(const std::string& value, int32_t& result);
+  bool parseFloat(const std::string& value, float& result);
+  bool parseBool(const std::string& value, bool& result);
+  
+private:
+  std::unordered_map<int32_t key, Property> _properties;
 };
 
 class Assets
@@ -533,33 +574,13 @@ public:
     float _tickPeriod;
   };
 
-  class Config
+  enum ConfigKey
   {
-  public:
-    static constexpr char comment {'#'};
-    static constexpr char seperator {'='};
-
-    static const std::string filename;
-    static const std::string key_window_width;
-    static const std::string key_window_height;
-    static const std::string key_fullscreen;
-    static const std::string key_opengl_major;
-    static const std::string key_opengl_minor;
-
-    static constexpr int32_t defaultWindowWidth {800};
-    static constexpr int32_t defaultWindowHeight {600};
-    static constexpr int32_t defaultFullscreen {0};
-    static constexpr int32_t defaultOpenglMajor {2};
-    static constexpr int32_t defaultOpenglMinor {1};
-
-  public:
-    Config();
-    void load();
-    void setProperty(const std::string& key, int32_t value){_properties[key] = value;}
-    int32_t getProperty(const std::string& key){return _properties[key];}
-
-  private:
-    std::unordered_map<std::string, int32_t> _properties;
+    CKEY_WINDOW_WIDTH, 
+    CKEY_WINDOW_HEIGHT, 
+    CKEY_FULLSCREEN, 
+    CKEY_OPENGL_MAJOR, 
+    CKEY_OPENGL_MINOR
   };
 
 public:
@@ -577,16 +598,15 @@ private:
   void drawPauseDialog();
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
-  void loadConfig();
-  void generateDefaultConfig();
   double durationToSeconds(Duration_t d);
+  void generateDefaultConfiguration();
 
 private:
+  Configuration _config;
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
   std::unique_ptr<Application> _app;
   RealClock _realClock;
   GameClock _gameClock;
-  Configuration<std::string, int32_t> _config;
   bool _isPaused;
   bool _isSleeping;
   bool _isDrawingPerformanceStats;
