@@ -99,8 +99,8 @@ class SpaceInvaders final : public Application
 public:
   static const std::string name;
 
-  static constexpr int32 version_major {0};
-  static constexpr int32 version_minor {1};
+  static constexpr int32_t version_major {0};
+  static constexpr int32_t version_minor {1};
   static constexpr Vector2i baseWorldSize {300, 300};
 
 public:
@@ -108,17 +108,17 @@ public:
   ~SpaceInvaders() = default;
 
   const std::string& getName() const {return name;}
-  int32 getVersionMajor() const {return version_major;}
-  int32 getVersionMinor() const {return version_minor;}
+  int32_t getVersionMajor() const {return version_major;}
+  int32_t getVersionMinor() const {return version_minor;}
 
-  bool initialize(Engine* engine, int32 windowWidth, int32 windowHeight);
+  bool initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight);
 
 private:
   Vector2i getWorldSize() const {return _worldSize;}
 
 private:
   Vector2i _worldSize;
-  int32 _worldScale;
+  int32_t _worldScale;
 };
 
 #endif

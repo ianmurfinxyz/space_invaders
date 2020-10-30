@@ -113,7 +113,7 @@ std::unique_ptr<Input> input {nullptr};
 // ##>GRAPHICS                                                                                   //
 //===============================================================================================//
 
-Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
+Bitmap::Bitmap(std::vector<std::string> bits, int32_t scale)
 {
   assert(0 < scale && scale <= scaleMax);
   for(auto& str : bits){
@@ -141,9 +141,9 @@ Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
     }
     bits = std::move(sbits);
   }
-  int32 w {0};
+  int32_t w {0};
   for(const auto& str : bits){
-    w = std::max(w, static_cast<int32>(str.length()));
+    w = std::max(w, static_cast<int32_t>(str.length()));
   }
   _width = w;
   _height = bits.size();
@@ -155,7 +155,7 @@ Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
       bool bit = !(c == '0'); 
       row.push_back(bit); 
     }
-    int32 n {w - row.size()};
+    int32_t n {w - row.size()};
     while(n-- > 0){
       row.push_back(false);
     }
@@ -168,8 +168,8 @@ Bitmap::Bitmap(std::vector<std::string> bits, int32 scale)
 void Bitmap::regenBytes()
 {
   _bytes.clear();
-  uint8 byte {0};
-  int32 bitNo {0};
+  uint8_t byte {0};
+  int32_t bitNo {0};
   for(const auto& row : _bits){
     for(bool bit : row){
       if(bitNo > 7){
@@ -187,14 +187,14 @@ void Bitmap::regenBytes()
   }
 }
 
-bool Bitmap::getBit(int32 row, int32 col)
+bool Bitmap::getBit(int32_t row, int32_t col)
 {
   assert(0 <= row && row < _width);
   assert(0 <= col && col < _height);
   return _bits[row][col];
 }
 
-void Bitmap::setBit(int32 row, int32 col, bool value, bool regen)
+void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
 {
   assert(0 <= row && row < _width);
   assert(0 <= col && col < _height);
@@ -232,13 +232,15 @@ Renderer::Renderer(const Config& config)
 {
   _config = config;
 
-  uint32 flags = SDL_WINDOW_OPENGL;
-  if(_config._fullscreen)
+  uint32_t flags = SDL_WINDOW_OPENGL;
+  if(_config._fullscreen){
     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+    log->log(Log::INFO, logstr::info_fullscreen_mode);
+  }
 
   std::stringstream ss {};
   ss << "{w:" << _config._windowWidth << ",h:" << _config._windowHeight << "}";
-  nomad::log->log(Log::info, Log::creating_window, std::string{ss.str()});
+  log->log(Log::INFO, logstr::info_creating_window, std::string{ss.str()});
 
   _window = SDL_CreateWindow(
       _config._windowTitle.c_str(), 
@@ -250,22 +252,27 @@ Renderer::Renderer(const Config& config)
   );
 
   if(_window == nullptr){
-    nomad::log->log(Log::fatal, Log::failed_to_create_window, std::string{SDL_GetError()});
+    log->log(Log::FATAL, logstr::fail_create_window, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
+  Vector2i wndsize = getWindowSize();
+  std::stringstream().swap(ss);
+  ss << "{w:" << wndsize._x << ",h:" << wndsize._y << "}";
+  log->log(Log::INFO, logstr::info_created_window, std::string{ss.str()});
+
   _glContext = SDL_GL_CreateContext(_window);
   if(_glContext == nullptr){
-    nomad::log->log(Log::fatal, Log::failed_to_create_opengl_context, std::string{SDL_GetError()});
+    log->log(Log::FATAL, logstr::fail_create_opengl_context, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
-    nomad::log->log(Log::fatal, Log::opengl_set_attribute_fail, std::string{SDL_GetError()});
+    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
-    nomad::log->log(Log::fatal, Log::opengl_set_attribute_fail, std::string{SDL_GetError()});
+    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -334,46 +341,28 @@ std::unique_ptr<Renderer> renderer {nullptr};
 // ##>RESOURCES                                                                                  //
 //===============================================================================================//
 
-Configuration::Configuration(std::initializer_list<Property> properties)
+Dataset::Property::Property(int32_t key, std::string name, Value_t default_, Value_t min, Value_t max) :
+  _key{key}, _name{name}, _default{default_}, _min{min}, _max{max}
+{
+  assert(_default.index() == _min.index() && _default.index() == _max.index());
+  _type = static_cast<Type>(_default.index());
+}
+
+Dataset::Dataset(std::initializer_list<Property> properties)
 {
   for(const auto& property : properties)
-    _properties.emplace(std::make_pair(property.key, property));
+    _properties.emplace(std::make_pair(property._key, property));
 }
 
-void Configuration::clearProperties()
-{
-  _properties.clear();
-}
-
-bool removeProperty(int32_t key)
-{
-  return _properties.erase(key);
-}
-
-void Configuration::addProperty(const Property& property)
-{
-  auto& search = _properties.find(property.key);
-  if(search == _properties.end()){
-    _properties.emplace(std::make_pair(property.key, property));
-    return true;
-  }
-  return false;
-}
-
-bool Configuration::hasProperty(int32_t key) const
-{
-  return _properties.find(key) == _properties.end();
-}
-
-bool Configuration::load(const std::string& filename, bool loadComments)
+bool Dataset::load(const char* filename)
 {
   std::ifstream file {filename};
   if(!file){
-    log->log(Log::ERROR, logstr::fail_open_config, std::string{filename});
+    log->log(Log::ERROR, logstr::warn_cannot_open_dataset, std::string{filename});
     return false;
   }
 
-  auto lineNoToString [](int32_t l){return std::string{"["} + std::to_string(l) + "]";}
+  auto lineNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
   auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
 
   int32_t lineNo {0};
@@ -386,34 +375,41 @@ bool Configuration::load(const std::string& filename, bool loadComments)
     if(line.front() == comment) 
       continue;
      
-    int32 count {0};
+    int32_t count {0};
     count = std::count(line.begin(), line.end(), seperator);
     if(count != 1){
-      log->log(Log::ERROR, logstr::fail_malformed_config, lineNoToString(lineNo) + line);
+      log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unexpected_seperators, std::string{seperator});
+      log->log(Log::INFO, logstr::info_ignoring_line);
       continue;
     }
 
     std::size_t pos = line.find_first_of(seperator);
-    std::string keyword {line.substr(0, pos)};
+    std::string name {line.substr(0, pos)};
     std::string value {line.substr(pos + 1)};
 
-    if(keyword.empty() || value.empty()){
-      log->log(Log::ERROR, logstr::fail_malformed_config, lineNoToString(lineNo) + line);
+    if(name.empty() || value.empty()){
+      log->log(Log::ERROR, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_incomplete_property);
+      log->log(Log::INFO, logstr::info_ignoring_line);
       continue;
     }
 
     Property* p {nullptr};
     for(auto& pair : _properties){
-      if(pair.second._keyword == keyword){
+      if(pair.second._name == name){
         p = &pair.second;
         break;
       }
     }
 
     if(p == nullptr){
-      log->log(Log::ERROR, logstr::unkown_config_property, lineNoToString(lineNo) + keyword);
+      log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
+      log->log(Log::INFO, logstr::info_unknown_dataset_property, name);
+      log->log(Log::INFO, logstr::info_ignoring_line);
       continue;
     }
 
@@ -422,134 +418,110 @@ bool Configuration::load(const std::string& filename, bool loadComments)
         {
           int32_t result {0};
           if(!parseInt(value, result)){
-            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
-            log->log(Log::INFO, logstr::expected_integer, value);
+            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::info_expected_integer, value);
+            log->log(Log::INFO, logstr::info_ignoring_line);
             continue;
           }
-          p->_value = result;
+          p->_value = std::clamp(result, std::get<int32_t>(p->_min), std::get<int32_t>(p->_max));
+          if(std::get<int32_t>(p->_value) != result){
+            log->log(Log::INFO, logstr::info_property_clamped, name);
+          }
+          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
           break;
         }
       case FLOAT_PROPERTY:
         {
           float result {0.f};
           if(!parseFloat(value, result)){
-            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
-            log->log(Log::INFO, logstr::expected_float, value);
+            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::info_expected_float, value);
+            log->log(Log::INFO, logstr::info_ignoring_line);
             continue;
           }
-          p->_value = result;
+          p->_value = std::clamp(result, std::get<float>(p->_min), std::get<float>(p->_max));
+          if(std::get<float>(p->_value) != result){
+            log->log(Log::INFO, logstr::info_property_clamped, name);
+          }
+          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
           break;
         }
       case BOOL_PROPERTY:
         {
-          bool result {0.f};
+          bool result {false};
           if(!parseBool(value, result)){
-            log->log(Log::ERROR, logstr::fail_malformed_dataset, lineNoToString(lineNo) + line);
-            log->log(Log::INFO, logstr::expected_bool, value);
+            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
+            log->log(Log::INFO, logstr::info_expected_bool, value);
+            log->log(Log::INFO, logstr::info_ignoring_line);
             continue;
           }
           p->_value = result;
+          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
           break;
         }
-    };
+    }
+  }
 
+  for(auto& pair : _properties){
+    if(std::get<0>(pair.second._value) == 0){
+      log->log(Log::WARN, logstr::warn_property_not_set, pair.second._name);
+      log->log(Log::INFO, logstr::info_using_property_default);
+      pair.second._value = pair.second._default;
+    }
   }
 
   return true;
 }
 
-bool Configuration::write(const std::string& filename)
+bool Dataset::write(const char* filename, bool genComments)
 {
 }
 
-int32_t Configuration::lookupIntValue(int32_t key) const
+int32_t Dataset::getIntValue(int32_t key) const
+{
+  assert(_properties.at(key)._type == INT_PROPERTY);
+  return std::get<int32_t>(_properties.at(key)._value);
+}
+
+float Dataset::getFloatValue(int32_t key) const
+{
+  assert(_properties.at(key)._type == FLOAT_PROPERTY);
+  return std::get<float>(_properties.at(key)._value);
+}
+
+bool Dataset::getBoolValue(int32_t key) const
+{
+  assert(_properties.at(key)._type == BOOL_PROPERTY);
+  return std::get<bool>(_properties.at(key)._value);
+}
+
+void Dataset::setIntValue(int32_t key, int32_t value)
 {
 }
 
-int32_t Configuration::lookupIntDefault(int32_t key) const
+void Dataset::setFloatValue(int32_t key, float value)
 {
 }
 
-int32_t Configuration::lookupIntMax(int32_t key) const
+void Dataset::setBoolValue(int32_t key, bool value)
 {
 }
 
-int32_t Configuration::lookupIntMin(int32_t key) const
+void Dataset::scaleIntValue(int32_t key, int32_t scale)
 {
 }
 
-float Configuration::lookupFloatValue(int32_t key) const
+void Dataset::scaleFloatValue(int32_t key, float scale)
 {
 }
 
-float Configuration::lookupFloatDefault(int32_t key) const
-{
-}
-
-float Configuration::lookupFloatMax(int32_t key) const
-{
-}
-
-float Configuration::lookupFloatMin(int32_t key) const
-{
-}
-
-bool Configuration::lookupBoolValue(int32_t key) const
-{
-}
-
-bool Configuration::lookupBoolDefault(int32_t key) const
-{
-}
-
-void Configuration::setComment(int32_t key, const std::string& comment)
-{
-}
-
-void Configuration::setIntValue(int32_t key)
-{
-}
-
-void Configuration::setIntDefault(int32_t key)
-{
-}
-
-void Configuration::setIntMax(int32_t key)
-{
-}
-
-void Configuration::setIntMin(int32_t key)
-{
-}
-
-void Configuration::setFloatValue(int32_t key)
-{
-}
-
-void Configuration::setFloatDefault(int32_t key)
-{
-}
-
-void Configuration::setFloatMax(int32_t key)
-{
-}
-
-void Configuration::setFloatMin(int32_t key)
-{
-}
-
-void Configuration::setBoolValue(int32_t key)
-{
-}
-
-void Configuration::setBoolDefault(int32_t key)
-{
-}
-
-bool Configuration::parseInt(const std::string& value, int32_t& result)
+bool Dataset::parseInt(const std::string& value, int32_t& result)
 {
   auto isDigit = [](unsigned char c){return std::isdigit(c);};
-  auto isSign = [](unsigned char c){return c == '+' || c == '-';}
+  auto isSign = [](unsigned char c){return c == '+' || c == '-';};
 
   int32_t nSigns = std::count_if(value.begin(), value.end(), isSign);
   if(nSigns > 1){
@@ -568,10 +540,10 @@ bool Configuration::parseInt(const std::string& value, int32_t& result)
   return true;
 }
 
-bool Configuration::parseFloat(const std::string& value, float& result)
+bool Dataset::parseFloat(const std::string& value, float& result)
 {
   auto isDigit = [](unsigned char c){return std::isdigit(c);};
-  auto isSign = [](unsigned char c){return c == '+' || c == '-';}
+  auto isSign = [](unsigned char c){return c == '+' || c == '-';};
 
   int32_t nSigns = std::count_if(value.begin(), value.end(), isSign);
   if(nSigns > 1){
@@ -585,7 +557,7 @@ bool Configuration::parseFloat(const std::string& value, float& result)
   if(nPoints > 1)
     return false;
 
-  count = std::count_if(value.begin(), value.end(), isDigit);
+  int32_t count = std::count_if(value.begin(), value.end(), isDigit);
   if(count != value.length() - nPoints - nSigns)
     return false;
 
@@ -593,7 +565,7 @@ bool Configuration::parseFloat(const std::string& value, float& result)
   return true;
 }
 
-bool Configuration::parseBool(const std::string& value, bool& result)
+bool Dataset::parseBool(const std::string& value, bool& result)
 {
   if(value == "true"){
     result = true;
@@ -607,7 +579,7 @@ bool Configuration::parseBool(const std::string& value, bool& result)
   return false;
 }
 
-void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
+void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32_t scale)
 {
   auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
   auto isBinary = [](char ch){return ch == '0' || ch == '1';};
@@ -624,7 +596,7 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
     path += bitmaps_extension;
     std::ifstream bitmap {path};
     if(!bitmap){
-      nomad::log->log(Log::fatal, Log::missing_asset, path);
+      //nomad::log->log(Log::FATAL, Log::missing_asset, path);
       fail = true;
       continue;
     }
@@ -633,9 +605,9 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
     std::vector<std::string> rows {};
     for(std::string row; std::getline(bitmap, row);){
       row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-      int32 count = std::count_if(row.begin(), row.end(), isBinary);
+      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
       if(count != row.length()){
-        nomad::log->log(Log::fatal, Log::malformed_bitmap, path);
+        //nomad::log->log(Log::FATAL, Log::malformed_bitmap, path);
         malformed = true;
         break;
       }
@@ -651,7 +623,7 @@ void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32 scale)
     exit(EXIT_FAILURE);
 }
 
-const Font& Assets::getFont(const std::string& key, int32 scale) const
+const Font& Assets::getFont(const std::string& key, int32_t scale) const
 {
 
 }
@@ -662,7 +634,7 @@ std::unique_ptr<Assets> assets {nullptr};
 // ##>APPLICATION                                                                                //
 //===============================================================================================//
 
-void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
+void Application::onWindowResize(int32_t windowWidth, int32_t windowHeight)
 {
   Vector2i worldSize = getWorldSize();
 
@@ -684,7 +656,7 @@ void Application::onWindowResize(int32 windowWidth, int32 windowHeight)
   }
 }
 
-bool Application::initialize(Engine* engine, int32 windowWidth, int32 windowHeight)
+bool Application::initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight)
 {
   _engine = engine;
   return true;
@@ -743,12 +715,12 @@ Engine::Duration_t Engine::RealClock::update()
 Engine::Duration_t Engine::GameClock::update(Duration_t realDt)
 {
   if(_isPaused) return Duration_t::zero();
-  _dt = Duration_t{static_cast<int64>(realDt.count() * _scale)};
+  _dt = Duration_t{static_cast<int64_t>(realDt.count() * _scale)};
   _now += _dt;
   return _dt;
 }
 
-int64 Engine::Metronome::doTicks(Duration_t gameNow)
+int64_t Engine::Metronome::doTicks(Duration_t gameNow)
 {
   int ticks {0};
   while(_lastTickNow + _tickPeriod < gameNow) {
@@ -759,7 +731,7 @@ int64 Engine::Metronome::doTicks(Duration_t gameNow)
   return ticks;
 }
 
-void Engine::TPSMeter::recordTicks(Duration_t realDt, int32 ticks)
+void Engine::TPSMeter::recordTicks(Duration_t realDt, int32_t ticks)
 {
   _timer += realDt;
   _ticks += ticks;
@@ -770,46 +742,23 @@ void Engine::TPSMeter::recordTicks(Duration_t realDt, int32 ticks)
   }
 }
 
-void Engine::Config::load()
-{
-  Dataset ds;
-  if(!ds.load(filename)){
-    log->log(Log::INFO, logstr::info_using_default_config);
-    return;
-  }
-
-  std::string key{};
-  for(auto& property : _properties){
-    key += property._key;
-    if(ds.hasProperty(key)){
-      property._value = ds.getProperty(key);
-      ds.eraseProperty(key);
-      log->log(Log::INFO, logstr::info_set_config_property, key);
-    }
-    key.clear();
-  }
-
-  for(const auto& pair : ds.getProperties()){
-    log->log(Log::INFO, logstr::info_unkown_config_property, pair.first);
-  }
-}
-
 void Engine::initialize(std::unique_ptr<Application>&& app)
 {
-  nomad::log = std::make_unique<Log>();
+  log = std::make_unique<Log>();
 
   _app = std::move(app);
 
-  _config.load();
+  if(!_config.load(Config::filename))
+    _config.write(Config::filename); // generate a default file if one doesn't exist.
 
   if(SDL_Init(SDL_INIT_VIDEO) < 0){
-    nomad::log->log(Log::fatal, Log::sdl2_init_failed, std::string{SDL_GetError()});
+    log->log(Log::FATAL, logstr::fail_sdl_init, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
   LoopTick* tick = &_loopTicks[LOOPTICK_UPDATE];
   tick->_onTick = &Engine::onUpdateTick;
-  tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
+  tick->_metronome.setTickPeriod(Duration_t{static_cast<int64_t>(1.0e9 / 60.0_hz)});
   tick->_ticksAccumulated = 0;
   tick->_ticksDoneThisFrame = 0;
   tick->_maxTicksPerFrame = 5;
@@ -817,14 +766,14 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
 
   tick = &_loopTicks[LOOPTICK_DRAW];
   tick->_onTick = &Engine::onDrawTick;
-  tick->_metronome.setTickPeriod(Duration_t{static_cast<int64>(1.0e9 / 60.0_hz)});
+  tick->_metronome.setTickPeriod(Duration_t{static_cast<int64_t>(1.0e9 / 60.0_hz)});
   tick->_ticksAccumulated = 0;
   tick->_ticksDoneThisFrame = 0;
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  nomad::input = std::make_unique<Input>();
-  nomad::assets = std::make_unique<Assets>();
+  input = std::make_unique<Input>();
+  assets = std::make_unique<Assets>();
 
   std::stringstream ss {};
   ss << _app->getName() 
@@ -835,14 +784,14 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
 
   Renderer::Config rconfig {
     std::string{ss.str()},
-    _config[Config::WINDOW_WIDTH],
-    _config[Config::WINDOW_HEIGHT],
-    _config[Config::OPENGL_MAJOR],
-    _config[Config::OPENGL_MINOR],
-    _config[Config::FULLSCREEN]
+    _config.getIntValue(Config::KEY_WINDOW_WIDTH),
+    _config.getIntValue(Config::KEY_WINDOW_HEIGHT),
+    _config.getIntValue(Config::KEY_OPENGL_MAJOR),
+    _config.getIntValue(Config::KEY_OPENGL_MINOR),
+    _config.getBoolValue(Config::KEY_FULLSCREEN)
   };
 
-  nomad::renderer = std::make_unique<Renderer>(rconfig);
+  renderer = std::make_unique<Renderer>(rconfig);
 
   Vector2i windowSize = nomad::renderer->getWindowSize();
 
@@ -899,7 +848,7 @@ void Engine::mainloop()
     }
   }
 
-  for(int32 i = LOOPTICK_UPDATE; i < LOOPTICK_COUNT; ++i){
+  for(int32_t i = LOOPTICK_UPDATE; i < LOOPTICK_COUNT; ++i){
     LoopTick& tick = _loopTicks[i];
     tick._ticksAccumulated += tick._metronome.doTicks(gameNow);
     tick._ticksDoneThisFrame = 0;
@@ -959,18 +908,6 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
 double Engine::durationToSeconds(Duration_t d)
 {
   return static_cast<double>(d.count()) / static_cast<double>(oneSecond.count());
-}
-
-void Engine::generateDefaultConfiguration()
-{
-  _config.clear();
-  _config.addProperties({
-    {CKEY_WINDOW_WIDTH, "windowWidth", "", {0}, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
-    {CKEY_WINDOW_HEIGHT, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
-    {CKEY_FULLSCREEN, {true}, {false}, {true}, Configuration::INT_PROPERTY},
-    {CKEY_WINDOW_WIDTH, {500}, {300}, {1000}, Configuration::INT_PROPERTY},
-    {CKEY_WINDOW_WIDTH, {500}, {300}, {1000}, Configuration::INT_PROPERTY}
-  });
 }
 
 } // namespace nomad

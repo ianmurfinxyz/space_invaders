@@ -11,8 +11,10 @@
 #include <sstream>
 #include <cmath>
 #include <vector>
+#include <initializer_list>
 #include <memory>
 #include <fstream>
+#include <variant>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -88,25 +90,35 @@ using fRect = Rect<float>;
 
 namespace logstr
 {
-  const char* fail_open_log = "failed to open log";
-  const char* fail_sdl_init = "failed to initialize SDL";
-  const char* fail_create_ogl_context = "failed to create opengl context";
-  const char* fail_set_ogl_attribute = "failed to set opengl attribute";
-  const char* fail_create_window = "failed to create window";
-  const char* fail_open_config = "failed to open configuration file";
-  const char* fail_malformed_config = "malformed configuration file";
-  const char* fail_unknown_config_property = "unkown configuration property";
-  const char* fail_missing_asset = "missing asset";
-  const char* fail_malformed_bitmap = "malformed bitmap";
+  constexpr const char* fail_open_log = "failed to open log";
+  constexpr const char* fail_sdl_init = "failed to initialize SDL";
+  constexpr const char* fail_create_opengl_context = "failed to create opengl context";
+  constexpr const char* fail_set_opengl_attribute = "failed to set opengl attribute";
+  constexpr const char* fail_create_window = "failed to create window";
+  constexpr const char* fail_missing_asset = "missing asset";
+  constexpr const char* fail_malformed_bitmap = "malformed bitmap";
 
-  const char* info_stderr_log = "logging to standard error";
-  const char* info_set_config_property = "set config property";
-  const char* info_using_default_config = "using default engine configuration";
-  const char* info_created_window = "window created";
-  const char* info_unexpected_seperators = "expected one seperator character";
-  const char* info_incomplete_property = "missing property key or value";
-  const char* info_expected_integer = "expected integer value";
-};
+  constexpr const char* warn_cannot_open_dataset = "failed to open data file";
+  constexpr const char* warn_malformed_dataset = "malformed data file";
+  constexpr const char* warn_property_not_set = "property not set";
+
+  constexpr const char* info_stderr_log = "logging to standard error";
+  constexpr const char* info_using_default_config = "using default engine configuration";
+  constexpr const char* info_fullscreen_mode = "activating fullscreen mode";
+  constexpr const char* info_creating_window = "creating window";
+  constexpr const char* info_created_window = "window created";
+  constexpr const char* info_on_line = "on line";
+  constexpr const char* info_unknown_dataset_property = "unkown property";
+  constexpr const char* info_unexpected_seperators = "expected a single seperator character";
+  constexpr const char* info_incomplete_property = "missing property key or value";
+  constexpr const char* info_expected_integer = "expected integer value";
+  constexpr const char* info_expected_float = "expected float value";
+  constexpr const char* info_expected_bool = "expected bool value";
+  constexpr const char* info_ignoring_line = "ignoring line";
+  constexpr const char* info_property_set = "dataset property set";
+  constexpr const char* info_property_clamped = "property value clamped to min-max range";
+  constexpr const char* info_using_property_default = "using property default value";
+}; 
 
 class Log
 {
@@ -121,7 +133,7 @@ public:
   {
     FATAL,
     ERROR,
-    WARNING,
+    WARN,
     INFO
   };
 
@@ -203,7 +215,7 @@ public:
   void setBit(int32_t row, int32_t col, bool value, bool regen = true);
   int32_t getWidth() const {return _width;}
   int32_t getHeight() const {return _height;}
-  const std::vector<uint8>& getBytes() const {return _bytes;}
+  const std::vector<uint8_t>& getBytes() const {return _bytes;}
   void print(std::ostream& out) const;
 
 private:
@@ -211,7 +223,7 @@ private:
 
 private:
   std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
-  std::vector<uint8> _bytes;             // used for rendering
+  std::vector<uint8_t> _bytes;             // used for rendering
   int32_t _width;
   int32_t _height;
 };
@@ -258,7 +270,7 @@ class Color3f
   constexpr static float hi {1.f};
 
 public:
-  Color3f(float r, float g, float b) : 
+  constexpr Color3f(float r, float g, float b) : 
     _r{std::clamp(r, lo, hi)},
     _g{std::clamp(g, lo, hi)},
     _b{std::clamp(b, lo, hi)}
@@ -277,6 +289,8 @@ private:
   float _b;
 };
 
+namespace colors
+{
 constexpr Color3f white {1.f, 1.f, 1.f};
 constexpr Color3f black {0.f, 0.f, 0.f};
 constexpr Color3f red {1.f, 0.f, 0.f};
@@ -285,6 +299,7 @@ constexpr Color3f blue {0.f, 0.f, 1.f};
 constexpr Color3f cyan {0.f, 1.f, 1.f};
 constexpr Color3f magenta {1.f, 0.f, 1.f};
 constexpr Color3f yellow {1.f, 1.f, 0.f};
+};
 
 class Renderer
 {
@@ -325,21 +340,25 @@ extern std::unique_ptr<Renderer> renderer;
 // ##>RESOURCES                                                                                  //
 //===============================================================================================//
 
-class Configuration
+class Dataset
 {
 public:
-  enum PropertyType {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
+  enum Type {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
 
   struct Property
   {
+    using Value_t = std::variant<int32_t, float, bool>;
+
+    Property() = default;
+    Property(int32_t key, std::string name, Value_t default_, Value_t min, Value_t max); 
+
     int32_t _key;
-    std::string _keyword;
-    std::string _comment;
-    std::variant<int32_t, float, bool> _value;
-    std::variant<int32_t, float, bool> _default;
-    std::variant<int32_t, float, bool> _min;
-    std::variant<int32_t, float, bool> _max;
-    PropertyType _type;
+    std::string _name;
+    Value_t _value;
+    Value_t _default;
+    Value_t _min;
+    Value_t _max;
+    Type _type;
   };
 
 public:
@@ -347,45 +366,28 @@ public:
   static constexpr char seperator {'='};
 
 public:
-  Configuration() = default;
-  Configuration(std::initializer_list<Property> properties);
-  Configuration(const Configuration&) = default;
-  Configuration(Configuration&&) = default;
+  bool load(const char* filename);
+  bool write(const char* filename, bool genComments = true);
 
-  Configuration& operator=(const Configuration&) = default;
-  Configuration& operator=(Configuration&&) = default;
+  int32_t getIntValue(int32_t key) const;
+  float getFloatValue(int32_t key) const;
+  bool getBoolValue(int32_t key) const;
 
-  void clearProperties();
-  bool removeProperty(int32_t key);
-  bool addProperty(const Property& property);
-  bool hasProperty(int32_t key) const;
+  void setIntValue(int32_t key, int32_t value);
+  void setFloatValue(int32_t key, float value);
+  void setBoolValue(int32_t key, bool value);
 
-  bool load(const std::string& filename);
-  bool write(const std::string& filename);
+  void scaleIntValue(int32_t key, int32_t scale);
+  void scaleFloatValue(int32_t key, float scale);
 
-  int32_t lookupIntValue(int32_t key) const;
-  int32_t lookupIntDefault(int32_t key) const;
-  int32_t lookupIntMax(int32_t key) const;
-  int32_t lookupIntMin(int32_t key) const;
-  float lookupFloatValue(int32_t key) const;
-  float lookupFloatDefault(int32_t key) const;
-  float lookupFloatMax(int32_t key) const;
-  float lookupFloatMin(int32_t key) const;
-  bool lookupBoolValue(int32_t key) const;
-  bool lookupBoolDefault(int32_t key) const;
+protected:
+  Dataset(std::initializer_list<Property> properties);
 
-  void setComment(int32_t key, const std::string& comment);
-
-  void setIntValue(int32_t key);
-  void setIntDefault(int32_t key);
-  void setIntMax(int32_t key);
-  void setIntMin(int32_t key);
-  void setFloatValue(int32_t key);
-  void setFloatDefault(int32_t key);
-  void setFloatMax(int32_t key);
-  void setFloatMin(int32_t key);
-  void setBoolValue(int32_t key);
-  void setBoolDefault(int32_t key);
+  Dataset() = delete;
+  Dataset(const Dataset&) = delete;
+  Dataset(Dataset&&) = delete;
+  Dataset& operator=(const Dataset&) = delete;
+  Dataset& operator=(Dataset&&) = delete;
 
 private:
   bool parseInt(const std::string& value, int32_t& result);
@@ -393,7 +395,7 @@ private:
   bool parseBool(const std::string& value, bool& result);
   
 private:
-  std::unordered_map<int32_t key, Property> _properties;
+  std::unordered_map<int32_t, Property> _properties;
 };
 
 class Assets
@@ -536,15 +538,15 @@ public:
   public:
     explicit Metronome() : _lastTickNow{}, _tickPeriod{}, _totalTicks{0}{}
     ~Metronome() = default;
-    int64 doTicks(Duration_t gameNow);
+    int64_t doTicks(Duration_t gameNow);
     void setTickPeriod(Duration_t period) {_tickPeriod += period;}
     Duration_t getTickPeriod() const {return _tickPeriod;}
-    int64 getTotalTicks() const {return _totalTicks;}
+    int64_t getTotalTicks() const {return _totalTicks;}
 
   private:
     Duration_t _lastTickNow;
     Duration_t _tickPeriod;
-    int64 _totalTicks;
+    int64_t _totalTicks;
   };
 
   class TPSMeter
@@ -568,19 +570,33 @@ public:
     void (Engine::*_onTick)(Duration_t, Duration_t, Duration_t, float);
     TPSMeter _tpsMeter;
     Metronome _metronome;
-    int64 _ticksAccumulated;
+    int64_t _ticksAccumulated;
     int32_t _ticksDoneThisFrame;
     int32_t _maxTicksPerFrame;
     float _tickPeriod;
   };
-
-  enum ConfigKey
+  
+  class Config final : public Dataset
   {
-    CKEY_WINDOW_WIDTH, 
-    CKEY_WINDOW_HEIGHT, 
-    CKEY_FULLSCREEN, 
-    CKEY_OPENGL_MAJOR, 
-    CKEY_OPENGL_MINOR
+  public:
+    static constexpr const char* filename = "engine.config";
+    
+    enum Key
+    {
+      KEY_WINDOW_WIDTH, 
+      KEY_WINDOW_HEIGHT, 
+      KEY_FULLSCREEN, 
+      KEY_OPENGL_MAJOR, 
+      KEY_OPENGL_MINOR
+    };
+
+    Config() : Dataset({
+      {KEY_WINDOW_WIDTH,  "windowWidth",  {500},   {300},   {1000}},
+      {KEY_WINDOW_HEIGHT, "windowHeight", {500},   {300},   {1000}},
+      {KEY_FULLSCREEN,    "fullscreen",   {false}, {false}, {true}},
+      {KEY_OPENGL_MAJOR,  "openglMajor",  {2},     {2},     {2},  },
+      {KEY_OPENGL_MINOR,  "openglMinor",  {2},     {2},     {2},  }
+    }){}
   };
 
 public:
@@ -599,10 +615,9 @@ private:
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   double durationToSeconds(Duration_t d);
-  void generateDefaultConfiguration();
 
 private:
-  Configuration _config;
+  Config _config;
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
   std::unique_ptr<Application> _app;
   RealClock _realClock;

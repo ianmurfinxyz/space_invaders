@@ -67,11 +67,11 @@ void MenuState::onReset()
 
 const std::string SpaceInvaders::name {"Space Invaders"};
 
-bool SpaceInvaders::initialize(Engine* engine, int32 windowWidth, int32 windowHeight)
+bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight)
 {
   Application::initialize(engine, windowWidth, windowHeight);
 
-  int32 scale {1};
+  int32_t scale {1};
   while((baseWorldSize._x * scale) < windowWidth && (baseWorldSize._y * scale) < windowHeight)
     ++scale; 
 
