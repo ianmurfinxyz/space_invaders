@@ -115,57 +115,144 @@ std::unique_ptr<Input> input {nullptr};
 
 Bitmap::Bitmap(std::vector<std::string> bits, int32_t scale)
 {
+  setBits(std::move(bits), scale);
+}
+
+Bitmap::Bitmap(const std::string& filename, int32_t scale)
+{
+  loadBits(filename, scale);
+}
+
+void Bitmap::setBits(std::vector<std::string> bits, int32_t scale)
+{
   assert(0 < scale && scale <= scaleMax);
-  for(auto& str : bits){
-    for(char c : str){
-      assert(c == '0' || c == '1');
-    }
-    while(str.back() == '0'){
-      str.pop_back();
+
+  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+  auto rowNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
+
+  if(bits.size() == 0){
+    log->log(Log::INFO, logstr::info_using_error_bitmap);
+    assignErrorBits(bits);
+  }
+  else
+  {
+    // validate bits
+    int32_t rowNo {0};
+    for(auto& row : bits){
+      ++rowNo;
+
+      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
+      if(count != row.length()){
+        log->log(Log::WARN, logstr::warn_malformed_bitmap);
+        log->log(Log::INFO, logstr::info_on_row, rowNoToString(rowNo) + row);
+        log->log(Log::INFO, logstr::info_using_error_bitmap);
+        assignErrorBits(bits);
+        break;
+      }
+
+      while(row.back() == '0'){
+        row.pop_back();
+      }
     }
   }
+
+  // scale bits
   if(scale > 1){
     std::vector<std::string> sbits {};
-    std::string row {};
-    for(auto& str : bits){
-      for(auto c : str){
+    std::string srow {};
+    for(auto& row : bits){
+      for(auto c : row){
         for(int i = 0; i < scale; ++i){
-          row.push_back(c);
+          srow.push_back(c);
         }
       }
       row.shrink_to_fit();
       for(int i = 0; i < scale; ++i){
-        sbits.push_back(row);
+        sbits.push_back(srow);
       }
-      row.clear();
+      srow.clear();
     }
     bits = std::move(sbits);
   }
-  int32_t w {0};
-  for(const auto& str : bits){
-    w = std::max(w, static_cast<int32_t>(str.length()));
+
+  // compute bitmap dimensions
+  size_t w {0};
+  for(const auto& row : bits){
+    w = std::max(w, row.length());
   }
   _width = w;
   _height = bits.size();
-  std::vector<bool> row {};
-  row.reserve(w);
-  for(const auto& str : bits){
-    row.clear();
-    for(char c : str){
+
+  // generate the bit data
+  std::vector<bool> brow {};
+  brow.reserve(w);
+  for(const auto& row : bits){
+    brow.clear();
+    for(char c : row){
       bool bit = !(c == '0'); 
-      row.push_back(bit); 
+      brow.push_back(bit); 
     }
-    int32_t n {w - row.size()};
+    int32_t n = w - row.size();
     while(n-- > 0){
-      row.push_back(false);
+      brow.push_back(false); // pad to make all rows equal length
     }
-    row.shrink_to_fit();
-    _bits.push_back(row);
+    brow.shrink_to_fit();
+    _bits.push_back(brow);
   }
-  regenBytes();
+
+  generateBytes();
 }
 
-void Bitmap::regenBytes()
+void Bitmap::loadBits(const std::string& filename, int32_t scale)
+{
+  std::ifstream bitmap {filename};
+  if(!bitmap){
+    log->log(Log::WARN, logstr::warn_missing_bitmap, filename);
+    setBits(std::vector<std::string>{}, scale);
+    return;
+  }
+
+  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
+
+  std::vector<std::string> rows {};
+  for(std::string row; std::getline(bitmap, row);){
+    row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
+    rows.push_back(row);
+  }
+
+  std::reverse(rows.begin(), rows.end()); 
+
+  setBits(std::move(rows), scale);
+}
+
+bool Bitmap::getBit(int32_t row, int32_t col)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  return _bits[row][col];
+}
+
+void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  _bits[row][col] = value;
+  if(regen)
+    generateBytes();
+}
+
+void Bitmap::print(std::ostream& out) const
+{
+  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
+    for(bool bit : *iter){
+      out << bit;
+    }
+    out << '\n';
+  }
+  out << std::endl;
+}
+
+void Bitmap::generateBytes()
 {
   _bytes.clear();
   uint8_t byte {0};
@@ -187,31 +274,12 @@ void Bitmap::regenBytes()
   }
 }
 
-bool Bitmap::getBit(int32_t row, int32_t col)
+void Bitmap::assignErrorBits(std::vector<std::string>& bits)
 {
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
-  return _bits[row][col];
-}
-
-void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
-{
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
-  _bits[row][col] = value;
-  if(regen)
-    regenBytes();
-}
-
-void Bitmap::print(std::ostream& out) const
-{
-  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
-    for(bool bit : *iter){
-      out << bit;
-    }
-    out << '\n';
+  bits.clear();
+  for(const char* row : errorBits){
+    bits.push_back(row); 
   }
-  out << std::endl;
 }
 
 Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
@@ -534,31 +602,33 @@ bool Dataset::getBoolValue(int32_t key) const
 void Dataset::setIntValue(int32_t key, int32_t value)
 {
   assert(_properties.at(key)._type == INT_PROPERTY);
-  _properties[key] = value;
+  _properties[key]._value = value;
 }
 
 void Dataset::setFloatValue(int32_t key, float value)
 {
   assert(_properties.at(key)._type == FLOAT_PROPERTY);
-  _properties[key] = value;
+  _properties[key]._value = value;
 }
 
 void Dataset::setBoolValue(int32_t key, bool value)
 {
   assert(_properties.at(key)._type == BOOL_PROPERTY);
-  _properties[key] = value;
+  _properties[key]._value = value;
 }
 
 void Dataset::scaleIntValue(int32_t key, int32_t scale)
 {
   assert(_properties.at(key)._type == INT_PROPERTY);
-  _properties[key] *= scale;
+  int32_t value = std::get<int32_t>(_properties[key]._value);
+  _properties[key]._value = value * scale;
 }
 
 void Dataset::scaleFloatValue(int32_t key, float scale)
 {
   assert(_properties.at(key)._type == FLOAT_PROPERTY);
-  _properties[key] *= scale;
+  float value = std::get<float>(_properties[key]._value);
+  _properties[key]._value = value * scale;
 }
 
 bool Dataset::parseInt(const std::string& value, int32_t& result)
@@ -637,54 +707,33 @@ void Dataset::printValue(const Value_t& value, std::ostream& os)
   }
 }
 
-void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32_t scale)
+void Assets::loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale)
 {
   auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
   auto isBinary = [](char ch){return ch == '0' || ch == '1';};
 
-  bool fail {false};
   std::string path {};
-  for(const auto& key : manifest){
-    if(_bitmaps.find(key) != _bitmaps.end())
+
+  for(const auto& pair : manifest){
+    if(_bitmaps.find(pair.first) != _bitmaps.end()){
+      log->log(Log::WARN, logstr::warn_bitmap_loaded_twice, pair.second);
       continue;
+    }
 
     path.clear();
     path += bitmaps_path;
-    path += key;
+    path += pair.second;
     path += bitmaps_extension;
-    std::ifstream bitmap {path};
-    if(!bitmap){
-      //nomad::log->log(Log::FATAL, Log::missing_asset, path);
-      fail = true;
-      continue;
-    }
 
-    bool malformed {false};
-    std::vector<std::string> rows {};
-    for(std::string row; std::getline(bitmap, row);){
-      row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
-      if(count != row.length()){
-        //nomad::log->log(Log::FATAL, Log::malformed_bitmap, path);
-        malformed = true;
-        break;
-      }
-      rows.push_back(row);
-    }
-    if(malformed) continue;
-    std::reverse(rows.begin(), rows.end()); 
-    
-    _bitmaps.emplace(std::make_pair(key, Bitmap{rows, scale}));
+    log->log(Log::INFO, logstr::info_loading_bitmap, path);
+
+    _bitmaps.emplace(std::make_pair(pair.first, Bitmap{path, scale}));
   }
-
-  if(fail)
-    exit(EXIT_FAILURE);
 }
 
-const Font& Assets::getFont(const std::string& key, int32_t scale) const
-{
-
-}
+//const Font& Assets::getFont(const std::string& key, int32_t scale) const
+//{
+//}
 
 std::unique_ptr<Assets> assets {nullptr};
 

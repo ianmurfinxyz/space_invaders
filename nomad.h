@@ -95,13 +95,14 @@ namespace logstr
   constexpr const char* fail_create_opengl_context = "failed to create opengl context";
   constexpr const char* fail_set_opengl_attribute = "failed to set opengl attribute";
   constexpr const char* fail_create_window = "failed to create window";
-  constexpr const char* fail_missing_asset = "missing asset";
-  constexpr const char* fail_malformed_bitmap = "malformed bitmap";
 
   constexpr const char* warn_cannot_open_dataset = "failed to open data file";
   constexpr const char* warn_cannot_create_dataset = "failed to create data file";
   constexpr const char* warn_malformed_dataset = "malformed data file";
   constexpr const char* warn_property_not_set = "property not set";
+  constexpr const char* warn_malformed_bitmap = "malformed bitmap";
+  constexpr const char* warn_missing_bitmap = "missing bitmap";
+  constexpr const char* warn_bitmap_loaded_twice = "bitmap loaded twice";
 
   constexpr const char* info_stderr_log = "logging to standard error";
   constexpr const char* info_using_default_config = "using default engine configuration";
@@ -109,6 +110,7 @@ namespace logstr
   constexpr const char* info_creating_window = "creating window";
   constexpr const char* info_created_window = "window created";
   constexpr const char* info_on_line = "on line";
+  constexpr const char* info_on_row = "on row";
   constexpr const char* info_unknown_dataset_property = "unkown property";
   constexpr const char* info_unexpected_seperators = "expected a single seperator character";
   constexpr const char* info_incomplete_property = "missing property key or value";
@@ -120,6 +122,8 @@ namespace logstr
   constexpr const char* info_property_clamped = "property value clamped to min-max range";
   constexpr const char* info_using_property_defaults = "using property default values";
   constexpr const char* info_using_property_default = "using property default value";
+  constexpr const char* info_using_error_bitmap = "using error bitmap";
+  constexpr const char* info_loading_bitmap = "loading bitmap";
 }; 
 
 class Log
@@ -207,27 +211,60 @@ class Bitmap
 public:
   constexpr static int32_t scaleMax {8};
 
-  explicit Bitmap() = default;
+public:
   explicit Bitmap(std::vector<std::string> bits, int32_t scale = 1);
+  explicit Bitmap(const std::string& filename, int32_t scale = 1);
+
+  Bitmap() = default;
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
   Bitmap(Bitmap&&) = default;
   Bitmap& operator=(Bitmap&&) = default;
+
+  void setBits(std::vector<std::string> bits, int32_t scale = 1);
+  void loadBits(const std::string& filename, int32_t scale = 1);
+
   bool getBit(int32_t row, int32_t col);
-  void setBit(int32_t row, int32_t col, bool value, bool regen = true);
   int32_t getWidth() const {return _width;}
   int32_t getHeight() const {return _height;}
   const std::vector<uint8_t>& getBytes() const {return _bytes;}
+
+  void setBit(int32_t row, int32_t col, bool value, bool regen = true);
+
   void print(std::ostream& out) const;
 
+  bool isErrorBitmap() const {return _isErrorBitmap;}
+
 private:
-  void regenBytes();
+  static constexpr std::array<const char*, 16> errorBits {
+    "1111111111111111"
+    "1110000000000111"
+    "1111000000001111"
+    "1011100000011101"
+    "1001110000111001"
+    "1000111001110001"
+    "1000011111100001"
+    "1000001111000001"
+    "1000001111000001"
+    "1000011111100001"
+    "1000111001110001"
+    "1001110000111001"
+    "1011100000011101"
+    "1111000000001111"
+    "1110000000000111"
+    "1111111111111111"
+  };
+
+private:
+  void generateBytes();
+  void assignErrorBits(std::vector<std::string>& bits);
 
 private:
   std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
-  std::vector<uint8_t> _bytes;             // used for rendering
+  std::vector<uint8_t> _bytes;           // used for rendering
   int32_t _width;
   int32_t _height;
+  bool _isErrorBitmap;
 };
 
 class Font
@@ -405,20 +442,25 @@ private:
 class Assets
 {
 public:
+  using Key_t = int32_t;
+  using Name_t = const char*;
+
   static constexpr const char* bitmaps_path {"assets/bitmaps/"};
   static constexpr const char* bitmaps_extension {".bitmap"};
 
 public:
   Assets() = default;
   ~Assets() = default;
-  void loadBitmaps(const std::vector<std::string>& manifest, int32_t scale);
-  void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32_t>& scales);
-  const Bitmap& getBitmap(const std::string& key) {return _bitmaps[key];}
-  const Font& getFont(const std::string& key, int32_t scale) const;
+
+  void loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale);
+  //void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32_t>& scales);
+
+  const Bitmap& getBitmap(Key_t key) {return _bitmaps[key];}
+  //const Font& getFont(const std::string& key, int32_t scale) const;
 
 private:
-  std::unordered_map<std::string, Bitmap> _bitmaps;
-  std::unordered_map<std::string, std::pair<Font, int32_t>> _fonts;
+  std::unordered_map<Key_t, Bitmap> _bitmaps;
+  //std::unordered_map<std::string, std::pair<Font, int32_t>> _fonts;
 };
 
 extern std::unique_ptr<Assets> assets;
