@@ -99,6 +99,7 @@ namespace logstr
   constexpr const char* fail_malformed_bitmap = "malformed bitmap";
 
   constexpr const char* warn_cannot_open_dataset = "failed to open data file";
+  constexpr const char* warn_cannot_create_dataset = "failed to create data file";
   constexpr const char* warn_malformed_dataset = "malformed data file";
   constexpr const char* warn_property_not_set = "property not set";
 
@@ -117,6 +118,7 @@ namespace logstr
   constexpr const char* info_ignoring_line = "ignoring line";
   constexpr const char* info_property_set = "dataset property set";
   constexpr const char* info_property_clamped = "property value clamped to min-max range";
+  constexpr const char* info_using_property_defaults = "using property default values";
   constexpr const char* info_using_property_default = "using property default value";
 }; 
 
@@ -343,12 +345,12 @@ extern std::unique_ptr<Renderer> renderer;
 class Dataset
 {
 public:
+  using Value_t = std::variant<int32_t, float, bool>;
+
   enum Type {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
 
   struct Property
   {
-    using Value_t = std::variant<int32_t, float, bool>;
-
     Property() = default;
     Property(int32_t key, std::string name, Value_t default_, Value_t min, Value_t max); 
 
@@ -393,6 +395,8 @@ private:
   bool parseInt(const std::string& value, int32_t& result);
   bool parseFloat(const std::string& value, float& result);
   bool parseBool(const std::string& value, bool& result);
+
+  void printValue(const Value_t& value, std::ostream& os);
   
 private:
   std::unordered_map<int32_t, Property> _properties;
@@ -587,15 +591,16 @@ public:
       KEY_WINDOW_HEIGHT, 
       KEY_FULLSCREEN, 
       KEY_OPENGL_MAJOR, 
-      KEY_OPENGL_MINOR
+      KEY_OPENGL_MINOR,
     };
 
     Config() : Dataset({
+      //    key               name        default   min      max
       {KEY_WINDOW_WIDTH,  "windowWidth",  {500},   {300},   {1000}},
       {KEY_WINDOW_HEIGHT, "windowHeight", {500},   {300},   {1000}},
       {KEY_FULLSCREEN,    "fullscreen",   {false}, {false}, {true}},
       {KEY_OPENGL_MAJOR,  "openglMajor",  {2},     {2},     {2},  },
-      {KEY_OPENGL_MINOR,  "openglMinor",  {2},     {2},     {2},  }
+      {KEY_OPENGL_MINOR,  "openglMinor",  {1},     {1},     {1},  }
     }){}
   };
 

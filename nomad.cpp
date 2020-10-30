@@ -358,7 +358,10 @@ bool Dataset::load(const char* filename)
 {
   std::ifstream file {filename};
   if(!file){
-    log->log(Log::ERROR, logstr::warn_cannot_open_dataset, std::string{filename});
+    log->log(Log::WARN, logstr::warn_cannot_open_dataset, std::string{filename});
+    log->log(Log::INFO, logstr::info_using_property_defaults);
+    for(auto& pair : _properties)
+      pair.second._value = pair.second._default;
     return false;
   }
 
@@ -466,7 +469,7 @@ bool Dataset::load(const char* filename)
   }
 
   for(auto& pair : _properties){
-    if(std::get<0>(pair.second._value) == 0){
+    if(pair.second._value == Value_t{}){
       log->log(Log::WARN, logstr::warn_property_not_set, pair.second._name);
       log->log(Log::INFO, logstr::info_using_property_default);
       pair.second._value = pair.second._default;
@@ -478,6 +481,36 @@ bool Dataset::load(const char* filename)
 
 bool Dataset::write(const char* filename, bool genComments)
 {
+  std::ofstream file {filename, std::ios_base::out | std::ios_base::trunc};
+  if(!file){
+    log->log(Log::WARN, logstr::warn_cannot_create_dataset, std::string{filename});
+    return false;
+  }
+
+  for(const auto& pair : _properties){
+    const Property& p = pair.second;
+    
+    std::stringstream ss {};
+
+    if(genComments){
+      ss << comment;
+      ss << " default=";
+      printValue(p._default, ss);
+      ss << " min=";
+      printValue(p._min, ss);
+      ss << " max=";
+      printValue(p._max, ss);
+      ss << '\n';
+      file << ss.str();
+    }
+
+    std::stringstream().swap(ss);
+
+    ss << p._name << "=";
+    printValue(p._value, ss);
+    ss << '\n';
+    file << ss.str();
+  }
 }
 
 int32_t Dataset::getIntValue(int32_t key) const
@@ -500,22 +533,32 @@ bool Dataset::getBoolValue(int32_t key) const
 
 void Dataset::setIntValue(int32_t key, int32_t value)
 {
+  assert(_properties.at(key)._type == INT_PROPERTY);
+  _properties[key] = value;
 }
 
 void Dataset::setFloatValue(int32_t key, float value)
 {
+  assert(_properties.at(key)._type == FLOAT_PROPERTY);
+  _properties[key] = value;
 }
 
 void Dataset::setBoolValue(int32_t key, bool value)
 {
+  assert(_properties.at(key)._type == BOOL_PROPERTY);
+  _properties[key] = value;
 }
 
 void Dataset::scaleIntValue(int32_t key, int32_t scale)
 {
+  assert(_properties.at(key)._type == INT_PROPERTY);
+  _properties[key] *= scale;
 }
 
 void Dataset::scaleFloatValue(int32_t key, float scale)
 {
+  assert(_properties.at(key)._type == FLOAT_PROPERTY);
+  _properties[key] *= scale;
 }
 
 bool Dataset::parseInt(const std::string& value, int32_t& result)
@@ -577,6 +620,21 @@ bool Dataset::parseBool(const std::string& value, bool& result)
   }
 
   return false;
+}
+
+void Dataset::printValue(const Value_t& value, std::ostream& os)
+{
+  switch(value.index()){
+    case 0:
+      os << std::get<int32_t>(value);
+      break;
+    case 1:
+      os << std::get<float>(value);
+      break;
+    case 2:
+      os << (std::get<bool>(value) ? "true" : "false");
+      break;
+  }
 }
 
 void Assets::loadBitmaps(const std::vector<std::string>& manifest, int32_t scale)
