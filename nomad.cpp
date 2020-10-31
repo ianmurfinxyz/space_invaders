@@ -108,303 +108,6 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
 
 std::unique_ptr<Input> input {nullptr};
 
-
-//===============================================================================================//
-// ##>GRAPHICS                                                                                   //
-//===============================================================================================//
-
-Bitmap::Bitmap(std::vector<std::string> bits, int32_t scale)
-{
-  setBits(std::move(bits), scale);
-}
-
-Bitmap::Bitmap(const std::string& filename, int32_t scale)
-{
-  loadBits(filename, scale);
-}
-
-void Bitmap::setBits(std::vector<std::string> bits, int32_t scale)
-{
-  assert(0 < scale && scale <= scaleMax);
-
-  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
-  auto rowNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
-
-  if(bits.size() == 0){
-    log->log(Log::INFO, logstr::info_using_error_bitmap);
-    assignErrorBits(bits);
-  }
-  else
-  {
-    // validate bits
-    int32_t rowNo {0};
-    for(auto& row : bits){
-      ++rowNo;
-
-      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
-      if(count != row.length()){
-        log->log(Log::WARN, logstr::warn_malformed_bitmap);
-        log->log(Log::INFO, logstr::info_on_row, rowNoToString(rowNo) + row);
-        log->log(Log::INFO, logstr::info_using_error_bitmap);
-        assignErrorBits(bits);
-        break;
-      }
-
-      while(row.back() == '0'){
-        row.pop_back();
-      }
-    }
-  }
-
-  // scale bits
-  if(scale > 1){
-    std::vector<std::string> sbits {};
-    std::string srow {};
-    for(auto& row : bits){
-      for(auto c : row){
-        for(int i = 0; i < scale; ++i){
-          srow.push_back(c);
-        }
-      }
-      row.shrink_to_fit();
-      for(int i = 0; i < scale; ++i){
-        sbits.push_back(srow);
-      }
-      srow.clear();
-    }
-    bits = std::move(sbits);
-  }
-
-  // compute bitmap dimensions
-  size_t w {0};
-  for(const auto& row : bits){
-    w = std::max(w, row.length());
-  }
-  _width = w;
-  _height = bits.size();
-
-  // generate the bit data
-  std::vector<bool> brow {};
-  brow.reserve(w);
-  for(const auto& row : bits){
-    brow.clear();
-    for(char c : row){
-      bool bit = !(c == '0'); 
-      brow.push_back(bit); 
-    }
-    int32_t n = w - row.size();
-    while(n-- > 0){
-      brow.push_back(false); // pad to make all rows equal length
-    }
-    brow.shrink_to_fit();
-    _bits.push_back(brow);
-  }
-
-  generateBytes();
-}
-
-void Bitmap::loadBits(const std::string& filename, int32_t scale)
-{
-  std::ifstream bitmap {filename};
-  if(!bitmap){
-    log->log(Log::WARN, logstr::warn_missing_bitmap, filename);
-    setBits(std::vector<std::string>{}, scale);
-    return;
-  }
-
-  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
-
-  std::vector<std::string> rows {};
-  for(std::string row; std::getline(bitmap, row);){
-    row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-    rows.push_back(row);
-  }
-
-  std::reverse(rows.begin(), rows.end()); 
-
-  setBits(std::move(rows), scale);
-}
-
-bool Bitmap::getBit(int32_t row, int32_t col)
-{
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
-  return _bits[row][col];
-}
-
-void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
-{
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
-  _bits[row][col] = value;
-  if(regen)
-    generateBytes();
-}
-
-void Bitmap::print(std::ostream& out) const
-{
-  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
-    for(bool bit : *iter){
-      out << bit;
-    }
-    out << '\n';
-  }
-  out << std::endl;
-}
-
-void Bitmap::generateBytes()
-{
-  _bytes.clear();
-  uint8_t byte {0};
-  int32_t bitNo {0};
-  for(const auto& row : _bits){
-    for(bool bit : row){
-      if(bitNo > 7){
-        _bytes.push_back(byte);
-        byte = 0;
-        bitNo = 0;
-      }
-      if(bit) 
-        byte |= 0x01 << (7 - bitNo);
-      bitNo++;
-    }
-    _bytes.push_back(byte);
-    byte = 0;
-    bitNo = 0;
-  }
-}
-
-void Bitmap::assignErrorBits(std::vector<std::string>& bits)
-{
-  bits.clear();
-  for(const char* row : errorBits){
-    bits.push_back(row); 
-  }
-}
-
-Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
-  _glyphs{glyphs}, _meta{meta}
-{
-  static constexpr int checkSum {7505}; // sum of all ascii codes from 32 to 126 inclusive.
-
-  int sum{0};
-  for(const auto& g : _glyphs)
-    sum += g._asciiCode;
-  assert(sum == checkSum);
-
-  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0._asciiCode < g1._asciiCode;};
-  std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
-}
-
-Renderer::Renderer(const Config& config)
-{
-  _config = config;
-
-  uint32_t flags = SDL_WINDOW_OPENGL;
-  if(_config._fullscreen){
-    flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    log->log(Log::INFO, logstr::info_fullscreen_mode);
-  }
-
-  std::stringstream ss {};
-  ss << "{w:" << _config._windowWidth << ",h:" << _config._windowHeight << "}";
-  log->log(Log::INFO, logstr::info_creating_window, std::string{ss.str()});
-
-  _window = SDL_CreateWindow(
-      _config._windowTitle.c_str(), 
-      SDL_WINDOWPOS_UNDEFINED,
-      SDL_WINDOWPOS_UNDEFINED,
-      _config._windowWidth,
-      _config._windowHeight,
-      flags
-  );
-
-  if(_window == nullptr){
-    log->log(Log::FATAL, logstr::fail_create_window, std::string{SDL_GetError()});
-    exit(EXIT_FAILURE);
-  }
-
-  Vector2i wndsize = getWindowSize();
-  std::stringstream().swap(ss);
-  ss << "{w:" << wndsize._x << ",h:" << wndsize._y << "}";
-  log->log(Log::INFO, logstr::info_created_window, std::string{ss.str()});
-
-  _glContext = SDL_GL_CreateContext(_window);
-  if(_glContext == nullptr){
-    log->log(Log::FATAL, logstr::fail_create_opengl_context, std::string{SDL_GetError()});
-    exit(EXIT_FAILURE);
-  }
-
-  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
-    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
-    exit(EXIT_FAILURE);
-  }
-  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
-    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
-    exit(EXIT_FAILURE);
-  }
-
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  setViewport(iRect{0, 0, _config._windowWidth, _config._windowHeight});
-}
-
-Renderer::~Renderer()
-{
-  SDL_GL_DeleteContext(_glContext);
-  SDL_DestroyWindow(_window);
-}
-
-void Renderer::setViewport(iRect viewport)
-{
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  glOrtho(0.0, viewport._w, 0.0, viewport._h, -1.0, 1.0);
-  glMatrixMode(GL_MODELVIEW);
-  glLoadIdentity();
-  glViewport(viewport._x, viewport._y, viewport._w, viewport._h);
-  _viewport = viewport;
-}
-
-void Renderer::blitText(Vector2f position, const std::string& text, const Color3f& color)
-{
-}
-
-void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
-{
-  glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
-  glRasterPos2f(position._x, position._y);
-  glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());
-}
-
-void Renderer::clearWindow(const Color3f& color)
-{
-  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
-  glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void Renderer::clearViewport(const Color3f& color)
-{
-  glEnable(GL_SCISSOR_TEST);
-  glScissor(_viewport._x, _viewport._y, _viewport._w, _viewport._h);
-  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glDisable(GL_SCISSOR_TEST);
-}
-
-void Renderer::show()
-{
-  SDL_GL_SwapWindow(_window);
-}
-
-Vector2i Renderer::getWindowSize() const
-{
-  Vector2i size;
-  SDL_GL_GetDrawableSize(_window, &size._x, &size._y);
-  return size;
-}
-
-std::unique_ptr<Renderer> renderer {nullptr};
-
 //===============================================================================================//
 // ##>RESOURCES                                                                                  //
 //===============================================================================================//
@@ -422,7 +125,7 @@ Dataset::Dataset(std::initializer_list<Property> properties)
     _properties.emplace(std::make_pair(property._key, property));
 }
 
-bool Dataset::load(const char* filename)
+int32_t Dataset::load(const char* filename)
 {
   std::ifstream file {filename};
   if(!file){
@@ -430,13 +133,14 @@ bool Dataset::load(const char* filename)
     log->log(Log::INFO, logstr::info_using_property_defaults);
     for(auto& pair : _properties)
       pair.second._value = pair.second._default;
-    return false;
+    return -1;
   }
 
   auto lineNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
   auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
 
   int32_t lineNo {0};
+  int32_t nErrors {0};
 
   for(std::string line; std::getline(file, line);){
     ++lineNo;
@@ -453,6 +157,7 @@ bool Dataset::load(const char* filename)
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unexpected_seperators, std::string{seperator});
       log->log(Log::INFO, logstr::info_ignoring_line);
+      ++nErrors;
       continue;
     }
 
@@ -465,6 +170,7 @@ bool Dataset::load(const char* filename)
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_incomplete_property);
       log->log(Log::INFO, logstr::info_ignoring_line);
+      ++nErrors;
       continue;
     }
 
@@ -481,6 +187,7 @@ bool Dataset::load(const char* filename)
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unknown_dataset_property, name);
       log->log(Log::INFO, logstr::info_ignoring_line);
+      ++nErrors;
       continue;
     }
 
@@ -493,6 +200,7 @@ bool Dataset::load(const char* filename)
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_integer, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
+            ++nErrors;
             continue;
           }
           p->_value = std::clamp(result, std::get<int32_t>(p->_min), std::get<int32_t>(p->_max));
@@ -510,6 +218,7 @@ bool Dataset::load(const char* filename)
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_float, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
+            ++nErrors;
             continue;
           }
           p->_value = std::clamp(result, std::get<float>(p->_min), std::get<float>(p->_max));
@@ -527,6 +236,7 @@ bool Dataset::load(const char* filename)
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_bool, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
+            ++nErrors;
             continue;
           }
           p->_value = result;
@@ -544,15 +254,15 @@ bool Dataset::load(const char* filename)
     }
   }
 
-  return true;
+  return nErrors;
 }
 
-bool Dataset::write(const char* filename, bool genComments)
+int32_t Dataset::write(const char* filename, bool genComments)
 {
   std::ofstream file {filename, std::ios_base::out | std::ios_base::trunc};
   if(!file){
     log->log(Log::WARN, logstr::warn_cannot_create_dataset, std::string{filename});
-    return false;
+    return -1;
   }
 
   for(const auto& pair : _properties){
@@ -736,6 +446,331 @@ void Assets::loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, 
 //}
 
 std::unique_ptr<Assets> assets {nullptr};
+
+
+//===============================================================================================//
+// ##>GRAPHICS                                                                                   //
+//===============================================================================================//
+
+Bitmap::Bitmap(int32_t scale)
+{
+  setBits(std::vector<std::string>{}, scale);
+}
+
+Bitmap::Bitmap(std::vector<std::string> bits, int32_t scale)
+{
+  setBits(std::move(bits), scale);
+}
+
+Bitmap::Bitmap(const std::string& filename, int32_t scale)
+{
+  loadBits(filename, scale);
+}
+
+void Bitmap::setBits(std::vector<std::string> bits, int32_t scale)
+{
+  assert(0 < scale && scale <= scaleMax);
+
+  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+  auto rowNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
+
+  if(bits.size() == 0){
+    log->log(Log::INFO, logstr::info_using_error_bitmap);
+    assignErrorBits(bits);
+  }
+  else
+  {
+    // validate bits
+    int32_t rowNo {0};
+    for(auto& row : bits){
+      ++rowNo;
+
+      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
+      if(count != row.length()){
+        log->log(Log::WARN, logstr::warn_malformed_bitmap);
+        log->log(Log::INFO, logstr::info_on_row, rowNoToString(rowNo) + row);
+        log->log(Log::INFO, logstr::info_using_error_bitmap);
+        assignErrorBits(bits);
+        break;
+      }
+
+      while(row.back() == '0'){
+        row.pop_back();
+      }
+    }
+  }
+
+  // scale bits
+  if(scale > 1){
+    std::vector<std::string> sbits {};
+    std::string srow {};
+    for(auto& row : bits){
+      for(auto c : row){
+        for(int i = 0; i < scale; ++i){
+          srow.push_back(c);
+        }
+      }
+      row.shrink_to_fit();
+      for(int i = 0; i < scale; ++i){
+        sbits.push_back(srow);
+      }
+      srow.clear();
+    }
+    bits = std::move(sbits);
+  }
+
+  // compute bitmap dimensions
+  size_t w {0};
+  for(const auto& row : bits){
+    w = std::max(w, row.length());
+  }
+  _width = w;
+  _height = bits.size();
+
+  // generate the bit data
+  std::vector<bool> brow {};
+  brow.reserve(w);
+  for(const auto& row : bits){
+    brow.clear();
+    for(char c : row){
+      bool bit = !(c == '0'); 
+      brow.push_back(bit); 
+    }
+    int32_t n = w - row.size();
+    while(n-- > 0){
+      brow.push_back(false); // pad to make all rows equal length
+    }
+    brow.shrink_to_fit();
+    _bits.push_back(brow);
+  }
+
+  generateBytes();
+}
+
+void Bitmap::loadBits(const std::string& filename, int32_t scale)
+{
+  std::ifstream bitmap {filename};
+  if(!bitmap){
+    log->log(Log::WARN, logstr::warn_missing_bitmap, filename);
+    setBits(std::vector<std::string>{}, scale);
+    return;
+  }
+
+  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
+
+  std::vector<std::string> rows {};
+  for(std::string row; std::getline(bitmap, row);){
+    row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
+    rows.push_back(row);
+  }
+
+  std::reverse(rows.begin(), rows.end()); 
+
+  setBits(std::move(rows), scale);
+}
+
+bool Bitmap::getBit(int32_t row, int32_t col)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  return _bits[row][col];
+}
+
+void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
+{
+  assert(0 <= row && row < _width);
+  assert(0 <= col && col < _height);
+  _bits[row][col] = value;
+  if(regen)
+    generateBytes();
+}
+
+void Bitmap::print(std::ostream& out) const
+{
+  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
+    for(bool bit : *iter){
+      out << bit;
+    }
+    out << '\n';
+  }
+  out << std::endl;
+}
+
+void Bitmap::generateBytes()
+{
+  _bytes.clear();
+  uint8_t byte {0};
+  int32_t bitNo {0};
+  for(const auto& row : _bits){
+    for(bool bit : row){
+      if(bitNo > 7){
+        _bytes.push_back(byte);
+        byte = 0;
+        bitNo = 0;
+      }
+      if(bit) 
+        byte |= 0x01 << (7 - bitNo);
+      bitNo++;
+    }
+    _bytes.push_back(byte);
+    byte = 0;
+    bitNo = 0;
+  }
+}
+
+void Bitmap::assignErrorBits(std::vector<std::string>& bits)
+{
+  bits.clear();
+  for(const char* row : errorBits){
+    bits.push_back(row); 
+  }
+}
+
+Font::Font(const std::string& name, size_t scale)
+{
+  // extract font data from font file
+  // load each glyph
+
+  std::string filepath {};
+  filepath += filepaths::fonts_path;
+  filepath += filepaths::seperator;
+  filepath += name;
+  filepath += filepaths::seperator;
+  filepath += name;
+  filepath += filepaths::fonts_extension;
+
+  std::ifstream font {filepath};
+  if(!font){
+    // generate a base error font
+  }
+
+  FontDataset fontdata {};
+
+
+}
+
+Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
+  _glyphs{glyphs}, _meta{meta}
+{
+  static constexpr int checkSum {7505}; // sum of all ascii codes from 32 to 126 inclusive.
+
+  int sum{0};
+  for(const auto& g : _glyphs)
+    sum += g._asciiCode;
+  assert(sum == checkSum);
+
+  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0._asciiCode < g1._asciiCode;};
+  std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
+}
+
+Renderer::Renderer(const Config& config)
+{
+  _config = config;
+
+  uint32_t flags = SDL_WINDOW_OPENGL;
+  if(_config._fullscreen){
+    flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+    log->log(Log::INFO, logstr::info_fullscreen_mode);
+  }
+
+  std::stringstream ss {};
+  ss << "{w:" << _config._windowWidth << ",h:" << _config._windowHeight << "}";
+  log->log(Log::INFO, logstr::info_creating_window, std::string{ss.str()});
+
+  _window = SDL_CreateWindow(
+      _config._windowTitle.c_str(), 
+      SDL_WINDOWPOS_UNDEFINED,
+      SDL_WINDOWPOS_UNDEFINED,
+      _config._windowWidth,
+      _config._windowHeight,
+      flags
+  );
+
+  if(_window == nullptr){
+    log->log(Log::FATAL, logstr::fail_create_window, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
+
+  Vector2i wndsize = getWindowSize();
+  std::stringstream().swap(ss);
+  ss << "{w:" << wndsize._x << ",h:" << wndsize._y << "}";
+  log->log(Log::INFO, logstr::info_created_window, std::string{ss.str()});
+
+  _glContext = SDL_GL_CreateContext(_window);
+  if(_glContext == nullptr){
+    log->log(Log::FATAL, logstr::fail_create_opengl_context, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
+
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
+    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
+    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    exit(EXIT_FAILURE);
+  }
+
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  setViewport(iRect{0, 0, _config._windowWidth, _config._windowHeight});
+}
+
+Renderer::~Renderer()
+{
+  SDL_GL_DeleteContext(_glContext);
+  SDL_DestroyWindow(_window);
+}
+
+void Renderer::setViewport(iRect viewport)
+{
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho(0.0, viewport._w, 0.0, viewport._h, -1.0, 1.0);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glViewport(viewport._x, viewport._y, viewport._w, viewport._h);
+  _viewport = viewport;
+}
+
+void Renderer::blitText(Vector2f position, const std::string& text, const Color3f& color)
+{
+}
+
+void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
+{
+  glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
+  glRasterPos2f(position._x, position._y);
+  glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());
+}
+
+void Renderer::clearWindow(const Color3f& color)
+{
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void Renderer::clearViewport(const Color3f& color)
+{
+  glEnable(GL_SCISSOR_TEST);
+  glScissor(_viewport._x, _viewport._y, _viewport._w, _viewport._h);
+  glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glDisable(GL_SCISSOR_TEST);
+}
+
+void Renderer::show()
+{
+  SDL_GL_SwapWindow(_window);
+}
+
+Vector2i Renderer::getWindowSize() const
+{
+  Vector2i size;
+  SDL_GL_GetDrawableSize(_window, &size._x, &size._y);
+  return size;
+}
+
+std::unique_ptr<Renderer> renderer {nullptr};
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //

@@ -188,6 +188,122 @@ private:
 extern std::unique_ptr<Input> input;
 
 //===============================================================================================//
+// ##>RESOURCES                                                                                  //
+//===============================================================================================//
+
+class Bitmap;
+class Font;
+
+class Dataset
+{
+public:
+  using Value_t = std::variant<int32_t, float, bool>;
+
+  enum Type {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
+
+  struct Property
+  {
+    Property() = default;
+    Property(int32_t key, std::string name, Value_t default_, Value_t min, Value_t max); 
+
+    int32_t _key;
+    std::string _name;
+    Value_t _value;
+    Value_t _default;
+    Value_t _min;
+    Value_t _max;
+    Type _type;
+  };
+
+public:
+  static constexpr char comment {'#'};
+  static constexpr char seperator {'='};
+
+public:
+  int32_t load(const char* filename);
+  int32_t write(const char* filename, bool genComments = true);
+
+  int32_t getIntValue(int32_t key) const;
+  float getFloatValue(int32_t key) const;
+  bool getBoolValue(int32_t key) const;
+
+  void setIntValue(int32_t key, int32_t value);
+  void setFloatValue(int32_t key, float value);
+  void setBoolValue(int32_t key, bool value);
+
+  void scaleIntValue(int32_t key, int32_t scale);
+  void scaleFloatValue(int32_t key, float scale);
+
+protected:
+  Dataset(std::initializer_list<Property> properties);
+
+  Dataset() = delete;
+  Dataset(const Dataset&) = delete;
+  Dataset(Dataset&&) = delete;
+  Dataset& operator=(const Dataset&) = delete;
+  Dataset& operator=(Dataset&&) = delete;
+
+private:
+  bool parseInt(const std::string& value, int32_t& result);
+  bool parseFloat(const std::string& value, float& result);
+  bool parseBool(const std::string& value, bool& result);
+
+  void printValue(const Value_t& value, std::ostream& os);
+  
+private:
+  std::unordered_map<int32_t, Property> _properties;
+};
+
+namespace filepaths
+{
+
+//#if defined posix
+
+  constexpr const char seperator = '/';
+
+  constexpr const char* bitmaps_path = "assets/bitmaps";
+  constexpr const char* bitmaps_extension = ".bitmap";
+  constexpr const char* fonts_path = "assets/fonts";
+  constexpr const char* fonts_extension = ".font";
+  constexpr const char* glyphs_extension = ".glyph";
+
+//#endif
+
+//#if defined windows
+
+
+//#endif
+
+}
+
+class Assets
+{
+public:
+  using Key_t = int32_t;
+  using Name_t = const char*;
+  using Scale_t = size_t;
+
+public:
+  static constexpr const int32_t scaleMax {8};
+
+public:
+  Assets() = default;
+  ~Assets() = default;
+
+  void loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale);
+  void loadFonts(const std::vector<std::tuple<Key_t, Name_t, Scale_t>& manifest);
+
+  const Bitmap& getBitmap(Key_t key) {return _bitmaps[key];}
+  //const Font& getFont(const std::string& key, int32_t scale) const;
+
+private:
+  std::unordered_map<Key_t, Bitmap> _bitmaps;
+  std::unordered_map<Key_t, std::array<std::unique_ptr<Font>, scaleMax>> _fonts;
+};
+
+extern std::unique_ptr<Assets> assets;
+
+//===============================================================================================//
 // ##>GRAPHICS                                                                                   //
 //===============================================================================================//
 
@@ -212,10 +328,10 @@ public:
   constexpr static int32_t scaleMax {8};
 
 public:
-  explicit Bitmap(std::vector<std::string> bits, int32_t scale = 1);
+  explicit Bitmap(int32_t scale = 1);
   explicit Bitmap(const std::string& filename, int32_t scale = 1);
+  explicit Bitmap(std::vector<std::string> bits, int32_t scale = 1);
 
-  Bitmap() = default;
   Bitmap(const Bitmap&) = default;
   Bitmap& operator=(const Bitmap&) = default;
   Bitmap(Bitmap&&) = default;
@@ -236,23 +352,15 @@ public:
   bool isErrorBitmap() const {return _isErrorBitmap;}
 
 private:
-  static constexpr std::array<const char*, 16> errorBits {
-    "1111111111111111"
-    "1110000000000111"
-    "1111000000001111"
-    "1011100000011101"
-    "1001110000111001"
-    "1000111001110001"
-    "1000011111100001"
-    "1000001111000001"
-    "1000001111000001"
-    "1000011111100001"
-    "1000111001110001"
-    "1001110000111001"
-    "1011100000011101"
-    "1111000000001111"
-    "1110000000000111"
-    "1111111111111111"
+  static constexpr std::array<const char*, 8> errorBits {
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
   };
 
 private:
@@ -288,8 +396,38 @@ public:
     int32_t _size;
   };
 
+  class FontDataset : public Dataset
+  {
+  public:
+    enum Key { KEY_LINE_SPACE, KEY_WORD_SPACE, KEY_GLYPH_SPACE, KEY_SIZE };
+
+    FontDataset() : Dataset({
+      // key            name          default   min    max
+      {KEY_LINE_SPACE , "lineSpace" , {10}    , {0}  , {1000}},
+      {KEY_WORD_SPACE , "wordSpace" , {4}     , {0}  , {1000}},
+      {KEY_GLYPH_SPACE, "glyphSpace", {2}     , {0}  , {1000}},
+      {KEY_SIZE       , "size"      , {8}     , {0}  , {1000}}
+    });
+  };
+
+  class GlyphDataset : public Dataset
+  {
+  public:
+    enum Key { KEY_ASCII_CODE, KEY_OFFSET_X, KEY_ADVANCE, KEY_WIDTH, KEY_HEIGHT };
+
+    GlyphDataset() : Dataset({
+      // key           name         default  min    max
+      {KEY_ASCCI_CODE, "asciiCode", {0}    , {0}  , {1000}},
+      {KEY_OFFSET_X  , "offsetX"  , {0}    , {0}  , {1000}},
+      {KEY_ADVANCE   , "advance"  , {8}    , {0}  , {1000}},
+      {KEY_WIDTH     , "width"    , {8}    , {0}  , {1000}},
+      {KEY_HEIGHT    , "height"   , {8}    , {0}  , {1000}}
+    });
+  };
+
 public:
-  Font(const std::vector<Glyph>& glyphs, Meta meta);
+  Font(const std::string& name, size_t scale = 1); 
+  Font(const std::vector<Glyph>& glyphs, const Meta& meta);
   Font(const Font&) = default;
   Font& operator=(const Font&) = default;
   const Glyph& getGlyph(char c) const;
@@ -374,96 +512,6 @@ private:
 };
 
 extern std::unique_ptr<Renderer> renderer;
-
-//===============================================================================================//
-// ##>RESOURCES                                                                                  //
-//===============================================================================================//
-
-class Dataset
-{
-public:
-  using Value_t = std::variant<int32_t, float, bool>;
-
-  enum Type {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
-
-  struct Property
-  {
-    Property() = default;
-    Property(int32_t key, std::string name, Value_t default_, Value_t min, Value_t max); 
-
-    int32_t _key;
-    std::string _name;
-    Value_t _value;
-    Value_t _default;
-    Value_t _min;
-    Value_t _max;
-    Type _type;
-  };
-
-public:
-  static constexpr char comment {'#'};
-  static constexpr char seperator {'='};
-
-public:
-  bool load(const char* filename);
-  bool write(const char* filename, bool genComments = true);
-
-  int32_t getIntValue(int32_t key) const;
-  float getFloatValue(int32_t key) const;
-  bool getBoolValue(int32_t key) const;
-
-  void setIntValue(int32_t key, int32_t value);
-  void setFloatValue(int32_t key, float value);
-  void setBoolValue(int32_t key, bool value);
-
-  void scaleIntValue(int32_t key, int32_t scale);
-  void scaleFloatValue(int32_t key, float scale);
-
-protected:
-  Dataset(std::initializer_list<Property> properties);
-
-  Dataset() = delete;
-  Dataset(const Dataset&) = delete;
-  Dataset(Dataset&&) = delete;
-  Dataset& operator=(const Dataset&) = delete;
-  Dataset& operator=(Dataset&&) = delete;
-
-private:
-  bool parseInt(const std::string& value, int32_t& result);
-  bool parseFloat(const std::string& value, float& result);
-  bool parseBool(const std::string& value, bool& result);
-
-  void printValue(const Value_t& value, std::ostream& os);
-  
-private:
-  std::unordered_map<int32_t, Property> _properties;
-};
-
-class Assets
-{
-public:
-  using Key_t = int32_t;
-  using Name_t = const char*;
-
-  static constexpr const char* bitmaps_path {"assets/bitmaps/"};
-  static constexpr const char* bitmaps_extension {".bitmap"};
-
-public:
-  Assets() = default;
-  ~Assets() = default;
-
-  void loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale);
-  //void loadFonts(const std::vector<std::string>& manifest, const std::vector<int32_t>& scales);
-
-  const Bitmap& getBitmap(Key_t key) {return _bitmaps[key];}
-  //const Font& getFont(const std::string& key, int32_t scale) const;
-
-private:
-  std::unordered_map<Key_t, Bitmap> _bitmaps;
-  //std::unordered_map<std::string, std::pair<Font, int32_t>> _fonts;
-};
-
-extern std::unique_ptr<Assets> assets;
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //
