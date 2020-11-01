@@ -254,35 +254,13 @@ private:
   std::unordered_map<int32_t, Property> _properties;
 };
 
-namespace filepaths
-{
-
-//#if defined posix
-
-  constexpr const char seperator = '/';
-
-  constexpr const char* bitmaps_path = "assets/bitmaps";
-  constexpr const char* bitmaps_extension = ".bitmap";
-  constexpr const char* fonts_path = "assets/fonts";
-  constexpr const char* fonts_extension = ".font";
-  constexpr const char* glyphs_extension = ".glyph";
-
-//#endif
-
-//#if defined windows
-
-
-//#endif
-
-}
-
 class Assets
 {
 public:
   using Key_t = int32_t;
   using Name_t = const char*;
   using Scale_t = size_t;
-
+  
 public:
   static constexpr const int32_t scaleMax {8};
 
@@ -290,14 +268,81 @@ public:
   Assets() = default;
   ~Assets() = default;
 
-  void loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale);
-  void loadFonts(const std::vector<std::tuple<Key_t, Name_t, Scale_t>& manifest);
+  Assets(const Assets&) = delete;
+  Assets(Assets&&) = delete;
 
-  const Bitmap& getBitmap(Key_t key) {return _bitmaps[key];}
-  //const Font& getFont(const std::string& key, int32_t scale) const;
+  Assets& operator=(const Assets&) = delete;
+  Assets& operator=(Assets&&) = delete;
+
+  void loadBitmaps(const std::vector<std::tuple<Key_t, Name_t, Scale_t>>& manifest);
+  void loadFonts(const std::vector<std::tuple<Key_t, Name_t, Scale_t>>& manifest);
+
+  const Bitmap& getBitmap(Key_t key, Scale_t scale) const;
+  const Font& getFont(Key_t key, Scale_t scale) const;
 
 private:
-  std::unordered_map<Key_t, Bitmap> _bitmaps;
+  static constexpr const char path_seperator = '/';
+
+  static constexpr const char* bitmaps_path = "assets/bitmaps";
+  static constexpr const char* fonts_path = "assets/fonts";
+  static constexpr const char* bitmaps_extension = ".bitmap";
+  static constexpr const char* fonts_extension = ".font";
+  static constexpr const char* glyphs_extension = ".glyph";
+
+  static constexpr std::array<const char*, 8> errorBits {
+    "11111111", "11111111", "11111111", "11111111", "11111111", "11111111", "11111111", "11111111"
+  };
+
+  static constexpr int32_t asciiCharCount {94};
+
+  static constexpr const std::array<const char*, asciiCharCount> glyphFilenames {
+    "emark", "dquote", "hash", "dollar", "percent", "ampersand", "squote", "lrbracket", "rrbracket",
+    "asterix", "plus", "comma", "minus", "dot", "fslash", "0", "1", "2", "3", "4", "5", "6", "7", 
+    "8", "9", "colon", "scolon", "lcroc", "equals", "rcroc", "qmark", "at", "A", "B", "C", "D", "E", 
+    "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", 
+    "Y", "Z", "lsbracket", "bslash", "rsbracket", "carrot", "underscore", "backtick", "a", "b", "c", 
+    "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", 
+    "w", "x", "y", "z", "lcbracket", "pipe", "rcbracket", "tilde"
+  };
+
+  class FontData : public Dataset
+  {
+  public:
+    enum Key { KEY_LINE_SPACE, KEY_WORD_SPACE, KEY_GLYPH_SPACE, KEY_SIZE };
+
+    FontData() : Dataset({
+      // key            name          default   min    max
+      {KEY_LINE_SPACE , "lineSpace" , {10}    , {0}  , {1000}},
+      {KEY_WORD_SPACE , "wordSpace" , {5}     , {0}  , {1000}},
+      {KEY_GLYPH_SPACE, "glyphSpace", {2}     , {0}  , {1000}},
+      {KEY_SIZE       , "size"      , {8}     , {0}  , {1000}}
+    });
+  };
+
+  class GlyphData : public Dataset
+  {
+  public:
+    enum Key { KEY_ASCII_CODE, KEY_OFFSET_X, KEY_ADVANCE, KEY_WIDTH, KEY_HEIGHT };
+
+    GlyphData() : Dataset({
+      // key           name         default  min    max
+      {KEY_ASCCI_CODE, "asciiCode", {0}    , {0}  , {1000}},
+      {KEY_OFFSET_X  , "offsetX"  , {0}    , {0}  , {1000}},
+      {KEY_ADVANCE   , "advance"  , {8}    , {0}  , {1000}},
+      {KEY_WIDTH     , "width"    , {8}    , {0}  , {1000}},
+      {KEY_HEIGHT    , "height"   , {8}    , {0}  , {1000}}
+    });
+  };
+
+private:
+  Bitmap loadBitmap(std::string name, Scale_t scale = 1);
+  Font loadFont(std::string name, Scale_t scale = 1);
+  Bitmap generateErrorBitmap(Scale_t scale);
+  Font generateErrorFont(Scale_t scale);
+  Glyph generateErrorGlyph(int32_t asciiCode, Scale_t scale);
+
+private:
+  std::unordered_map<Key_t, std::array<std::unique_ptr<Bitmap>, scaleMax>> _bitmaps;
   std::unordered_map<Key_t, std::array<std::unique_ptr<Font>, scaleMax>> _fonts;
 };
 
@@ -322,23 +367,16 @@ extern std::unique_ptr<Assets> assets;
 //         0 |█| |█| | |█| |█|           i.e bit[0][0] is the bottom-left most bit.
 //           +-----------------> col
 //            0 1 2 3 4 5 6 7
-class Bitmap
+class Bitmap final
 {
-public:
-  constexpr static int32_t scaleMax {8};
+  friend Assets;
 
 public:
-  explicit Bitmap(int32_t scale = 1);
-  explicit Bitmap(const std::string& filename, int32_t scale = 1);
-  explicit Bitmap(std::vector<std::string> bits, int32_t scale = 1);
-
   Bitmap(const Bitmap&) = default;
-  Bitmap& operator=(const Bitmap&) = default;
   Bitmap(Bitmap&&) = default;
+  Bitmap& operator=(const Bitmap&) = default;
   Bitmap& operator=(Bitmap&&) = default;
-
-  void setBits(std::vector<std::string> bits, int32_t scale = 1);
-  void loadBits(const std::string& filename, int32_t scale = 1);
+  ~Bitmap() = default;
 
   bool getBit(int32_t row, int32_t col);
   int32_t getWidth() const {return _width;}
@@ -349,34 +387,23 @@ public:
 
   void print(std::ostream& out) const;
 
-  bool isErrorBitmap() const {return _isErrorBitmap;}
-
 private:
-  static constexpr std::array<const char*, 8> errorBits {
-    "11111111"
-    "11111111"
-    "11111111"
-    "11111111"
-    "11111111"
-    "11111111"
-    "11111111"
-    "11111111"
-  };
+  Bitmap() = default;
 
-private:
+  void initialize(std::vector<std::string> bits, int32_t scale = 1);
   void generateBytes();
-  void assignErrorBits(std::vector<std::string>& bits);
 
 private:
   std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
   std::vector<uint8_t> _bytes;           // used for rendering
   int32_t _width;
   int32_t _height;
-  bool _isErrorBitmap;
 };
 
 class Font
 {
+  friend class Assets;
+
 public:
   struct Glyph
   {
@@ -396,45 +423,21 @@ public:
     int32_t _size;
   };
 
-  class FontDataset : public Dataset
-  {
-  public:
-    enum Key { KEY_LINE_SPACE, KEY_WORD_SPACE, KEY_GLYPH_SPACE, KEY_SIZE };
-
-    FontDataset() : Dataset({
-      // key            name          default   min    max
-      {KEY_LINE_SPACE , "lineSpace" , {10}    , {0}  , {1000}},
-      {KEY_WORD_SPACE , "wordSpace" , {4}     , {0}  , {1000}},
-      {KEY_GLYPH_SPACE, "glyphSpace", {2}     , {0}  , {1000}},
-      {KEY_SIZE       , "size"      , {8}     , {0}  , {1000}}
-    });
-  };
-
-  class GlyphDataset : public Dataset
-  {
-  public:
-    enum Key { KEY_ASCII_CODE, KEY_OFFSET_X, KEY_ADVANCE, KEY_WIDTH, KEY_HEIGHT };
-
-    GlyphDataset() : Dataset({
-      // key           name         default  min    max
-      {KEY_ASCCI_CODE, "asciiCode", {0}    , {0}  , {1000}},
-      {KEY_OFFSET_X  , "offsetX"  , {0}    , {0}  , {1000}},
-      {KEY_ADVANCE   , "advance"  , {8}    , {0}  , {1000}},
-      {KEY_WIDTH     , "width"    , {8}    , {0}  , {1000}},
-      {KEY_HEIGHT    , "height"   , {8}    , {0}  , {1000}}
-    });
-  };
-
 public:
-  Font(const std::string& name, size_t scale = 1); 
-  Font(const std::vector<Glyph>& glyphs, const Meta& meta);
   Font(const Font&) = default;
+  Font(Font&&) = default;
   Font& operator=(const Font&) = default;
-  const Glyph& getGlyph(char c) const;
+  Font& operator=(Font&&) = default;
+
+  const Glyph& getGlyph(char c) const {return _glyphs[static_cast<int32_t>(c - '!')];}
   int32_t getLineSpace() const {return _meta._lineSpace;}
   int32_t getWordSpace() const {return _meta._wordSpace;}
   int32_t getGlyphSpace() const {return _meta._glyphSpace;}
   int32_t getSize() const {return _meta._size;}
+
+private:
+  Font() = default;
+  void initialize(Meta meta, std::vector<Glyph> glyphs);
 
 private:
   std::vector<Glyph> _glyphs;

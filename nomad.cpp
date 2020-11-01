@@ -187,7 +187,6 @@ int32_t Dataset::load(const char* filename)
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unknown_dataset_property, name);
       log->log(Log::INFO, logstr::info_ignoring_line);
-      ++nErrors;
       continue;
     }
 
@@ -251,6 +250,7 @@ int32_t Dataset::load(const char* filename)
       log->log(Log::WARN, logstr::warn_property_not_set, pair.second._name);
       log->log(Log::INFO, logstr::info_using_property_default);
       pair.second._value = pair.second._default;
+      ++nErrors;
     }
   }
 
@@ -417,33 +417,253 @@ void Dataset::printValue(const Value_t& value, std::ostream& os)
   }
 }
 
-void Assets::loadBitmaps(const std::vector<std::pair<Key_t, Name_t>>& manifest, int32_t scale)
+void Assets::loadBitmaps(std::vector<std::typle<Key_t, Name_t, Scale_t>> manifest)
 {
-  auto isSpace = [](char ch){return std::isspace<char>(ch, std::locale::classic());};
-  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+  for(const auto& tuple : manifest){
+    Key_t key = std::get<0>(typle);
+    Name_t name = std::get<1>(typle);
+    Scale_t scale = std::get<2>(typle);
 
-  std::string path {};
+    assert(scale < maxScale);
 
-  for(const auto& pair : manifest){
-    if(_bitmaps.find(pair.first) != _bitmaps.end()){
-      log->log(Log::WARN, logstr::warn_bitmap_loaded_twice, pair.second);
+    auto search = _fonts.find(key);
+    if(search == _fonts.end()){
+      auto pair = _fonts.insert(std::make_pair(key, {}));
+      assert(pair->second);
+      search = pair->first;
+    }
+
+    if((search->second)[scale] != nullptr){
+      std::string addendum = std::string{key} + std::string{" : scale:"} + std::to_string(scale)); 
+      log->log(Log::WARN, logstr::warn_bitmap_already_loaded, std::move(addendum));
+      log->log(Log::INFO, logstr::info_skipping_bitmap_loading);
       continue;
     }
 
-    path.clear();
-    path += bitmaps_path;
-    path += pair.second;
-    path += bitmaps_extension;
-
-    log->log(Log::INFO, logstr::info_loading_bitmap, path);
-
-    _bitmaps.emplace(std::make_pair(pair.first, Bitmap{path, scale}));
+    (search->second)[scale] = std::move(std::make_unique<Bitmap>(loadBitmap(name, scale)));
   }
 }
 
-//const Font& Assets::getFont(const std::string& key, int32_t scale) const
-//{
-//}
+Bitmap Assets::loadBitmap(std::string name, Scale_t scale)
+{
+  assert(scale < maxScale);
+
+  std::string bitpath {};
+  bitpath += bitmaps_path;
+  bitpath += path_seperator;
+  bitpath += name;
+  bitpath += bitmaps_extension;
+
+  log->log(Log::INFO, logstr::info_loading_bitmap, bitpath);
+
+  std::ifstream file {bitpath};
+  if(!file){
+    log->log(Log::WARN, logstr::warn_missing_bitmap, bitpath);
+    log->log(Log::INFO, logstr::using_error_bitmap);
+    return generateErrorBitmap(scale);
+  }
+
+  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
+
+  std::vector<std::string> rows {};
+
+  for(std::string row; std::getline(file, row);){
+    row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
+    if(row.length() > 0)
+      rows.emplace_back(std::move(row));
+  }
+
+  if(rows.size() == 0){
+    log->log(Log::WARN, logstr::warn_no_bitmap_data, bitpath);
+    log->log(Log::INFO, logstr::using_error_bitmap);
+    return generateErrorBitmap(scale);
+  }
+
+  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
+
+  int32_t rowNo {0};
+  for(auto& row : rows){
+    ++rowNo;
+
+    int32_t count = std::count_if(row.begin(), row.end(), isBinary);
+    if(count != row.length()){
+      log->log(Log::WARN, logstr::warn_malformed_bitmap);
+      std::string addendum = std::string{" ["} + std::to_string(rowNo) + std::string{"] "} + row;
+      log->log(Log::INFO, logstr::info_on_row, addendum);
+      return generateErrorBitmap(scale);
+    }
+  }
+
+  std::reverse(rows.begin(), rows.end()); 
+
+  Bitmap bitmap {};
+  bitmap.initialize(std::move(rows), scale);
+
+  return bitmap;
+}
+
+Bitmap Assets::generateErrorBitmap(Scale_t scale)
+{
+  std::vector<std::string> rows {};
+
+  for(auto row : errorBits){
+    rows.push_back(row); 
+  }
+
+  Bitmap bitmap();
+  bitmap.initialize(rows, scale);
+
+  return bitmap;
+}
+
+void Assets::loadFonts(std::vector<std::typle<Key_t, Name_t, Scale_t>> manifest)
+{
+  for(const auto& tuple : manifest){
+    Key_t key = std::get<0>(typle);
+    Name_t name = std::get<1>(typle);
+    Scale_t scale = std::get<2>(typle);
+
+    assert(scale < maxScale);
+
+    auto search = _fonts.find(key);
+    if(search == _fonts.end()){
+      auto pair = _fonts.insert(std::make_pair(key, {}));
+      assert(pair->second);
+      search = pair->first;
+    }
+
+    if((search->second)[scale] != nullptr){
+      std::string addendum = std::string{key} + std::string{" : scale:"} + std::to_string(scale)); 
+      log->log(Log::WARN, logstr::warn_font_already_loaded, std::move(addendum));
+      log->log(Log::INFO, logstr::info_skipping_font_loading);
+      continue;
+    }
+
+    (search->second)[scale] = std::move(std::make_unique<Font>(loadFont(name, scale)));
+  }
+}
+
+Font Assets::loadFont(std::string name, Scale_t scale)
+{
+  Font::Meta meta;
+  std::vector<Font::Glyph> glyphs {};
+
+  std::string basepath {};
+  basepath += fonts_path;
+  basepath += path_seperator;
+  basepath += name;
+  basepath += path_seperator;
+
+  std::string fontpath {basepath};
+  fontpath += name;
+  fontpath += fonts_extension;
+
+  log->log(Log::INFO, logstr::info_loading_font, fontpath);
+
+  FontData fontdata {};
+  if((int32_t r = fontdata.load(fontpath)) != 0){
+    const char* error = (r < 0) ? logstr::fail_open_font : logstr::fail_parse_font;
+    log->log(Log::WARN, error, fontpath);
+    log->log(Log::info, logstr::info_using_error_font);
+    return generateErrorFont(scale);
+  }
+
+  meta._lineSpace = fontdata.getIntValue(KEY_LINE_SPACE) * scale;
+  meta._wordSpace = fontdata.getIntValue(KEY_WORD_SPACE) * scale;
+  meta._glyphSpace = fontdata.getIntValue(KEY_GLYPH_SPACE) * scale;
+  meta._size = fontdata.getIntValue(KEY_SIZE) * scale;
+
+  GlyphData glyphdata {};
+
+  for(int i = 0; i < asciiCharCount; ++i){
+    int32_t ascii = static_cast<int32_t>('!') + i;
+
+    std::string glyphpath {basepath};
+    glyphpath += glyphFilenames[i];
+    glyphpath += glyphs_extension;
+
+    if((int32_t r = glyphdata.load(glyphpath)) != 0){
+      const char* error = (r < 0) ? logstr::fail_open_glyph : logstr::fail_parse_glyph;
+      log->log(Log::WARN, error, glyphpath);
+      log->log(Log::info, logstr::info_using_error_glyph);
+      log->log(Log::info, logstr::info_ascii_code, std::to_string(ascii));
+      glyphs.emplace_back(generateErrorGlyph(ascii, scale));
+      continue;
+    }
+
+    Glyph glyph {};
+
+    glyph._asciiCode = ascii;
+    glyph._offsetX = glyphdata.getIntValue(KEY_OFFSET_X) * scale;
+    glyph._advance = glyphdata.getIntValue(KEY_ADVANCE) * scale;
+    glyph._width = glyphdata.getIntValue(KEY_WIDTH) * scale;
+    glyph._height = glyphdata.getIntValue(KEY_HEIGHT) * scale;
+
+    std::string bitpath {basepath};
+    bitpath += glyphFilenames[i];
+    bitpath += bitmap_extension;
+    glyph._bitmap = loadBitmap(bitpath, scale);
+
+    glyphs.emplace_back(std::move(glyph));
+  }
+
+  Font font;
+  font.initialize(meta, std::move(glyphs));
+
+  return font;
+}
+
+Font Assets::generateErrorFont(Scale_t scale)
+{
+  Font::Meta meta;
+  std::vector<Font::Glyph> glyphs {};
+
+  FontData fontdata {};
+
+  meta._lineSpace = fontdata.getIntValue(KEY_LINE_SPACE) * scale;
+  meta._wordSpace = fontdata.getIntValue(KEY_WORD_SPACE) * scale;
+  meta._glyphSpace = fontdata.getIntValue(KEY_GLYPH_SPACE) * scale;
+  meta._size = fontdata.getIntValue(KEY_SIZE) * scale;
+
+  for(int i = 0; i < asciiCharCount; ++i){
+    int32_t ascii = static_cast<int32_t>('!') + i;
+    glyphs.emplace_back(generateErrorGlyph(ascii, scale));
+  }
+
+  Font font {};
+  font.initialize(meta, std::move(glyphs));
+  return font;
+}
+
+Glyph Assets::generateErrorGlyph(int32_t asciiCode, Scale_t scale)
+{
+  GlyphData glyphdata {};
+  Glyph glyph {};
+
+  glyph._asciiCode = asciiCode;
+  glyph._offsetX = glyphdata.getIntValue(KEY_OFFSET_X) * scale;
+  glyph._advance = glyphdata.getIntValue(KEY_ADVANCE) * scale;
+  glyph._width = glyphdata.getIntValue(KEY_WIDTH) * scale;
+  glyph._height = glyphdata.getIntValue(KEY_HEIGHT) * scale;
+
+  std::vector<std::string> bits {};
+  for(auto row : errorBits)
+    bits.push_back(row);
+
+  glyph.bitmap.initialize(std::move(bits), scale);
+
+  return glyph;
+}
+
+const Bitmap& Assets::getBitmap(Key_t key, Scale_t scale) const
+{
+  return (_bitmaps.at(key))[scale];
+}
+
+const Font& Assets::getFont(Key_t key, Scale_t scale) const
+{
+  return (_fonts.at(key))[scale];
+}
 
 std::unique_ptr<Assets> assets {nullptr};
 
@@ -452,51 +672,13 @@ std::unique_ptr<Assets> assets {nullptr};
 // ##>GRAPHICS                                                                                   //
 //===============================================================================================//
 
-Bitmap::Bitmap(int32_t scale)
+void Bitmap::initialize(std::vector<std::string> bits, int32_t scale)
+  // predicate: bit strings must contain only 0's and 1's
 {
-  setBits(std::vector<std::string>{}, scale);
-}
-
-Bitmap::Bitmap(std::vector<std::string> bits, int32_t scale)
-{
-  setBits(std::move(bits), scale);
-}
-
-Bitmap::Bitmap(const std::string& filename, int32_t scale)
-{
-  loadBits(filename, scale);
-}
-
-void Bitmap::setBits(std::vector<std::string> bits, int32_t scale)
-{
-  assert(0 < scale && scale <= scaleMax);
-
-  auto isBinary = [](char ch){return ch == '0' || ch == '1';};
-  auto rowNoToString = [](int32_t l){return std::string{" ["} + std::to_string(l) + "] ";};
-
-  if(bits.size() == 0){
-    log->log(Log::INFO, logstr::info_using_error_bitmap);
-    assignErrorBits(bits);
-  }
-  else
-  {
-    // validate bits
-    int32_t rowNo {0};
-    for(auto& row : bits){
-      ++rowNo;
-
-      int32_t count = std::count_if(row.begin(), row.end(), isBinary);
-      if(count != row.length()){
-        log->log(Log::WARN, logstr::warn_malformed_bitmap);
-        log->log(Log::INFO, logstr::info_on_row, rowNoToString(rowNo) + row);
-        log->log(Log::INFO, logstr::info_using_error_bitmap);
-        assignErrorBits(bits);
-        break;
-      }
-
-      while(row.back() == '0'){
-        row.pop_back();
-      }
+  // strip redundant data
+  for(auto& row : bits){
+    while(row.back() == '0'){
+      row.pop_back();
     }
   }
 
@@ -545,28 +727,6 @@ void Bitmap::setBits(std::vector<std::string> bits, int32_t scale)
   }
 
   generateBytes();
-}
-
-void Bitmap::loadBits(const std::string& filename, int32_t scale)
-{
-  std::ifstream bitmap {filename};
-  if(!bitmap){
-    log->log(Log::WARN, logstr::warn_missing_bitmap, filename);
-    setBits(std::vector<std::string>{}, scale);
-    return;
-  }
-
-  auto isSpace = [](char c){return std::isspace<char>(c, std::locale::classic());};
-
-  std::vector<std::string> rows {};
-  for(std::string row; std::getline(bitmap, row);){
-    row.erase(std::remove_if(row.begin(), row.end(), isSpace), row.end());
-    rows.push_back(row);
-  }
-
-  std::reverse(rows.begin(), rows.end()); 
-
-  setBits(std::move(rows), scale);
 }
 
 bool Bitmap::getBit(int32_t row, int32_t col)
@@ -618,49 +778,12 @@ void Bitmap::generateBytes()
   }
 }
 
-void Bitmap::assignErrorBits(std::vector<std::string>& bits)
+void Font::initialize(Meta meta, std::vector<Glyph> glyphs)
+  // predicate: expects glyphs for all ascii codes in the range 33-126 inclusive.
+  // predicate: expects glyphs to be in ascending order of ascii code.
 {
-  bits.clear();
-  for(const char* row : errorBits){
-    bits.push_back(row); 
-  }
-}
-
-Font::Font(const std::string& name, size_t scale)
-{
-  // extract font data from font file
-  // load each glyph
-
-  std::string filepath {};
-  filepath += filepaths::fonts_path;
-  filepath += filepaths::seperator;
-  filepath += name;
-  filepath += filepaths::seperator;
-  filepath += name;
-  filepath += filepaths::fonts_extension;
-
-  std::ifstream font {filepath};
-  if(!font){
-    // generate a base error font
-  }
-
-  FontDataset fontdata {};
-
-
-}
-
-Font::Font(const std::vector<Glyph>& glyphs, Meta meta) : 
-  _glyphs{glyphs}, _meta{meta}
-{
-  static constexpr int checkSum {7505}; // sum of all ascii codes from 32 to 126 inclusive.
-
-  int sum{0};
-  for(const auto& g : _glyphs)
-    sum += g._asciiCode;
-  assert(sum == checkSum);
-
-  auto gcompare = [](const Glyph& g0, const Glyph& g1){return g0._asciiCode < g1._asciiCode;};
-  std::sort(_glyphs.begin(), _glyphs.end(), gcompare);
+  _meta = meta;
+  _glyphs = std::move(glyphs);
 }
 
 Renderer::Renderer(const Config& config)
