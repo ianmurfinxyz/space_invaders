@@ -1001,7 +1001,7 @@ Engine::Duration_t Engine::RealClock::update()
 {
   _now1 = Clock_t::now();
   _dt = _now1 - _now0;
-  _now1 = _now0;
+  _now0 = _now1;
   return _dt;
 }
 
@@ -1208,16 +1208,26 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
   std::stringstream().swap(ss);
   
   ss << std::setprecision(3);
-  ss << "Gdt:"   << durationToMilliseconds(gameDt) << "ms"
-     << "  Rdt:" << durationToMilliseconds(realDt) << "ms";
+  ss << "Gdt:"   << durationToMilliseconds(gameDt) << "ms";
   renderer->blitText({5.f, 20.f}, ss.str(), debugFont, colors::white); 
 
   std::stringstream().swap(ss);
 
   ss << std::setprecision(3);
-  ss << "GNow:"     << durationToMinutes(_gameClock.getNow()) << "min"
-     << "  Uptime:" << durationToMinutes(_realClock.getTimeSinceStart()) << "min";
+  ss << "  Rdt:" << durationToMilliseconds(realDt) << "ms";
+  renderer->blitText({120.f, 20.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+
+  ss << std::setprecision(3);
+  ss << "GNow:"     << durationToMinutes(_gameClock.getNow()) << "min";
   renderer->blitText({5.f, 10.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+
+  ss << std::setprecision(3);
+  ss << "  Uptime:" << durationToMinutes(_realClock.getTimeSinceStart()) << "min";
+  renderer->blitText({120.f, 10.f}, ss.str(), debugFont, colors::white); 
 }
 
 void Engine::drawPauseDialog()

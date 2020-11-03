@@ -617,7 +617,7 @@ public:
   public:
     RealClock() : _start{}, _now0{}, _now1{}, _dt{}{}
     ~RealClock() = default;
-    void start(){_now0 = Clock_t::now();}
+    void start(){_now0 = _start = Clock_t::now();}
     Duration_t update();
     Duration_t getDt() const {return _dt;}
     Duration_t getTimeSinceStart() {return Clock_t::now() - _start;}
