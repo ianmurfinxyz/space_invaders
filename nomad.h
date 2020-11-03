@@ -576,6 +576,8 @@ public:
 
   void switchState(const std::string& name);
 
+  bool isWindowTooSmall() const {return _isWindowTooSmall;}
+
 protected:
   virtual Vector2i getWorldSize() const = 0;
 
@@ -620,7 +622,7 @@ public:
     void start(){_now0 = _start = Clock_t::now();}
     Duration_t update();
     Duration_t getDt() const {return _dt;}
-    Duration_t getTimeSinceStart() {return Clock_t::now() - _start;}
+    Duration_t getNow() {return Clock_t::now() - _start;}
 
   private:
     TimePoint_t _start;

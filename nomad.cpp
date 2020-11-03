@@ -936,8 +936,8 @@ void Application::onWindowResize(int32_t windowWidth, int32_t windowHeight)
     _engine->pause();
     _viewport._x = 0;
     _viewport._y = 0;
-    _viewport._w = worldSize._x;
-    _viewport._h = worldSize._y;
+    _viewport._w = windowWidth;
+    _viewport._h = windowHeight;
   }
   else{
     _isWindowTooSmall = false;
@@ -958,10 +958,6 @@ bool Application::initialize(Engine* engine, int32_t windowWidth, int32_t window
 void Application::onUpdate(double now, float dt)
 {
   assert(_activeState != nullptr);
-
-  if(nomad::input->getKeyState(pauseKey) == Input::KeyState::PRESSED)
-    _engine->togglePause();
-
   (*_activeState)->onUpdate(now, dt);
 }
 
@@ -1111,6 +1107,7 @@ void Engine::mainloop()
   auto realDt = _realClock.update();
   auto gameDt = _gameClock.update(realDt);
   auto gameNow = _gameClock.getNow();
+  auto realNow = _realClock.getNow();
 
   SDL_Event event;
   while(SDL_PollEvent(&event) != 0){
@@ -1135,6 +1132,10 @@ void Engine::mainloop()
           _gameClock.setScale(1.f);
           break;
         }
+        else if(event.key.keysym.sym == SDLK_p && !_app->isWindowTooSmall()){
+          _gameClock.togglePause();
+          break;
+        }
         else if(event.key.keysym.sym == SDLK_BACKQUOTE){
           _isDrawingPerformanceStats = !_isDrawingPerformanceStats;
           break;
@@ -1145,9 +1146,19 @@ void Engine::mainloop()
     }
   }
 
+  //
+  // TODO: make the update loop more elegant - needed to make drawing based on real clock not
+  // on game clock so drawing doesnt stop when the game pauses or slow down when the timeline 
+  // is scaled.
+  //
+
   for(int32_t i = LOOPTICK_UPDATE; i < LOOPTICK_COUNT; ++i){
     LoopTick& tick = _loopTicks[i];
-    tick._ticksAccumulated += tick._metronome.doTicks(gameNow);
+
+    // ugly here!!!!!
+    auto now = (i == LOOPTICK_UPDATE) ? gameNow : realNow;
+    tick._ticksAccumulated += tick._metronome.doTicks(now);
+
     tick._ticksDoneThisFrame = 0;
     while(tick._ticksAccumulated > 0 && tick._ticksDoneThisFrame < tick._maxTicksPerFrame){
       ++tick._ticksDoneThisFrame;
@@ -1156,8 +1167,6 @@ void Engine::mainloop()
     }
     tick._tpsMeter.recordTicks(realDt, tick._ticksDoneThisFrame);
   }
-
-  nomad::input->onUpdate();
   
   if(_isSleeping){
     auto now1 {Clock_t::now()};
@@ -1226,7 +1235,7 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
   std::stringstream().swap(ss);
 
   ss << std::setprecision(3);
-  ss << "  Uptime:" << durationToMinutes(_realClock.getTimeSinceStart()) << "min";
+  ss << "  Uptime:" << durationToMinutes(_realClock.getNow()) << "min";
   renderer->blitText({120.f, 10.f}, ss.str(), debugFont, colors::white); 
 }
 
@@ -1237,13 +1246,18 @@ void Engine::drawPauseDialog()
 
   const Font& debugFont = assets->getFont(debugFontKey, debugFontScale);
 
-  renderer->blitText({windowSize._x - 20, windowSize._y}, "PAUSED", debugFont, colors::white); 
+  Vector2f position {};
+  position._x = (windowSize._x / 2.f) - 20.f; 
+  position._y = (windowSize._y / 2.f) - 5.f;
+
+  renderer->blitText(position, "PAUSED", debugFont, colors::white); 
 }
 
 void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
 {
   double now = durationToSeconds(gameNow);
   _app->onUpdate(now, tickDt);
+  nomad::input->onUpdate();
 }
 
 void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
