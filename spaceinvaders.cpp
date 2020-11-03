@@ -7,8 +7,9 @@
 
 const std::string GameState::name {"game"};
 
-void GameState::initialize(Vector2i worldSize)
+void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 {
+  _worldScale = worldScale;
 }
 
 void GameState::onUpdate(double now, float dt)
@@ -20,8 +21,8 @@ void GameState::onUpdate(double now, float dt)
 void GameState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::cyan);
-  renderer->blitBitmap(Vector2f{100.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0), colors::black);
-  renderer->blitBitmap(Vector2f{150.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0), colors::black);
+  renderer->blitBitmap(Vector2f{100.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale), colors::black);
+  renderer->blitBitmap(Vector2f{150.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0, _worldScale), colors::black);
 }
 
 void GameState::onReset()
@@ -34,8 +35,9 @@ void GameState::onReset()
 
 const std::string MenuState::name {"menu"};
 
-void MenuState::initialize(Vector2i worldSize)
+void MenuState::initialize(Vector2i worldSize, int32_t worldScale)
 {
+  _worldScale = worldScale;
 }
 
 void MenuState::onUpdate(double now, float dt)
@@ -47,8 +49,8 @@ void MenuState::onUpdate(double now, float dt)
 void MenuState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::magenta);
-  renderer->blitBitmap(Vector2f{100.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0), colors::white);
-  renderer->blitBitmap(Vector2f{150.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0), colors::blue);
+  renderer->blitBitmap(Vector2f{100.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale), colors::white);
+  renderer->blitBitmap(Vector2f{150.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0, _worldScale), colors::blue);
 }
 
 void MenuState::onReset()
@@ -65,30 +67,30 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 {
   Application::initialize(engine, windowWidth, windowHeight);
 
-  int32_t scale {1};
-  while((baseWorldSize._x * scale) < windowWidth && (baseWorldSize._y * scale) < windowHeight)
-    ++scale; 
+  _worldScale = 1;
+  while((baseWorldSize._x * _worldScale) < windowWidth && (baseWorldSize._y * _worldScale) < windowHeight)
+    ++_worldScale; 
 
-  --scale;
-  if(scale == 0)
-    scale = 1;
+  --_worldScale;
+  if(_worldScale == 0)
+    _worldScale = 1;
 
-  _worldSize = baseWorldSize * scale;
+  _worldSize = baseWorldSize * _worldScale;
 
   Application::onWindowResize(windowWidth, windowHeight);
 
-  std::vector<std::pair<int32_t, const char*>> manifest {};
+  Assets::Manifest_t manifest{};
   for(int32_t i = BMK_CANNON0; i < BMK_COUNT; ++i){
-    manifest.push_back(std::make_pair(i, _bitmapNames[i])); 
+    manifest.push_back({i, _bitmapNames[i], _worldScale}); 
   }
 
-  assets->loadBitmaps(std::move(manifest), scale);
+  assets->loadBitmaps(std::move(manifest));
 
   std::unique_ptr<ApplicationState> game {new GameState{this}};
   std::unique_ptr<ApplicationState> menu {new MenuState{this}};
 
-  game->initialize(_worldSize);
-  menu->initialize(_worldSize);
+  game->initialize(_worldSize, _worldScale);
+  menu->initialize(_worldSize, _worldScale);
 
   addState(std::move(game));
   addState(std::move(menu));

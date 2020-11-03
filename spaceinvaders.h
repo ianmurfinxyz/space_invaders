@@ -18,7 +18,7 @@ public:
   GameState(Application* app) : ApplicationState{app} {}
   ~GameState() = default;
 
-  void initialize(Vector2i worldSize);
+  void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
@@ -26,7 +26,7 @@ public:
   const std::string& getName(){return name;}
 
 private:
-
+  int32_t _worldScale;
 };
 
 //===============================================================================================//
@@ -42,7 +42,7 @@ public:
   MenuState(Application* app) : ApplicationState{app} {}
   ~MenuState() = default;
 
-  void initialize(Vector2i worldSize);
+  void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onReset();
@@ -50,7 +50,7 @@ public:
   const std::string& getName(){return name;}
 
 private:
-
+  int32_t _worldScale;
 };
 
 //===============================================================================================//
@@ -67,7 +67,7 @@ public:
   static constexpr Vector2i baseWorldSize {300, 300};
 
 public:
-  enum BitmapKey : int32_t
+  enum BitmapKey : Assets::Key_t
   {
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
@@ -75,7 +75,7 @@ public:
     BMK_COUNT
   };
 
-  constexpr static std::array<const char*, BMK_COUNT> _bitmapNames {
+  constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0"
@@ -93,6 +93,7 @@ public:
 
 private:
   Vector2i getWorldSize() const {return _worldSize;}
+  int32_t getWorldScale() const {return _worldScale;}
 
 private:
   Vector2i _worldSize;

@@ -116,6 +116,7 @@ Dataset::Property::Property(int32_t key, std::string name, Value_t default_, Val
   _key{key}, _name{name}, _default{default_}, _min{min}, _max{max}
 {
   assert(_default.index() == _min.index() && _default.index() == _max.index());
+  _value = unsetValue;
   _type = static_cast<Type>(_default.index());
 }
 
@@ -125,11 +126,11 @@ Dataset::Dataset(std::initializer_list<Property> properties)
     _properties.emplace(std::make_pair(property._key, property));
 }
 
-int32_t Dataset::load(const char* filename)
+int32_t Dataset::load(const std::string& filename)
 {
   std::ifstream file {filename};
   if(!file){
-    log->log(Log::WARN, logstr::warn_cannot_open_dataset, std::string{filename});
+    log->log(Log::WARN, logstr::warn_cannot_open_dataset, filename);
     log->log(Log::INFO, logstr::info_using_property_defaults);
     for(auto& pair : _properties)
       pair.second._value = pair.second._default;
@@ -153,7 +154,7 @@ int32_t Dataset::load(const char* filename)
     int32_t count {0};
     count = std::count(line.begin(), line.end(), seperator);
     if(count != 1){
-      log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::WARN, logstr::warn_malformed_dataset, filename); 
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unexpected_seperators, std::string{seperator});
       log->log(Log::INFO, logstr::info_ignoring_line);
@@ -166,7 +167,7 @@ int32_t Dataset::load(const char* filename)
     std::string value {line.substr(pos + 1)};
 
     if(name.empty() || value.empty()){
-      log->log(Log::ERROR, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::ERROR, logstr::warn_malformed_dataset, filename); 
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_incomplete_property);
       log->log(Log::INFO, logstr::info_ignoring_line);
@@ -183,7 +184,7 @@ int32_t Dataset::load(const char* filename)
     }
 
     if(p == nullptr){
-      log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+      log->log(Log::WARN, logstr::warn_malformed_dataset, filename); 
       log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
       log->log(Log::INFO, logstr::info_unknown_dataset_property, name);
       log->log(Log::INFO, logstr::info_ignoring_line);
@@ -195,7 +196,7 @@ int32_t Dataset::load(const char* filename)
         {
           int32_t result {0};
           if(!parseInt(value, result)){
-            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::WARN, logstr::warn_malformed_dataset, filename); 
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_integer, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
@@ -206,14 +207,14 @@ int32_t Dataset::load(const char* filename)
           if(std::get<int32_t>(p->_value) != result){
             log->log(Log::INFO, logstr::info_property_clamped, name);
           }
-          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
+          log->log(Log::INFO, logstr::info_property_set, filename + lineNoToString(lineNo) + line);
           break;
         }
       case FLOAT_PROPERTY:
         {
           float result {0.f};
           if(!parseFloat(value, result)){
-            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::WARN, logstr::warn_malformed_dataset, filename); 
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_float, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
@@ -224,14 +225,14 @@ int32_t Dataset::load(const char* filename)
           if(std::get<float>(p->_value) != result){
             log->log(Log::INFO, logstr::info_property_clamped, name);
           }
-          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
+          log->log(Log::INFO, logstr::info_property_set, filename + lineNoToString(lineNo) + line);
           break;
         }
       case BOOL_PROPERTY:
         {
           bool result {false};
           if(!parseBool(value, result)){
-            log->log(Log::WARN, logstr::warn_malformed_dataset, std::string{filename}); 
+            log->log(Log::WARN, logstr::warn_malformed_dataset, filename); 
             log->log(Log::INFO, logstr::info_on_line, lineNoToString(lineNo) + line);
             log->log(Log::INFO, logstr::info_expected_bool, value);
             log->log(Log::INFO, logstr::info_ignoring_line);
@@ -239,16 +240,16 @@ int32_t Dataset::load(const char* filename)
             continue;
           }
           p->_value = result;
-          log->log(Log::INFO, logstr::info_property_set, std::string{filename} + lineNoToString(lineNo) + line);
+          log->log(Log::INFO, logstr::info_property_set, filename + lineNoToString(lineNo) + line);
           break;
         }
     }
   }
 
   for(auto& pair : _properties){
-    if(pair.second._value == Value_t{}){
+    if(pair.second._value == unsetValue){
       log->log(Log::WARN, logstr::warn_property_not_set, pair.second._name);
-      log->log(Log::INFO, logstr::info_using_property_default);
+      log->log(Log::INFO, logstr::info_using_property_defaults);
       pair.second._value = pair.second._default;
       ++nErrors;
     }
@@ -257,11 +258,11 @@ int32_t Dataset::load(const char* filename)
   return nErrors;
 }
 
-int32_t Dataset::write(const char* filename, bool genComments)
+int32_t Dataset::write(const std::string& filename, bool genComments)
 {
   std::ofstream file {filename, std::ios_base::out | std::ios_base::trunc};
   if(!file){
-    log->log(Log::WARN, logstr::warn_cannot_create_dataset, std::string{filename});
+    log->log(Log::WARN, logstr::warn_cannot_create_dataset, filename);
     return -1;
   }
 
@@ -341,6 +342,13 @@ void Dataset::scaleFloatValue(int32_t key, float scale)
   _properties[key]._value = value * scale;
 }
 
+void Dataset::applyDefaults()
+{
+  for(auto& pair : _properties){
+    pair.second._value = pair.second._default;
+  }
+}
+
 bool Dataset::parseInt(const std::string& value, int32_t& result)
 {
   auto isDigit = [](unsigned char c){return std::isdigit(c);};
@@ -417,49 +425,49 @@ void Dataset::printValue(const Value_t& value, std::ostream& os)
   }
 }
 
-void Assets::loadBitmaps(std::vector<std::typle<Key_t, Name_t, Scale_t>> manifest)
+void Assets::loadBitmaps(const Manifest_t& manifest)
 {
   for(const auto& tuple : manifest){
-    Key_t key = std::get<0>(typle);
-    Name_t name = std::get<1>(typle);
-    Scale_t scale = std::get<2>(typle);
+    Key_t key = std::get<0>(tuple);
+    Name_t name = std::get<1>(tuple);
+    Scale_t scale = std::get<2>(tuple);
 
     assert(scale < maxScale);
 
-    auto search = _fonts.find(key);
-    if(search == _fonts.end()){
-      auto pair = _fonts.insert(std::make_pair(key, {}));
-      assert(pair->second);
-      search = pair->first;
+    auto search = _bitmaps.find(key);
+    if(search == _bitmaps.end()){
+      auto pair = _bitmaps.insert(std::make_pair(key, std::array<std::unique_ptr<Bitmap>, maxScale>{}));
+      assert(pair.second);
+      search = pair.first;
     }
 
     if((search->second)[scale] != nullptr){
-      std::string addendum = std::string{key} + std::string{" : scale:"} + std::to_string(scale)); 
+      std::string addendum = std::string{name} + std::string{" : scale:"} + std::to_string(scale); 
       log->log(Log::WARN, logstr::warn_bitmap_already_loaded, std::move(addendum));
-      log->log(Log::INFO, logstr::info_skipping_bitmap_loading);
+      log->log(Log::INFO, logstr::info_skipping_asset_loading);
       continue;
     }
 
-    (search->second)[scale] = std::move(std::make_unique<Bitmap>(loadBitmap(name, scale)));
+    (search->second)[scale] = std::move(std::make_unique<Bitmap>(loadBitmap(bitmaps_path, name, scale)));
   }
 }
 
-Bitmap Assets::loadBitmap(std::string name, Scale_t scale)
+Bitmap Assets::loadBitmap(std::string path, std::string name, Scale_t scale)
 {
   assert(scale < maxScale);
 
   std::string bitpath {};
-  bitpath += bitmaps_path;
+  bitpath += path;
   bitpath += path_seperator;
   bitpath += name;
   bitpath += bitmaps_extension;
 
-  log->log(Log::INFO, logstr::info_loading_bitmap, bitpath);
+  log->log(Log::INFO, logstr::info_loading_asset, bitpath);
 
   std::ifstream file {bitpath};
   if(!file){
-    log->log(Log::WARN, logstr::warn_missing_bitmap, bitpath);
-    log->log(Log::INFO, logstr::using_error_bitmap);
+    log->log(Log::WARN, logstr::warn_cannot_open_asset, bitpath);
+    log->log(Log::INFO, logstr::info_using_error_bitmap);
     return generateErrorBitmap(scale);
   }
 
@@ -474,8 +482,8 @@ Bitmap Assets::loadBitmap(std::string name, Scale_t scale)
   }
 
   if(rows.size() == 0){
-    log->log(Log::WARN, logstr::warn_no_bitmap_data, bitpath);
-    log->log(Log::INFO, logstr::using_error_bitmap);
+    log->log(Log::WARN, logstr::warn_empty_bitmap_file, bitpath);
+    log->log(Log::INFO, logstr::info_using_error_bitmap);
     return generateErrorBitmap(scale);
   }
 
@@ -510,32 +518,32 @@ Bitmap Assets::generateErrorBitmap(Scale_t scale)
     rows.push_back(row); 
   }
 
-  Bitmap bitmap();
+  Bitmap bitmap {};
   bitmap.initialize(rows, scale);
 
   return bitmap;
 }
 
-void Assets::loadFonts(std::vector<std::typle<Key_t, Name_t, Scale_t>> manifest)
+void Assets::loadFonts(const Manifest_t& manifest)
 {
   for(const auto& tuple : manifest){
-    Key_t key = std::get<0>(typle);
-    Name_t name = std::get<1>(typle);
-    Scale_t scale = std::get<2>(typle);
+    Key_t key = std::get<0>(tuple);
+    Name_t name = std::get<1>(tuple);
+    Scale_t scale = std::get<2>(tuple);
 
     assert(scale < maxScale);
 
     auto search = _fonts.find(key);
     if(search == _fonts.end()){
-      auto pair = _fonts.insert(std::make_pair(key, {}));
-      assert(pair->second);
-      search = pair->first;
+      auto pair = _fonts.insert(std::make_pair(key, std::array<std::unique_ptr<Font>, maxScale>{}));
+      assert(pair.second);
+      search = pair.first;
     }
 
     if((search->second)[scale] != nullptr){
-      std::string addendum = std::string{key} + std::string{" : scale:"} + std::to_string(scale)); 
+      std::string addendum = std::string{name} + std::string{" : scale:"} + std::to_string(scale); 
       log->log(Log::WARN, logstr::warn_font_already_loaded, std::move(addendum));
-      log->log(Log::INFO, logstr::info_skipping_font_loading);
+      log->log(Log::INFO, logstr::info_skipping_asset_loading);
       continue;
     }
 
@@ -546,7 +554,7 @@ void Assets::loadFonts(std::vector<std::typle<Key_t, Name_t, Scale_t>> manifest)
 Font Assets::loadFont(std::string name, Scale_t scale)
 {
   Font::Meta meta;
-  std::vector<Font::Glyph> glyphs {};
+  std::vector<Glyph> glyphs {};
 
   std::string basepath {};
   basepath += fonts_path;
@@ -558,20 +566,22 @@ Font Assets::loadFont(std::string name, Scale_t scale)
   fontpath += name;
   fontpath += fonts_extension;
 
-  log->log(Log::INFO, logstr::info_loading_font, fontpath);
+  log->log(Log::INFO, logstr::info_loading_asset, fontpath);
 
   FontData fontdata {};
-  if((int32_t r = fontdata.load(fontpath)) != 0){
-    const char* error = (r < 0) ? logstr::fail_open_font : logstr::fail_parse_font;
+
+  int32_t r = fontdata.load(fontpath);
+  if(r != 0){
+    const char* error = (r < 0) ? logstr::warn_cannot_open_asset : logstr::warn_asset_parse_errors;
     log->log(Log::WARN, error, fontpath);
-    log->log(Log::info, logstr::info_using_error_font);
+    log->log(Log::INFO, logstr::info_using_error_font);
     return generateErrorFont(scale);
   }
 
-  meta._lineSpace = fontdata.getIntValue(KEY_LINE_SPACE) * scale;
-  meta._wordSpace = fontdata.getIntValue(KEY_WORD_SPACE) * scale;
-  meta._glyphSpace = fontdata.getIntValue(KEY_GLYPH_SPACE) * scale;
-  meta._size = fontdata.getIntValue(KEY_SIZE) * scale;
+  meta._lineSpace = fontdata.getIntValue(FontData::KEY_LINE_SPACE) * scale;
+  meta._wordSpace = fontdata.getIntValue(FontData::KEY_WORD_SPACE) * scale;
+  meta._glyphSpace = fontdata.getIntValue(FontData::KEY_GLYPH_SPACE) * scale;
+  meta._size = fontdata.getIntValue(FontData::KEY_SIZE) * scale;
 
   GlyphData glyphdata {};
 
@@ -582,11 +592,12 @@ Font Assets::loadFont(std::string name, Scale_t scale)
     glyphpath += glyphFilenames[i];
     glyphpath += glyphs_extension;
 
-    if((int32_t r = glyphdata.load(glyphpath)) != 0){
-      const char* error = (r < 0) ? logstr::fail_open_glyph : logstr::fail_parse_glyph;
+    int32_t r = glyphdata.load(glyphpath);
+    if(r != 0){
+      const char* error = (r < 0) ? logstr::warn_cannot_open_asset : logstr::warn_asset_parse_errors;
       log->log(Log::WARN, error, glyphpath);
-      log->log(Log::info, logstr::info_using_error_glyph);
-      log->log(Log::info, logstr::info_ascii_code, std::to_string(ascii));
+      log->log(Log::INFO, logstr::info_using_error_glyph);
+      log->log(Log::INFO, logstr::info_ascii_code, std::to_string(ascii));
       glyphs.emplace_back(generateErrorGlyph(ascii, scale));
       continue;
     }
@@ -594,15 +605,13 @@ Font Assets::loadFont(std::string name, Scale_t scale)
     Glyph glyph {};
 
     glyph._asciiCode = ascii;
-    glyph._offsetX = glyphdata.getIntValue(KEY_OFFSET_X) * scale;
-    glyph._advance = glyphdata.getIntValue(KEY_ADVANCE) * scale;
-    glyph._width = glyphdata.getIntValue(KEY_WIDTH) * scale;
-    glyph._height = glyphdata.getIntValue(KEY_HEIGHT) * scale;
+    glyph._offsetX = glyphdata.getIntValue(GlyphData::KEY_OFFSET_X) * scale;
+    glyph._offsetY = glyphdata.getIntValue(GlyphData::KEY_OFFSET_Y) * scale;
+    glyph._advance = glyphdata.getIntValue(GlyphData::KEY_ADVANCE) * scale;
+    glyph._width = glyphdata.getIntValue(GlyphData::KEY_WIDTH) * scale;
+    glyph._height = glyphdata.getIntValue(GlyphData::KEY_HEIGHT) * scale;
 
-    std::string bitpath {basepath};
-    bitpath += glyphFilenames[i];
-    bitpath += bitmap_extension;
-    glyph._bitmap = loadBitmap(bitpath, scale);
+    glyph._bitmap = loadBitmap(basepath, glyphFilenames[i], scale);
 
     glyphs.emplace_back(std::move(glyph));
   }
@@ -616,14 +625,15 @@ Font Assets::loadFont(std::string name, Scale_t scale)
 Font Assets::generateErrorFont(Scale_t scale)
 {
   Font::Meta meta;
-  std::vector<Font::Glyph> glyphs {};
+  std::vector<Glyph> glyphs {};
 
   FontData fontdata {};
+  fontdata.applyDefaults();
 
-  meta._lineSpace = fontdata.getIntValue(KEY_LINE_SPACE) * scale;
-  meta._wordSpace = fontdata.getIntValue(KEY_WORD_SPACE) * scale;
-  meta._glyphSpace = fontdata.getIntValue(KEY_GLYPH_SPACE) * scale;
-  meta._size = fontdata.getIntValue(KEY_SIZE) * scale;
+  meta._lineSpace = fontdata.getIntValue(FontData::KEY_LINE_SPACE) * scale;
+  meta._wordSpace = fontdata.getIntValue(FontData::KEY_WORD_SPACE) * scale;
+  meta._glyphSpace = fontdata.getIntValue(FontData::KEY_GLYPH_SPACE) * scale;
+  meta._size = fontdata.getIntValue(FontData::KEY_SIZE) * scale;
 
   for(int i = 0; i < asciiCharCount; ++i){
     int32_t ascii = static_cast<int32_t>('!') + i;
@@ -638,31 +648,34 @@ Font Assets::generateErrorFont(Scale_t scale)
 Glyph Assets::generateErrorGlyph(int32_t asciiCode, Scale_t scale)
 {
   GlyphData glyphdata {};
+  glyphdata.applyDefaults();
+
   Glyph glyph {};
 
   glyph._asciiCode = asciiCode;
-  glyph._offsetX = glyphdata.getIntValue(KEY_OFFSET_X) * scale;
-  glyph._advance = glyphdata.getIntValue(KEY_ADVANCE) * scale;
-  glyph._width = glyphdata.getIntValue(KEY_WIDTH) * scale;
-  glyph._height = glyphdata.getIntValue(KEY_HEIGHT) * scale;
+  glyph._offsetX = glyphdata.getIntValue(GlyphData::KEY_OFFSET_X) * scale;
+  glyph._offsetY = glyphdata.getIntValue(GlyphData::KEY_OFFSET_Y) * scale;
+  glyph._advance = glyphdata.getIntValue(GlyphData::KEY_ADVANCE) * scale;
+  glyph._width = glyphdata.getIntValue(GlyphData::KEY_WIDTH) * scale;
+  glyph._height = glyphdata.getIntValue(GlyphData::KEY_HEIGHT) * scale;
 
   std::vector<std::string> bits {};
   for(auto row : errorBits)
     bits.push_back(row);
 
-  glyph.bitmap.initialize(std::move(bits), scale);
+  glyph._bitmap.initialize(std::move(bits), scale);
 
   return glyph;
 }
 
 const Bitmap& Assets::getBitmap(Key_t key, Scale_t scale) const
 {
-  return (_bitmaps.at(key))[scale];
+  return *((_bitmaps.at(key))[scale]);
 }
 
 const Font& Assets::getFont(Key_t key, Scale_t scale) const
 {
-  return (_fonts.at(key))[scale];
+  return *((_fonts.at(key))[scale]);
 }
 
 std::unique_ptr<Assets> assets {nullptr};
@@ -855,8 +868,23 @@ void Renderer::setViewport(iRect viewport)
   _viewport = viewport;
 }
 
-void Renderer::blitText(Vector2f position, const std::string& text, const Color3f& color)
+void Renderer::blitText(Vector2f position, const std::string& text,  const Font& font, const Color3f& color)
 {
+  glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
+  glRasterPos2f(position._x, position._y);
+
+  for(char c : text){
+    if(!(' ' <= c && c <= '~'))
+      continue;
+
+    if(c == ' '){
+      glBitmap(0, 0, 0, 0, font.getWordSpace(), 0, nullptr);
+    }
+    else{
+      const Glyph& g = font.getGlyph(c);      
+      glBitmap(g._width, g._height, g._offsetX, g._offsetY, g._advance + font.getGlyphSpace(), 0, g._bitmap.getBytes().data());
+    }
+  }
 }
 
 void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
@@ -1007,7 +1035,7 @@ void Engine::TPSMeter::recordTicks(Duration_t realDt, int32_t ticks)
   }
 }
 
-void Engine::initialize(std::unique_ptr<Application>&& app)
+void Engine::initialize(std::unique_ptr<Application> app)
 {
   log = std::make_unique<Log>();
 
@@ -1037,9 +1065,6 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
   tick->_maxTicksPerFrame = 1;
   tick->_tickPeriod = 1.0 / 60.0_hz;
 
-  input = std::make_unique<Input>();
-  assets = std::make_unique<Assets>();
-
   std::stringstream ss {};
   ss << _app->getName() 
      << " version:" 
@@ -1058,10 +1083,17 @@ void Engine::initialize(std::unique_ptr<Application>&& app)
 
   renderer = std::make_unique<Renderer>(rconfig);
 
+  input = std::make_unique<Input>();
+  assets = std::make_unique<Assets>();
+
+  Assets::Manifest_t manifest {{debugFontKey, debugFontName, debugFontScale}};
+  assets->loadFonts(manifest);
+
   Vector2i windowSize = nomad::renderer->getWindowSize();
 
   _app->initialize(this, windowSize._x, windowSize._y);
 
+  _frameNo = 0;
   _isSleeping = true;
   _isDrawingPerformanceStats = false;
   _isDone = false;
@@ -1133,16 +1165,69 @@ void Engine::mainloop()
     if(framePeriod < minFramePeriod)
       std::this_thread::sleep_for(minFramePeriod - framePeriod); 
   }
+
+  ++_frameNo;
+  _fpsMeter.recordTicks(realDt, 1);
 }
 
 void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
 {
+  Vector2i windowSize = renderer->getWindowSize();
+  renderer->setViewport({0, 0, std::min(300, windowSize._x), std::min(70, windowSize._y)});
+  renderer->clearViewport(colors::blue);
 
+  const Font& debugFont = assets->getFont(debugFontKey, debugFontScale);
+
+  std::stringstream ss {};
+
+  LoopTick* tick = &_loopTicks[LOOPTICK_UPDATE];
+  ss << std::setprecision(3);
+  ss << "UTPS:"  << tick->_tpsMeter.getTPS() << "hz"
+     << "  UTA:" << tick->_ticksAccumulated
+     << "  UTD:" << tick->_ticksDoneThisFrame
+     << "  UTT:"  << tick->_metronome.getTotalTicks();
+  renderer->blitText({5.f, 50.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+
+  tick = &_loopTicks[LOOPTICK_DRAW];
+  ss << std::setprecision(3);
+  ss << "DTPS:"  << tick->_tpsMeter.getTPS() << "hz"
+     << "  DTA:" << tick->_ticksAccumulated
+     << "  DTD:" << tick->_ticksDoneThisFrame
+     << "  DTT:" << tick->_metronome.getTotalTicks();
+  renderer->blitText({5.f, 40.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+  
+  ss << std::setprecision(3);
+  ss << "FPS:"  << _fpsMeter.getTPS() << "hz"
+     << "  FNo:" << _frameNo;
+  renderer->blitText({5.f, 30.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+  
+  ss << std::setprecision(3);
+  ss << "Gdt:"   << durationToMilliseconds(gameDt) << "ms"
+     << "  Rdt:" << durationToMilliseconds(realDt) << "ms";
+  renderer->blitText({5.f, 20.f}, ss.str(), debugFont, colors::white); 
+
+  std::stringstream().swap(ss);
+
+  ss << std::setprecision(3);
+  ss << "GNow:"     << durationToMinutes(_gameClock.getNow()) << "min"
+     << "  Uptime:" << durationToMinutes(_realClock.getTimeSinceStart()) << "min";
+  renderer->blitText({5.f, 10.f}, ss.str(), debugFont, colors::white); 
 }
 
 void Engine::drawPauseDialog()
 {
+  Vector2i windowSize = renderer->getWindowSize();
+  renderer->setViewport({0, 0, windowSize._x, windowSize._y});
 
+  const Font& debugFont = assets->getFont(debugFontKey, debugFontScale);
+
+  renderer->blitText({windowSize._x - 20, windowSize._y}, "PAUSED", debugFont, colors::white); 
 }
 
 void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
@@ -1170,9 +1255,19 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
   nomad::renderer->show();
 }
 
+double Engine::durationToMilliseconds(Duration_t d)
+{
+  return static_cast<double>(d.count()) / static_cast<double>(oneMillisecond.count());
+}
+
 double Engine::durationToSeconds(Duration_t d)
 {
   return static_cast<double>(d.count()) / static_cast<double>(oneSecond.count());
+}
+
+double Engine::durationToMinutes(Duration_t d)
+{
+  return static_cast<double>(d.count()) / static_cast<double>(oneMinute.count());
 }
 
 } // namespace nomad

@@ -5,6 +5,7 @@
 #include <thread>
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
 #include <algorithm>
 #include <cassert>
 #include <string>
@@ -15,6 +16,7 @@
 #include <memory>
 #include <fstream>
 #include <variant>
+#include <tuple>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -101,8 +103,11 @@ namespace logstr
   constexpr const char* warn_malformed_dataset = "malformed data file";
   constexpr const char* warn_property_not_set = "property not set";
   constexpr const char* warn_malformed_bitmap = "malformed bitmap";
-  constexpr const char* warn_missing_bitmap = "missing bitmap";
-  constexpr const char* warn_bitmap_loaded_twice = "bitmap loaded twice";
+  constexpr const char* warn_bitmap_already_loaded = "bitmap already loaded";
+  constexpr const char* warn_empty_bitmap_file = "empty bitmap file";
+  constexpr const char* warn_font_already_loaded = "font already loaded";
+  constexpr const char* warn_cannot_open_asset = "failed to open asset file";
+  constexpr const char* warn_asset_parse_errors = "asset file parsing errors";
 
   constexpr const char* info_stderr_log = "logging to standard error";
   constexpr const char* info_using_default_config = "using default engine configuration";
@@ -121,9 +126,12 @@ namespace logstr
   constexpr const char* info_property_set = "dataset property set";
   constexpr const char* info_property_clamped = "property value clamped to min-max range";
   constexpr const char* info_using_property_defaults = "using property default values";
-  constexpr const char* info_using_property_default = "using property default value";
-  constexpr const char* info_using_error_bitmap = "using error bitmap";
-  constexpr const char* info_loading_bitmap = "loading bitmap";
+  constexpr const char* info_using_error_bitmap = "substituting with blank bitmap";
+  constexpr const char* info_using_error_font = "substituting with blank font";
+  constexpr const char* info_using_error_glyph = "substituting with blank glyph";
+  constexpr const char* info_loading_asset = "loading asset";
+  constexpr const char* info_skipping_asset_loading = "skipping asset loading";
+  constexpr const char* info_ascii_code = "ascii code";
 }; 
 
 class Log
@@ -193,11 +201,14 @@ extern std::unique_ptr<Input> input;
 
 class Bitmap;
 class Font;
+struct Glyph;
 
 class Dataset
 {
 public:
   using Value_t = std::variant<int32_t, float, bool>;
+
+  constexpr static Value_t unsetValue {std::numeric_limits<int32_t>::min()};
 
   enum Type {INT_PROPERTY, FLOAT_PROPERTY, BOOL_PROPERTY};
 
@@ -220,8 +231,8 @@ public:
   static constexpr char seperator {'='};
 
 public:
-  int32_t load(const char* filename);
-  int32_t write(const char* filename, bool genComments = true);
+  int32_t load(const std::string& filename);
+  int32_t write(const std::string&, bool genComments = true);
 
   int32_t getIntValue(int32_t key) const;
   float getFloatValue(int32_t key) const;
@@ -233,6 +244,8 @@ public:
 
   void scaleIntValue(int32_t key, int32_t scale);
   void scaleFloatValue(int32_t key, float scale);
+
+  void applyDefaults();
 
 protected:
   Dataset(std::initializer_list<Property> properties);
@@ -260,9 +273,10 @@ public:
   using Key_t = int32_t;
   using Name_t = const char*;
   using Scale_t = size_t;
+  using Manifest_t = std::vector<std::tuple<Key_t, Name_t, Scale_t>>;
   
 public:
-  static constexpr const int32_t scaleMax {8};
+  static constexpr const int32_t maxScale {8};
 
 public:
   Assets() = default;
@@ -274,8 +288,8 @@ public:
   Assets& operator=(const Assets&) = delete;
   Assets& operator=(Assets&&) = delete;
 
-  void loadBitmaps(const std::vector<std::tuple<Key_t, Name_t, Scale_t>>& manifest);
-  void loadFonts(const std::vector<std::tuple<Key_t, Name_t, Scale_t>>& manifest);
+  void loadBitmaps(const Manifest_t& manifest);
+  void loadFonts(const Manifest_t& manifest);
 
   const Bitmap& getBitmap(Key_t key, Scale_t scale) const;
   const Font& getFont(Key_t key, Scale_t scale) const;
@@ -316,34 +330,35 @@ private:
       {KEY_WORD_SPACE , "wordSpace" , {5}     , {0}  , {1000}},
       {KEY_GLYPH_SPACE, "glyphSpace", {2}     , {0}  , {1000}},
       {KEY_SIZE       , "size"      , {8}     , {0}  , {1000}}
-    });
+    }){}
   };
 
   class GlyphData : public Dataset
   {
   public:
-    enum Key { KEY_ASCII_CODE, KEY_OFFSET_X, KEY_ADVANCE, KEY_WIDTH, KEY_HEIGHT };
+    enum Key { KEY_ASCII_CODE, KEY_OFFSET_X, KEY_OFFSET_Y, KEY_ADVANCE, KEY_WIDTH, KEY_HEIGHT };
 
     GlyphData() : Dataset({
-      // key           name         default  min    max
-      {KEY_ASCCI_CODE, "asciiCode", {0}    , {0}  , {1000}},
-      {KEY_OFFSET_X  , "offsetX"  , {0}    , {0}  , {1000}},
-      {KEY_ADVANCE   , "advance"  , {8}    , {0}  , {1000}},
-      {KEY_WIDTH     , "width"    , {8}    , {0}  , {1000}},
-      {KEY_HEIGHT    , "height"   , {8}    , {0}  , {1000}}
-    });
+      // key           name         default  min       max
+      {KEY_ASCII_CODE, "asciiCode", {0}    , {0}     , {1000}},
+      {KEY_OFFSET_X  , "offsetX"  , {0}    , {-1000} , {1000}},
+      {KEY_OFFSET_Y  , "offsetY"  , {0}    , {-1000} , {1000}},
+      {KEY_ADVANCE   , "advance"  , {8}    , {0}     , {1000}},
+      {KEY_WIDTH     , "width"    , {8}    , {0}     , {1000}},
+      {KEY_HEIGHT    , "height"   , {8}    , {0}     , {1000}}
+    }){}
   };
 
 private:
-  Bitmap loadBitmap(std::string name, Scale_t scale = 1);
+  Bitmap loadBitmap(std::string path, std::string name, Scale_t scale = 1);
   Font loadFont(std::string name, Scale_t scale = 1);
   Bitmap generateErrorBitmap(Scale_t scale);
   Font generateErrorFont(Scale_t scale);
   Glyph generateErrorGlyph(int32_t asciiCode, Scale_t scale);
 
 private:
-  std::unordered_map<Key_t, std::array<std::unique_ptr<Bitmap>, scaleMax>> _bitmaps;
-  std::unordered_map<Key_t, std::array<std::unique_ptr<Font>, scaleMax>> _fonts;
+  std::unordered_map<Key_t, std::array<std::unique_ptr<Bitmap>, maxScale>> _bitmaps;
+  std::unordered_map<Key_t, std::array<std::unique_ptr<Font>, maxScale>> _fonts;
 };
 
 extern std::unique_ptr<Assets> assets;
@@ -400,21 +415,22 @@ private:
   int32_t _height;
 };
 
+struct Glyph // note -- cannot nest in font as it needs to be forward declared.
+{
+  Bitmap _bitmap;
+  int32_t _asciiCode;
+  int32_t _offsetX;
+  int32_t _offsetY;
+  int32_t _advance;
+  int32_t _width;
+  int32_t _height;
+};
+
 class Font
 {
   friend class Assets;
 
 public:
-  struct Glyph
-  {
-    Bitmap _bitmap;
-    int32_t _asciiCode;
-    int32_t _offsetX;
-    int32_t _advance;
-    int32_t _width;
-    int32_t _height;
-  };
-
   struct Meta
   {
     int32_t _lineSpace;
@@ -500,7 +516,7 @@ public:
   Renderer* operator=(const Renderer&) = delete;
   ~Renderer();
   void setViewport(iRect viewport);
-  void blitText(Vector2f position, const std::string& text, const Color3f& color);
+  void blitText(Vector2f position, const std::string& text, const Font& font, const Color3f& color);
   void blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color);
   void clearWindow(const Color3f& color);
   void clearViewport(const Color3f& color);
@@ -527,7 +543,7 @@ class ApplicationState
 public:
   ApplicationState(Application* app) : _app(app) {}
   virtual ~ApplicationState() = default;
-  virtual void initialize(Vector2i worldSize) = 0;
+  virtual void initialize(Vector2i worldSize, int32_t worldScale) = 0;
   virtual void onUpdate(double now, float dt) = 0;
   virtual void onDraw(double now, float dt) = 0;
   virtual void onReset() = 0;
@@ -587,13 +603,19 @@ public:
   using TimePoint_t = std::chrono::time_point<Clock_t>;
   using Duration_t = std::chrono::nanoseconds;
 
-  constexpr static Duration_t oneSecond {1'000'000};
-  constexpr static Duration_t minFramePeriod {2'000'000};
+  constexpr static Duration_t oneMillisecond {1'000'000};
+  constexpr static Duration_t oneSecond {1'000'000'000};
+  constexpr static Duration_t oneMinute {60'000'000'000};
+  constexpr static Duration_t minFramePeriod {1'000'000};
+
+  constexpr static Assets::Key_t debugFontKey {0}; // engine reserves this font key for itself.
+  constexpr static Assets::Name_t debugFontName {"debug"};
+  constexpr static Assets::Scale_t debugFontScale {1};
 
   class RealClock
   {
   public:
-    explicit RealClock() : _start{}, _now0{}, _now1{}, _dt{}{}
+    RealClock() : _start{}, _now0{}, _now1{}, _dt{}{}
     ~RealClock() = default;
     void start(){_now0 = Clock_t::now();}
     Duration_t update();
@@ -610,7 +632,7 @@ public:
   class GameClock
   {
   public:
-    explicit GameClock() : _now{}, _scale{1.f}, _isPaused{false}{}
+    GameClock() : _now{}, _scale{1.f}, _isPaused{false}{}
     ~GameClock() = default;
     Duration_t update(Duration_t realDt);
     Duration_t getNow() const {return _now;}
@@ -633,7 +655,7 @@ public:
   class Metronome
   {
   public:
-    explicit Metronome() : _lastTickNow{}, _tickPeriod{}, _totalTicks{0}{}
+    Metronome() : _lastTickNow{}, _tickPeriod{}, _totalTicks{0}{}
     ~Metronome() = default;
     int64_t doTicks(Duration_t gameNow);
     void setTickPeriod(Duration_t period) {_tickPeriod += period;}
@@ -649,7 +671,7 @@ public:
   class TPSMeter
   {
   public:
-    explicit TPSMeter() : _timer{}, _ticks{0}, _tps{0} {}
+    TPSMeter() : _timer{}, _ticks{0}, _tps{0} {}
     ~TPSMeter() = default;
     void recordTicks(Duration_t realDt, int32_t ticks);
     int32_t getTPS() const {return _tps;}
@@ -700,7 +722,7 @@ public:
 public:
   Engine() = default;
   ~Engine() = default;
-  void initialize(std::unique_ptr<Application>&& app);
+  void initialize(std::unique_ptr<Application> app);
   void run();
   void pause(){_gameClock.pause();}
   void unpause(){_gameClock.unpause();}
@@ -712,15 +734,19 @@ private:
   void drawPauseDialog();
   void onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
   void onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt);
+
+  double durationToMilliseconds(Duration_t d);
   double durationToSeconds(Duration_t d);
+  double durationToMinutes(Duration_t d);
 
 private:
   Config _config;
   std::array<LoopTick, LOOPTICK_COUNT> _loopTicks;
-  std::unique_ptr<Application> _app;
+  TPSMeter _fpsMeter;
+  int64_t _frameNo;
   RealClock _realClock;
   GameClock _gameClock;
-  bool _isPaused;
+  std::unique_ptr<Application> _app;
   bool _isSleeping;
   bool _isDrawingPerformanceStats;
   bool _isDone;
