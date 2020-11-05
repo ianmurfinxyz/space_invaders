@@ -547,7 +547,7 @@ public:
   virtual void onUpdate(double now, float dt) = 0;
   virtual void onDraw(double now, float dt) = 0;
   virtual void onReset() = 0;
-  virtual const std::string& getName() = 0;
+  virtual std::string getName() = 0;
 
 protected:
   Application* _app;
@@ -566,7 +566,7 @@ public:
   
   virtual bool initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight);
 
-  virtual const std::string& getName() const = 0;
+  virtual std::string getName() const = 0;
   virtual int32_t getVersionMajor() const = 0;
   virtual int32_t getVersionMinor() const = 0;
 
