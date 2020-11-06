@@ -65,7 +65,7 @@ public:
   static constexpr const char* name = "game";
 
 public:
-  GameState(Application* app) : ApplicationState{app} {}
+  GameState(Application* app);
   ~GameState() = default;
 
   void initialize(Vector2i worldSize, int32_t worldScale);
@@ -76,195 +76,129 @@ public:
   std::string getName(){return name;}
 
 private:
-
-  //-- CYCLES -----------------------------------------------------------------------------------//
-  
-  // Aliens move at fixed displacements independent of time, thus alien movement speed is an 
-  // emergent property of the rate of update ticks, and importantly, the number of aliens moved 
-  // in a each tick. Note the engine guarantees a tick rate of 60Hz (or less if on a slow 
-  // computer). Thus alien speed in game is controlled by the second factor; the number of aliens
-  // moved in each tick. Since the game is ticked at 60Hz, if a single alien is moved in each tick
-  // then 55 aliens will be moved in 55 ticks so in 55/60 seconds. Moving 2 aliens per tick 
-  // will result in twice the speed. A cycle controls the number of aliens moved in a single tick 
-  // where the elements of a cycle represent the number of aliens to tick. Thus a cycle such as
-  // {1, 2, end} means update 1 alien in tick N, 2 aliens in tick N + 1, and repeat. This
-  // results in (when you do the math) all 55 aliens moving in 37 ticks, i.e. it takes 37/60 
-  // seconds to complete one full grid movement, giving a frequency of grid movements of 60/37 Hz.
-  //
-  // Below is defined a set of cycles with exponentially increasing frequency of alien movements
-  // and thus speed. The alien speed is thus increased exponentially by moving up the cycle
-  // list. The frequency is the rate at which full grid movements occur.
-  //
-  // note: this design also makes alien movement speed dependent on the number of aliens in the
-  // grid. Thus if you change the number of aliens you must also recalculate all cycles to tune
-  // the gameplay.
-  
-  static constexpr int32_t cycleCount {15};
-  static constexpr int32_t cycleLength {4};
-  static constexpr int32_t cycleStart {0};
-  static constexpr int32_t cycleEnd {-1};
-
-  // These cycles are tuned to an alien grid with 55 columns and 5 rows.
-  static constexpr std::array<std::array<int32_t, cycleLength>, cycleCount> _cycles {{
-    {1,  cycleEnd, 0, 0},  // ticks:55.00   freq:1.09
-    {1,  1, 2, cycleEnd},  // ticks:42.00   freq:1.43
-    {1,  2, cycleEnd, 0},  // ticks:37.00   freq:1.60
-    {2,  cycleEnd, 0, 0},  // ticks:27.50   freq:2.18
-    {2,  2, 3, cycleEnd},  // ticks:23.57   freq:2.54
-    {2,  3, cycleEnd, 0},  // ticks:22.00   freq:2.70
-    {3,  cycleEnd, 0, 0},  // ticks:18.33   freq:3.33
-    {4,  cycleEnd, 0, 0},  // ticks:13.75   freq:4.35
-    {5,  cycleEnd, 0, 0},  // ticks:11.00   freq:5.56
-    {6,  cycleEnd, 0, 0},  // ticks:9.17    freq:6.67
-    {7,  cycleEnd, 0, 0},  // ticks:7.86    freq:7.69
-    {8,  cycleEnd, 0, 0},  // ticks:6.88    freq:9.09
-    {9,  cycleEnd, 0, 0},  // ticks:6.11    freq:9.81
-    {10, cycleEnd, 0, 0},  // ticks:5.50    freq:10.90
-    {11, cycleEnd, 0, 0}   // ticks:5.00    freq:12.00
-  }};
-
-  int32_t _activeCycle;
-  int32_t _activeCycleElement;
-
-  //-- COLOR PALLETE ----------------------------------------------------------------------------//
-
-  static constexpr int32_t palleteSize {3}; 
-  std::vector<Color3f> _colorPallete;
-
-  //-- ALIENS -----------------------------------------------------------------------------------//
-  
-  static constexpr int32_t gridWidth {11};
-  static constexpr int32_t gridHeight {5};
-
-  enum AlienClassId { SQUID, CRAB, OCTOPUS, GAP };
-
-  struct AlienClass
-  {
-    int32_t _scoreValue;
-    int32_t _colorIndex;
-    Assets::Key_t _bitmapKeys[2];
-  };
-
-  static constexpr int32_t alienClassCount {3};
-  static constexpr std::array<AlienClass, alienClassCount> _alienClasses {{
-    {30, 0, {SpaceInvaders::BMK_SQUID0  , SpaceInvaders::BMK_SQUID1  }},
-    {20, 1, {SpaceInvaders::BMK_CRAB0   , SpaceInvaders::BMK_CRAB1   }},
-    {10, 2, {SpaceInvaders::BMK_OCTOPUS0, SpaceInvaders::BMK_OCTOPUS1}},
-  }};
-
-  using Formation_t = std::array<std::array<AlienClassId, gridWidth>, gridHeight>;
-
-  static constexpr int32_t formationCount {2};
-  static constexpr std::array<Formation_t, formationCount> _formations {{
-    // formation 0
-    {{
-       {SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
-       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS},
-       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS}
-    }},
-
-    // formation 1
-    {{
-       {SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
-       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS},
-       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS}
-    }}
-  }};
-
-  struct Alien
-  {
-    AlienClassId _id;
-    Vector2i _position;
-    bool _drawState;
-    bool _isAlive;
-  };
-
   struct GridIndex
   {
     int32_t _row;
     int32_t _col;
   };
 
-  Vector2i _alienShiftDisplacement {2, 0};
-  Vector2i _alienDropDisplacement {0, -8};
+  enum AlienClassId { SQUID, CRAB, OCTOPUS, GAP };
 
-  int32_t _alienXSeperation {16};
-  int32_t _alienYSeperation {16};
+  static constexpr int32_t alienFramesCount {2};
+  struct AlienClass
+  {
+    int32_t _width;
+    int32_t _height;
+    int32_t _scoreValue;
+    int32_t _colorIndex;
+    std::array<Assets::Key_t, alienFramesCount> _bitmapKeys;
+  };
 
-  int32_t _worldMargin {5};
+  struct Alien
+  {
+    AlienClassId _classId;
+    Vector2i _position;
+    bool _frame;
+    bool _isAlive;
+  };
 
-  int32_t _worldLeftBorderX;
-  int32_t _worldRightBorderX;
+  enum BulletClassId { CROSS, ZIGZAG, ZAGZIG, LASER };
 
-  Vector2i _aliensSpawnPosition;
+  static constexpr int32_t bulletFramesCount {4};
+  struct BulletClass
+  {
+    float _speed;                                             // y-axis speed, unit: pixels per second.
+    int32_t _colorIndex;
+    int32_t _frameInterval;                                   // Beats between draw frames.
+    std::array<Assets::Key_t, bulletFramesCount> _bitmapKeys; 
+  };
 
-  // The 2D grid of aliens indexed by [row][col].
-  std::array<std::array<Alien, gridWidth>, gridHeight> _aliens; 
-  
-  // The alien to move in the next tick.
-  GridIndex _nextMover;
-
-  // Limited to values -1 for left, +1 for right.
-  int32_t _alienMoveDirection; 
-
-  bool _isAliensDropping;
-
-  //-- LEVELS -----------------------------------------------------------------------------------//
-
-  static constexpr int32_t levelCount {10};
+  struct Bullet
+  {
+    BulletClassId _classId;
+    Vector2f _position;
+    int32_t _beatsUntilNextFrame;  // Beats 
+    int32_t _frame;                // Constraint: value=[0, 4)
+    bool _isAlive;
+  };
 
   struct Level
   {
-    int32_t _spawnDrops;
+    int32_t _startCycle;      // The start rate of beats (start game speed).
+    int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
+    int32_t _formationIndex;  // The grid formation used for this level.
   };
 
-  static constexpr std::array<Level, levelCount> _levels {{
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-    {5},
-  }};
-
-  int32_t _levelNo;
-
-  // The index into the _levels array which sets the level properties e.g. alien grid formation
-  // and initial movement cycle.
-  int32_t _levelIndex;
-
-  int32_t _dropsDone;
-  bool _isAliensSpawning;
-
+private:
   void startNextLevel();
   void endSpawning();
-
-private:
-
-  // Increments index from left-to-right along the columns, moving up a row and back to the left
-  // most column upon reaching the end of the current column. Loops back to the bottom left most
-  // column of the bottom row upon reaching the top-right of the grid. Returns true to indicate
-  // a loop.
+  void doAlienMoving(int32_t beats);
+  void doAlienFiring(int32_t beats);
+  void doBulletMoving(int32_t beats, float dt);
   bool incrementGridIndex(GridIndex& index);
-
   bool testAlienBorderCollision();
 
-
 private:
-
-
   Vector2i _worldSize;
   int32_t _worldScale;
 
+  static constexpr int32_t paletteSize {3}; 
+  std::array<Color3f, paletteSize> _colorPallete;
 
+  static constexpr int32_t gridWidth {11};
+  static constexpr int32_t gridHeight {5};
+  using GridRow = std::array<Alien, gridWidth>;
+  std::array<GridRow, gridHeight> _grid; 
+  Vector2i _alienShiftDisplacement;
+  Vector2i _alienDropDisplacement;
+  Vector2i _aliensSpawnPosition;
+  int32_t _alienXSeperation;
+  int32_t _alienYSeperation;
+  int32_t _worldMargin;
+  int32_t _worldLeftBorderX;
+  int32_t _worldRightBorderX;
+  int32_t _alienMoveDirection;            // Limited to values -1 for left, +1 for right.
+  GridIndex _nextMover;                   // The alien to move in the next tick.
+  bool _isAliensSpawning;
+  bool _isAliensDropping;
+  int32_t _dropsDone;
+
+  static constexpr int32_t cycleCount {15};
+  static constexpr int32_t cycleLength {4};
+  static constexpr int32_t cycleStart {0};
+  static constexpr int32_t cycleEnd {-1};
+  using Cycle = std::array<int32_t, cycleLength>;
+  std::array<Cycle, cycleCount> _cycles;
+  int32_t _activeCycle;
+  int32_t _activeBeat;  // A beat is an element of a cycle.
+
+  static constexpr int32_t alienClassCount {3};
+  std::array<AlienClass, alienClassCount> _alienClasses;
+
+  static constexpr int32_t formationCount {2};
+  using Formation = std::array<std::array<AlienClassId, gridWidth>, gridHeight>;
+  std::array<Formation, formationCount> _formations;
+
+  float _fireIntervalDeviation;                 // Max deviation in beat count.
+  int32_t _fireIntervalBase;                    // Base beat count between firing.
+  int32_t _beatsUntilFire;
+  std::array<int32_t, gridWidth> _columnPops;   // Populations of alive aliens in each column.
+  RandInt _randColumn;
+
+  static constexpr int32_t bulletClassCount {4};
+  std::array<BulletClass, bulletClassCount> _bulletClasses;
+  RandInt _randBulletClass;
+
+  static constexpr int32_t maxAlienBullets {20};
+  std::array<Bullet, maxAlienBullets> _alienBullets;
+  int32_t _alienBulletCount;
+
+  Bullet _playerBullet;
+
+  static constexpr int32_t levelCount {10};
+  std::array<Level, levelCount> _levels;
+  int32_t _levelIndex;                        // Active level (index into _levels data).
+  int32_t _levelNo;                           // Real level number (total levels completed).
 };
 
 //===============================================================================================//

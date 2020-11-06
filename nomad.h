@@ -17,12 +17,22 @@
 #include <fstream>
 #include <variant>
 #include <tuple>
+#include <random>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
 namespace nomad
 {
+//===============================================================================================//
+// ##>UTILITY                                                                                    //
+//===============================================================================================//
+
+template<typename T>
+inline T wrap(T value, T lo, T hi)
+{
+  return (value < lo) ? hi : (value > hi) ? lo : value;
+}
 
 //===============================================================================================//
 // ##>MATH                                                                                       //
@@ -85,6 +95,31 @@ struct Rect
 
 using iRect = Rect<int32_t>;
 using fRect = Rect<float>;
+
+template<typename T, typename Dist>
+class RandBasic
+{
+public:
+  RandBasic(T lo, T hi) : d{lo, hi}
+  {
+    std::random_device r;
+    e.seed(r());
+  }
+
+  RandBasic(const RandBasic&) = delete;
+  RandBasic(RandBasic&&) = delete;
+  RandBasic& operator=(const RandBasic&) = delete;
+  RandBasic& operator=(RandBasic&&) = delete;
+
+  T operator()() {return d(e);}
+
+private:
+    std::default_random_engine e;
+    Dist d;
+};
+
+using RandInt = RandBasic<int32_t, std::uniform_int_distribution<int32_t>>;
+using RandReal = RandBasic<double, std::uniform_real_distribution<double>>;
 
 //===============================================================================================//
 // ##>LOG                                                                                        //
@@ -466,11 +501,18 @@ class Color3f
   constexpr static float hi {1.f};
 
 public:
+  Color3f() : _r{0.f}, _g{0.f}, _b{0.f}{}
+
   constexpr Color3f(float r, float g, float b) : 
     _r{std::clamp(r, lo, hi)},
     _g{std::clamp(g, lo, hi)},
     _b{std::clamp(b, lo, hi)}
   {}
+
+  Color3f(const Color3f&) = default;
+  Color3f(Color3f&&) = default;
+  Color3f& operator=(const Color3f&) = default;
+  Color3f& operator=(Color3f&&) = default;
 
   float getRed() const {return _r;}
   float getGreen() const {return _g;}
