@@ -25,14 +25,14 @@ public:
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
-    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_COUNT
+    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, BMK_COUNT
   };
 
   constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
-    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar"
+    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom"
   };
 
 public:
@@ -153,6 +153,7 @@ private:
     int32_t _boomFrameClock;           // Unit: beats.
     bool _isBooming;
     bool _isAlive;
+    bool _isFrozen;
     Assets::Key_t _cannonKey;
     std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
   };
@@ -192,11 +193,13 @@ private:
   void endSpawning();
   void spawnCannon();
   void boomCannon();
+  void boomAlien(Alien* alien);
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
   void doCannonFiring();
   void doAlienMoving(int32_t beats);
   void doAlienBombing(int32_t beats);
+  void doAlienBooming(float dt);
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
   void doCollisions();
@@ -228,11 +231,15 @@ private:
   int32_t _worldLeftBorderX;
   int32_t _worldRightBorderX;
   int32_t _alienMoveDirection;            // Limited to values -1 for left, +1 for right.
+  int32_t _dropsDone;
   GridIndex _nextMover;                   // The alien to move in the next tick.
+  Alien* _alienBoomer;                    // The alien going BOOM! (not your dad).
+  float _alienBoomClock;                  // Unit: seconds.
+  float _alienBoomDuration;               // Unit: seconds.
+  bool _isAliensBooming;
   bool _isAliensSpawning;
   bool _isAliensDropping;
   bool _isAliensFrozen;
-  int32_t _dropsDone;
 
   static constexpr int32_t cycleCount {15};
   static constexpr int32_t cycleLength {4};

@@ -91,6 +91,8 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _worldLeftBorderX = _worldMargin;
   _worldRightBorderX = _worldSize._x - _worldMargin;
 
+  _alienBoomDuration = 2.0f;
+
 
   // Each update tick the game performs a number of 'beats'. The beat rate controls the speed of
   // the game; speed of alien shifts and firing etc. Beats are composed into sets called cycles 
@@ -200,6 +202,7 @@ void GameState::startNextLevel()
   _nextMover = {0, 0};
   _alienMoveDirection = 1;
   _dropsDone = 0;
+  _isAliensBooming = false;
   _isAliensDropping = true;
   _isAliensSpawning = true;
   _isAliensFrozen = false;
@@ -230,6 +233,7 @@ void GameState::startNextLevel()
   // Reset player cannon.
   _cannon._isBooming = false;
   _cannon._isAlive = false;
+  _cannon._isFrozen = false;
 
   _bombClock = _bombIntervalBase;
 
@@ -266,9 +270,21 @@ void GameState::boomCannon()
   _isAliensFrozen = true;
 }
 
+void GameState::boomAlien(Alien* alien)
+{
+  _alienBoomer = alien;
+  _alienBoomClock = _alienBoomDuration;
+  _isAliensFrozen = true;
+  _isAliensBooming = true;
+  _cannon._isFrozen = true;
+}
+
 void GameState::doCannonMoving(float dt)
 {
   if(!_cannon._isAlive)
+    return;
+
+  if(_cannon._isFrozen)
     return;
 
   bool lKey = nomad::input->isKeyDown(Input::KEY_LEFT);
@@ -313,6 +329,9 @@ void GameState::doCannonBooming(int32_t beats)
 void GameState::doCannonFiring()
 {
   if(!_cannon._isAlive)
+    return;
+
+  if(_cannon._isFrozen)
     return;
 
   if(_laser._isAlive)
@@ -458,6 +477,20 @@ void GameState::doAlienBombing(int32_t beats)
   _bombClock = _bombIntervalBase;
 }
 
+void GameState::doAlienBooming(float dt)
+{
+  if(!_isAliensBooming)
+    return;
+
+  _alienBoomClock -= dt;
+  if(_alienBoomClock <= 0.f){
+    _alienBoomer = nullptr;
+    _isAliensFrozen = false;
+    _isAliensBooming = false;
+    _cannon._isFrozen = false;
+  }
+}
+
 void GameState::doBombMoving(int32_t beats, float dt)
 {
   for(auto& bomb : _bombs){
@@ -557,11 +590,30 @@ void GameState::onUpdate(double now, float dt)
   doAlienBombing(beats);
   doCannonMoving(dt);
   doCannonBooming(beats);
+  doAlienBooming(dt);
   doCannonFiring();
 
-  // TEMP - TODO- implement collision detectin to boom cannon.
+  //================================================================================
+  
+  // TEMP - TODO- implement collision detectin to boom cannon and aliens.
+  
   if(nomad::input->isKeyPressed(Input::KEY_b))
     boomCannon();
+
+  if(nomad::input->isKeyPressed(Input::KEY_a)){
+    for(auto& row : _grid){
+      for(auto& alien : row){
+        if(alien._isAlive){
+          alien._isAlive = false;
+          boomAlien(&alien);
+          goto BOOMED;
+        }
+      }
+    }
+  }
+  BOOMED:
+
+  //================================================================================
 
   ++_activeBeat;
   if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
@@ -582,6 +634,18 @@ void GameState::drawGrid()
         renderer->blitBitmap(position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
       }
     }
+  }
+
+  if(_isAliensBooming){
+    assert(_alienBoomer != nullptr);
+
+    const AlienClass& ac = _alienClasses[_alienBoomer->_classId];
+
+    Vector2f position(_alienBoomer->_position._x, _alienBoomer->_position._y);
+    Assets::Key_t bitmapKey = SpaceInvaders::BMK_ALIENBOOM;
+    Color3f& color = _colorPallete[ac._colorIndex];
+
+    renderer->blitBitmap(position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
   }
 }
 
