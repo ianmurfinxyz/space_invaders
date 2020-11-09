@@ -25,13 +25,14 @@ public:
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
-    BMK_COUNT
+    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_COUNT
   };
 
   constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
-    "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0"
+    "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
+    "cannonboom0", "cannonboom1", "cannonboom2"
   };
 
 public:
@@ -107,6 +108,8 @@ private:
   static constexpr int32_t bulletFramesCount {4};
   struct BulletClass
   {
+    int32_t _width;
+    int32_t _height;
     float _speed;                                             // y-axis speed, unit: pixels per second.
     int32_t _colorIndex;
     int32_t _frameInterval;                                   // Beats between draw frames.
@@ -117,9 +120,30 @@ private:
   {
     BulletClassId _classId;
     Vector2f _position;
-    int32_t _beatsUntilNextFrame;  // Beats 
-    int32_t _frame;                // Constraint: value=[0, 4)
+    int32_t _frameClock;       // unit: Cycle beats.
+    int32_t _frame;            // Constraint: value=[0, 4).
     bool _isAlive;
+  };
+
+  static constexpr int32_t cannonBoomFramesCount {3};
+  struct Cannon
+  {
+    Vector2f _spawnPosition;
+    Vector2f _position;
+    int32_t _colorIndex;
+    int32_t _width;
+    int32_t _height;
+    int32_t _moveDirection;            // -1 == left, 0 == still, +1 == right.
+    float _speed;
+    int32_t _boomInterval;             // Unit: beats - total length of boom animation.
+    int32_t _boomClock;                // Unit: beats.
+    int32_t _boomFrameInterval;        // Unit: beats - how many beats per frame.
+    int32_t _boomFrame;                // Current boom animation frame.
+    int32_t _boomFrameClock;           // Unit: beats.
+    bool _isBooming;
+    bool _isAlive;
+    Assets::Key_t _cannonKey;
+    std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
   };
 
   struct Level
@@ -132,17 +156,24 @@ private:
 private:
   void startNextLevel();
   void endSpawning();
+  void spawnCannon();
+  void boomCannon();
+  void doCannonMoving(float dt);
+  void doCannonBooming(int32_t beats);
   void doAlienMoving(int32_t beats);
   void doAlienFiring(int32_t beats);
   void doBulletMoving(int32_t beats, float dt);
   bool incrementGridIndex(GridIndex& index);
   bool testAlienBorderCollision();
+  void drawGrid();
+  void drawCannon();
+  void drawBullets();
 
 private:
   Vector2i _worldSize;
   int32_t _worldScale;
 
-  static constexpr int32_t paletteSize {3}; 
+  static constexpr int32_t paletteSize {7}; 
   std::array<Color3f, paletteSize> _colorPallete;
 
   static constexpr int32_t gridWidth {11};
@@ -161,6 +192,7 @@ private:
   GridIndex _nextMover;                   // The alien to move in the next tick.
   bool _isAliensSpawning;
   bool _isAliensDropping;
+  bool _isAliensFrozen;
   int32_t _dropsDone;
 
   static constexpr int32_t cycleCount {15};
@@ -187,13 +219,14 @@ private:
 
   static constexpr int32_t bulletClassCount {4};
   std::array<BulletClass, bulletClassCount> _bulletClasses;
-  RandInt _randBulletClass;
+  RandInt _randAlienBulletClass;
 
   static constexpr int32_t maxAlienBullets {20};
   std::array<Bullet, maxAlienBullets> _alienBullets;
   int32_t _alienBulletCount;
 
-  Bullet _playerBullet;
+  Bullet _laser;
+  Cannon _cannon;
 
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;

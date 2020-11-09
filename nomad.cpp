@@ -41,8 +41,8 @@ std::unique_ptr<Log> log {nullptr};
 
 Input::Input()
 {
-  for(auto& key : _keyStates)
-    key = KeyState::UP;
+  for(auto& key : _keys)
+    key._isDown = key._isReleased = key._isPressed = false;
 }
 
 void Input::onKeyEvent(const SDL_Event& event)
@@ -54,20 +54,20 @@ void Input::onKeyEvent(const SDL_Event& event)
   if(key == KEY_COUNT) 
     return;
 
-  if(event.type == SDL_KEYDOWN)
-    _keyStates[key] = KeyState::PRESSED;
-  else
-    _keyStates[key] = KeyState::RELEASED;
+  if(event.type == SDL_KEYDOWN){
+    _keys[key]._isDown = true;
+    _keys[key]._isPressed = true;
+  }
+  else{
+    _keys[key]._isDown = false;
+    _keys[key]._isReleased = true;
+  }
 }
 
 void Input::onUpdate()
 {
-  for(auto& state : _keyStates){
-    if(state == KeyState::PRESSED)
-      state = KeyState::DOWN;
-    else if(state == KeyState::RELEASED)
-      state = KeyState::UP;
-  }
+  for(auto& key : _keys)
+    key._isPressed = key._isReleased = false;
 }
 
 Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
@@ -1264,7 +1264,7 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
 {
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
-  nomad::renderer->clearWindow(colors::black);
+  nomad::renderer->clearWindow(colors::gainsboro);
 
   double now = durationToSeconds(gameNow);
 

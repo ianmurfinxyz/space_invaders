@@ -212,20 +212,29 @@ public:
     KEY_SPACE, KEY_ENTER, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_COUNT 
   };
 
-  enum class KeyState { DOWN, PRESSED, UP, RELEASED };
+  struct KeyLog
+  {
+    bool _isDown;
+    bool _isPressed;
+    bool _isReleased;
+  };
 
 public:
   Input();
   ~Input() = default;
+
   void onKeyEvent(const SDL_Event& event);
   void onUpdate();
-  KeyState getKeyState(KeyCode key){return _keyStates[key];}
+
+  bool isKeyDown(KeyCode key) {return _keys[key]._isDown;}
+  bool isKeyPressed(KeyCode key) {return _keys[key]._isPressed;}
+  bool isKeyReleased(KeyCode key) {return _keys[key]._isReleased;}
 
 private:
   KeyCode convertSdlKeyCode(int sdlCode);
 
 private:
-  std::array<KeyState, KEY_COUNT> _keyStates;
+  std::array<KeyLog, KEY_COUNT> _keys;
 };
 
 extern std::unique_ptr<Input> input;
@@ -537,6 +546,18 @@ constexpr Color3f blue {0.f, 0.f, 1.f};
 constexpr Color3f cyan {0.f, 1.f, 1.f};
 constexpr Color3f magenta {1.f, 0.f, 1.f};
 constexpr Color3f yellow {1.f, 1.f, 0.f};
+
+// greys - more grays: https://en.wikipedia.org/wiki/Shades_of_gray 
+
+constexpr Color3f gainsboro {0.88f, 0.88f, 0.88f};
+constexpr Color3f lightgray {0.844f, 0.844f, 0.844f};
+constexpr Color3f silver {0.768f, 0.768f, 0.768f};
+constexpr Color3f mediumgray {0.76f, 0.76f, 0.76f};
+constexpr Color3f spanishgray {0.608f, 0.608f, 0.608f};
+constexpr Color3f gray {0.512f, 0.512f, 0.512f};
+constexpr Color3f dimgray {0.42f, 0.42f, 0.42f};
+constexpr Color3f davysgray {0.34f, 0.34f, 0.34f};
+constexpr Color3f jet {0.208f, 0.208f, 0.208f};
 };
 
 class Renderer

@@ -2,13 +2,58 @@
 #include "spaceinvaders.h"
 
 //===============================================================================================//
+// ##>SPACE INVADERS                                                                             //
+//===============================================================================================//
+
+bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight)
+{
+  Application::initialize(engine, windowWidth, windowHeight);
+
+  _worldScale = 1;
+  while((baseWorldSize._x * _worldScale) < windowWidth && (baseWorldSize._y * _worldScale) < windowHeight)
+    ++_worldScale; 
+
+  --_worldScale;
+  if(_worldScale == 0)
+    _worldScale = 1;
+
+  _worldSize = baseWorldSize * _worldScale;
+
+  std::cout << "world scale = " << _worldScale << std::endl;
+  std::cout << "window width = " << windowWidth << std::endl;
+  std::cout << "window height = " << windowHeight << std::endl;
+
+  Application::onWindowResize(windowWidth, windowHeight);
+
+  Assets::Manifest_t manifest{};
+  for(int32_t i = BMK_CANNON0; i < BMK_COUNT; ++i){
+    manifest.push_back({i, _bitmapNames[i], _worldScale}); 
+  }
+
+  assets->loadBitmaps(std::move(manifest));
+
+  std::unique_ptr<ApplicationState> game {new GameState{this}};
+  std::unique_ptr<ApplicationState> menu {new MenuState{this}};
+
+  game->initialize(_worldSize, _worldScale);
+  menu->initialize(_worldSize, _worldScale);
+
+  addState(std::move(game));
+  addState(std::move(menu));
+
+  switchState(MenuState::name);
+
+  return true;
+}
+
+//===============================================================================================//
 // ##>GAME STATE                                                                                 //
 //===============================================================================================//
 
 GameState::GameState(Application* app) : 
   ApplicationState{app},
   _randColumn{1, gridWidth},
-  _randBulletClass{0, bulletClassCount - 1}
+  _randAlienBulletClass{CROSS, ZAGZIG}
 {}
 
 void GameState::initialize(Vector2i worldSize, int32_t worldScale)
@@ -18,16 +63,24 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _worldSize = worldSize;
   _worldScale = worldScale;
 
-  _colorPallete = {colors::red, colors::green, colors::blue};
+  _colorPallete = {     // index:
+    colors::red,        // 0
+    colors::green,      // 1
+    colors::blue,       // 2
+    colors::magenta,    // 3
+    colors::cyan,       // 4
+    colors::yellow,     // 5
+    colors::white       // 6
+  };
 
   _alienShiftDisplacement = Vector2i{2, 0} * _worldScale;
   _alienDropDisplacement = Vector2i{0, -8} * _worldScale;
 
-  _aliensSpawnPosition._x = (_worldSize._x - (gridWidth * _alienXSeperation)) / 2;
-  _aliensSpawnPosition._y = _worldSize._y - (gridHeight * _alienYSeperation) - 30;
-
   _alienXSeperation = 16 * _worldScale;
   _alienYSeperation = 16 * _worldScale;
+
+  _aliensSpawnPosition._x = (_worldSize._x - (gridWidth * _alienXSeperation)) / 2;
+  _aliensSpawnPosition._y = _worldSize._y - (gridHeight * _alienYSeperation) - 30;
 
   _worldMargin = 5 * _worldScale;
 
@@ -64,19 +117,19 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _alienClasses = {{
-    {8,  8, 30, 0, {SpaceInvaders::BMK_SQUID0  , SpaceInvaders::BMK_SQUID1  }},
-    {11, 8, 20, 1, {SpaceInvaders::BMK_CRAB0   , SpaceInvaders::BMK_CRAB1   }},
-    {12, 8, 10, 2, {SpaceInvaders::BMK_OCTOPUS0, SpaceInvaders::BMK_OCTOPUS1}}
+    {8  * _worldScale, 8 * _worldScale, 30, 1, {SpaceInvaders::BMK_SQUID0  , SpaceInvaders::BMK_SQUID1  }},
+    {11 * _worldScale, 8 * _worldScale, 20, 4, {SpaceInvaders::BMK_CRAB0   , SpaceInvaders::BMK_CRAB1   }},
+    {12 * _worldScale, 8 * _worldScale, 10, 3, {SpaceInvaders::BMK_OCTOPUS0, SpaceInvaders::BMK_OCTOPUS1}}
   }};
 
-  _formations = {{
+  _formations = {{  // note formations look inverted here as array[0] is the bottom row, but they are not.
     // formation 0
     {{
-       {SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
-       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
        {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS},
-       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS}
+       {OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS},
+       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
+       {CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   },
+       {SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  }
     }},
     // formation 1
     {{
@@ -92,11 +145,20 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _fireIntervalBase = 50;
 
   _bulletClasses = {{
-    {100.f, 0, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
-    {100.f, 0, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
-    {100.f, 0, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}},
-    {100.f, 0, {SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0}}
+    {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
+    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
+    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}},
+    {1 * _worldScale, 5 * _worldScale, -100.f * _worldScale, 6, 20, {SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0}}
   }};
+
+  _cannon._spawnPosition = Vector2f{20.f, 20.f};
+  _cannon._speed = 100.f * _worldScale;
+  _cannon._width = 13 * _worldScale;
+  _cannon._height = 8 * _worldScale;
+  _cannon._boomFrameInterval = 20;
+  _cannon._boomInterval = _cannon._boomFrameInterval * cannonBoomFramesCount * 4;
+  _cannon._cannonKey = SpaceInvaders::BMK_CANNON0;
+  _cannon._boomKeys = {{SpaceInvaders::BMK_CANNONBOOM0, SpaceInvaders::BMK_CANNONBOOM1, SpaceInvaders::BMK_CANNONBOOM2}};
 
   _levels = {{
     {0, 5},
@@ -131,6 +193,7 @@ void GameState::startNextLevel()
   _dropsDone = 0;
   _isAliensDropping = true;
   _isAliensSpawning = true;
+  _isAliensFrozen = false;
 
   // Reset aliens.
   for(int32_t col = 0; col < gridWidth; ++col){
@@ -147,17 +210,48 @@ void GameState::startNextLevel()
     }
   }
 
+  std::fill(_columnPops.begin(), _columnPops.end(), gridHeight);
+
   // Reset bullets.
   for(auto& bullet : _alienBullets)
     bullet._isAlive = false;
 
-  _playerBullet._isAlive = false;
+  _laser._isAlive = false;
+
+  // Reset player cannon.
+  _cannon._isBooming = false;
+  _cannon._isAlive = false;
+
+  _beatsUntilFire = _fireIntervalBase;
 }
 
 void GameState::endSpawning()
 {
   _isAliensSpawning = false;
   _isAliensDropping = false;
+  spawnCannon();
+}
+
+void GameState::spawnCannon()
+{
+  _cannon._position = _cannon._spawnPosition;
+  _cannon._moveDirection = 0;
+  _cannon._isBooming = false;
+  _cannon._isAlive = true;
+
+  _isAliensFrozen = false;
+}
+
+void GameState::boomCannon()
+{
+  _cannon._moveDirection = 0;
+  _cannon._boomClock = _cannon._boomInterval;
+  _cannon._boomFrame = 0;
+  _cannon._boomFrameClock = _cannon._boomFrameInterval;
+  _cannon._isBooming = true;
+  _cannon._isAlive = false;
+
+  _isAliensFrozen = true;
 }
 
 void GameState::onUpdate(double now, float dt)
@@ -167,13 +261,60 @@ void GameState::onUpdate(double now, float dt)
   doBulletMoving(beats, dt);
   doAlienMoving(beats);
   doAlienFiring(beats);
+  doCannonMoving(dt);
+  doCannonBooming(beats);
 
-
-
+  // TEMP - TODO- implement collision detectin to boom cannon.
+  if(::input->isKeyPressed(Input::KEY_b))
+    boomCannon();
 
   ++_activeBeat;
   if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
     _activeBeat = cycleStart;
+}
+
+void GameState::doCannonMoving(float dt)
+{
+  if(!_cannon._isAlive)
+    return;
+
+  bool lKey = ::input->isKeyDown(Input::KEY_LEFT);
+  bool rKey = ::input->isKeyDown(Input::KEY_RIGHT);
+  if(lKey && !rKey){
+    _cannon._moveDirection = -1;
+  }
+  else if(!lKey && rKey){
+    _cannon._moveDirection = 1;
+  }
+  else{
+    _cannon._moveDirection = 0;
+  }
+
+  _cannon._position._x += _cannon._speed * _cannon._moveDirection * dt;
+  _cannon._position._x = std::clamp(
+      _cannon._position._x, 
+      static_cast<float>(_worldLeftBorderX), 
+      static_cast<float>(_worldRightBorderX - _cannon._width)
+  );
+}
+
+void GameState::doCannonBooming(int32_t beats)
+{
+  if(!_cannon._isBooming)
+    return;
+
+  _cannon._boomClock -= beats;
+  if(_cannon._boomClock <= 0){
+    _cannon._isBooming = false;
+    spawnCannon();
+    return;
+  }
+
+  _cannon._boomFrameClock -= beats;
+  if(_cannon._boomFrameClock <= 0){
+    _cannon._boomFrame = nomad::wrap(++_cannon._boomFrame, 0, cannonBoomFramesCount - 1);
+    _cannon._boomFrameClock = _cannon._boomFrameInterval;
+  }
 }
 
 void GameState::doAlienMoving(int32_t beats)
@@ -195,6 +336,9 @@ void GameState::doAlienMoving(int32_t beats)
   // The more aliens the more beats are required to complete one grid movement and each grid 
   // movement results in a fixed grid displacement. Thus if you change the number of aliens you 
   // must also change all cycles to tune the gameplay.
+
+  if(_isAliensFrozen)
+    return;
 
   for(int i = 0; i < beats; ++i){
     Alien& alien = _grid[_nextMover._row][_nextMover._col];
@@ -235,6 +379,12 @@ void GameState::doAlienFiring(int32_t beats)
   // Cycles determine alien fire rate. Aliens fire every N beats, thus the higher beat rate
   // the higher the rate of fire. Randomness is added in a random deviation to the M moves fire 
   // interval and to the alien which does the firing.
+
+  if(_isAliensFrozen)
+    return;
+
+  if(_isAliensSpawning)
+    return;
   
   _beatsUntilFire -= beats;
   if(_beatsUntilFire > 0)
@@ -257,17 +407,23 @@ void GameState::doAlienFiring(int32_t beats)
 
   // Find the alien that will do the firing.
   Alien* alien {nullptr};
-  for(int32_t row = 0; row < gridHeight; ++row)
-    if(_grid[row][col]._isAlive)
+  for(int32_t row = 0; row < gridHeight; ++row){
+    if(_grid[row][col]._isAlive){
       alien = &_grid[row][col];
+      break;
+    }
+  }
 
   assert(alien != nullptr);   // The column selection should ensure this never happens.
 
   const AlienClass& alienClass = _alienClasses[alien->_classId];
 
+  BulletClassId bcid = static_cast<BulletClassId>(_randAlienBulletClass());
+  const BulletClass& bulletClass = _bulletClasses[bcid]; 
+
   Vector2f position {};
   position._x += alien->_position._x + (alienClass._width * 0.5f);
-  position._y += alien->_position._y;
+  position._y += alien->_position._y - bulletClass._height;
 
   // If this condition does occur then increase the max bullets until it doesn't.
   assert(_alienBulletCount != maxAlienBullets);
@@ -281,7 +437,7 @@ void GameState::doAlienFiring(int32_t beats)
   // If this occurs my bullet counts are off.
   assert(bullet != nullptr);
 
-  bullet->_classId = static_cast<BulletClassId>(_randBulletClass());
+  bullet->_classId = bcid;
   bullet->_position = position;
   bullet->_frame = 0;
   bullet->_isAlive = true;
@@ -302,10 +458,10 @@ void GameState::doBulletMoving(int32_t beats, float dt)
 
     bullet._position._y += bulletClass._speed * dt;
 
-    bullet._beatsUntilNextFrame -= beats;
-    if(bullet._beatsUntilNextFrame <= 0){
+    bullet._frameClock -= beats;
+    if(bullet._frameClock <= 0){
       bullet._frame = nomad::wrap(++bullet._frame, 0, bulletFramesCount - 1);
-      bullet._beatsUntilNextFrame = bulletClass._frameInterval;
+      bullet._frameClock = bulletClass._frameInterval;
     }
   }
 }
@@ -370,11 +526,8 @@ bool GameState::testAlienBorderCollision()
   return false;
 }
 
-
-void GameState::onDraw(double now, float dt)
+void GameState::drawGrid()
 {
-  renderer->clearViewport(colors::cyan);
-
   for(const auto& row : _grid){
     for(const auto& alien : row){
       if(alien._isAlive){
@@ -384,12 +537,49 @@ void GameState::onDraw(double now, float dt)
         Assets::Key_t bitmapKey = ac._bitmapKeys[alien._frame];
         Color3f& color = _colorPallete[ac._colorIndex];
 
-        std::cout << "key=" << bitmapKey << std::endl;
-
-        renderer->blitBitmap(position, assets->getBitmap(bitmapKey, _worldScale), color);
+        renderer->blitBitmap(position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
       }
     }
   }
+}
+
+void GameState::drawCannon()
+{
+  if(!(_cannon._isBooming || _cannon._isAlive))
+    return;
+
+  Assets::Key_t bitmapKey;
+  if(_cannon._isBooming){
+    bitmapKey = _cannon._boomKeys[_cannon._boomFrame];
+  }
+  else if(_cannon._isAlive){
+    bitmapKey = _cannon._cannonKey;
+  }
+
+  Color3f& color = _colorPallete[_cannon._colorIndex];
+
+  renderer->blitBitmap(_cannon._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
+}
+
+void GameState::drawBullets()
+{
+  for(auto& bullet : _alienBullets){
+    if(!bullet._isAlive)
+      continue;
+
+    const BulletClass& bc = _bulletClasses[bullet._classId];
+    Assets::Key_t bitmapKey = bc._bitmapKeys[bullet._frame];
+    Color3f& color = _colorPallete[bc._colorIndex];
+    renderer->blitBitmap(bullet._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
+  }
+}
+
+void GameState::onDraw(double now, float dt)
+{
+  renderer->clearViewport(colors::black);
+  drawGrid();
+  drawCannon();
+  drawBullets();
 }
 
 void GameState::onReset()
@@ -407,14 +597,14 @@ void MenuState::initialize(Vector2i worldSize, int32_t worldScale)
 
 void MenuState::onUpdate(double now, float dt)
 {
-  if(::input->getKeyState(Input::KEY_s) == Input::KeyState::PRESSED)
+  if(::input->isKeyPressed(Input::KEY_s))
     _app->switchState(GameState::name);
 }
 
 void MenuState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::magenta);
-  renderer->blitBitmap(Vector2f{10.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale), colors::white);
+  renderer->blitBitmap(Vector2f{0.f, 0.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale), colors::white);
 
   renderer->blitBitmap(Vector2f{60.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0, _worldScale), colors::blue);
   renderer->blitBitmap(Vector2f{90.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID1, _worldScale), colors::blue);
@@ -449,47 +639,3 @@ void MenuState::onReset()
 {
 }
 
-//===============================================================================================//
-// ##>SPACE INVADERS                                                                             //
-//===============================================================================================//
-
-bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight)
-{
-  Application::initialize(engine, windowWidth, windowHeight);
-
-  _worldScale = 1;
-  while((baseWorldSize._x * _worldScale) < windowWidth && (baseWorldSize._y * _worldScale) < windowHeight)
-    ++_worldScale; 
-
-  --_worldScale;
-  if(_worldScale == 0)
-    _worldScale = 1;
-
-  _worldSize = baseWorldSize * _worldScale;
-
-  std::cout << "world scale = " << _worldScale << std::endl;
-  std::cout << "window width = " << windowWidth << std::endl;
-  std::cout << "window height = " << windowHeight << std::endl;
-
-  Application::onWindowResize(windowWidth, windowHeight);
-
-  Assets::Manifest_t manifest{};
-  for(int32_t i = BMK_CANNON0; i < BMK_COUNT; ++i){
-    manifest.push_back({i, _bitmapNames[i], _worldScale}); 
-  }
-
-  assets->loadBitmaps(std::move(manifest));
-
-  std::unique_ptr<ApplicationState> game {new GameState{this}};
-  std::unique_ptr<ApplicationState> menu {new MenuState{this}};
-
-  game->initialize(_worldSize, _worldScale);
-  menu->initialize(_worldSize, _worldScale);
-
-  addState(std::move(game));
-  addState(std::move(menu));
-
-  switchState(MenuState::name);
-
-  return true;
-}
