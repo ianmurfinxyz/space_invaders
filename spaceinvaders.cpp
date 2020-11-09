@@ -19,9 +19,13 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   _worldSize = baseWorldSize * _worldScale;
 
+  // TEMP - TODO - remove this ================================================================
+
   std::cout << "world scale = " << _worldScale << std::endl;
   std::cout << "window width = " << windowWidth << std::endl;
   std::cout << "window height = " << windowHeight << std::endl;
+
+  //============================================================================================
 
   Application::onWindowResize(windowWidth, windowHeight);
 
@@ -53,7 +57,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 GameState::GameState(Application* app) : 
   ApplicationState{app},
   _randColumn{1, gridWidth},
-  _randAlienBulletClass{CROSS, ZAGZIG}
+  _randBombClass{CROSS, ZAGZIG}
 {}
 
 void GameState::initialize(Vector2i worldSize, int32_t worldScale)
@@ -141,24 +145,29 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
     }}
   }};
 
-  _fireIntervalDeviation = 0.5f; // Maximum 50% deviation from base.
-  _fireIntervalBase = 50;
+  _bombIntervalDeviation = 0.5f; // Maximum 50% deviation from base.
+  _bombIntervalBase = 50;
 
-  _bulletClasses = {{
+  _bombClasses = {{
     {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
     {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
-    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}},
-    {1 * _worldScale, 5 * _worldScale, -100.f * _worldScale, 6, 20, {SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0, SpaceInvaders::BMK_LASER0}}
+    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}}
   }};
 
-  _cannon._spawnPosition = Vector2f{20.f, 20.f};
+  _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f};
   _cannon._speed = 100.f * _worldScale;
   _cannon._width = 13 * _worldScale;
   _cannon._height = 8 * _worldScale;
-  _cannon._boomFrameInterval = 20;
-  _cannon._boomInterval = _cannon._boomFrameInterval * cannonBoomFramesCount * 4;
+  _cannon._boomFrameInterval = 10;
+  _cannon._boomInterval = _cannon._boomFrameInterval * 12;
   _cannon._cannonKey = SpaceInvaders::BMK_CANNON0;
   _cannon._boomKeys = {{SpaceInvaders::BMK_CANNONBOOM0, SpaceInvaders::BMK_CANNONBOOM1, SpaceInvaders::BMK_CANNONBOOM2}};
+
+  _laser._width = 1 * _worldScale;
+  _laser._height = 6 * _worldScale;
+  _laser._colorIndex = 6;
+  _laser._speed = 100.f * _worldScale;
+  _laser._bitmapKey = SpaceInvaders::BMK_LASER0;
 
   _levels = {{
     {0, 5},
@@ -212,9 +221,9 @@ void GameState::startNextLevel()
 
   std::fill(_columnPops.begin(), _columnPops.end(), gridHeight);
 
-  // Reset bullets.
-  for(auto& bullet : _alienBullets)
-    bullet._isAlive = false;
+  // Reset bombs.
+  for(auto& bomb : _bombs)
+    bomb._isAlive = false;
 
   _laser._isAlive = false;
 
@@ -222,7 +231,10 @@ void GameState::startNextLevel()
   _cannon._isBooming = false;
   _cannon._isAlive = false;
 
-  _beatsUntilFire = _fireIntervalBase;
+  _bombClock = _bombIntervalBase;
+
+  // Create new hitbar.
+  _hitbar = std::make_unique<Hitbar>(nomad::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 16, 1);
 }
 
 void GameState::endSpawning()
@@ -254,32 +266,13 @@ void GameState::boomCannon()
   _isAliensFrozen = true;
 }
 
-void GameState::onUpdate(double now, float dt)
-{
-  int32_t beats = _cycles[_activeCycle][_activeBeat]; 
-
-  doBulletMoving(beats, dt);
-  doAlienMoving(beats);
-  doAlienFiring(beats);
-  doCannonMoving(dt);
-  doCannonBooming(beats);
-
-  // TEMP - TODO- implement collision detectin to boom cannon.
-  if(::input->isKeyPressed(Input::KEY_b))
-    boomCannon();
-
-  ++_activeBeat;
-  if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
-    _activeBeat = cycleStart;
-}
-
 void GameState::doCannonMoving(float dt)
 {
   if(!_cannon._isAlive)
     return;
 
-  bool lKey = ::input->isKeyDown(Input::KEY_LEFT);
-  bool rKey = ::input->isKeyDown(Input::KEY_RIGHT);
+  bool lKey = nomad::input->isKeyDown(Input::KEY_LEFT);
+  bool rKey = nomad::input->isKeyDown(Input::KEY_RIGHT);
   if(lKey && !rKey){
     _cannon._moveDirection = -1;
   }
@@ -314,6 +307,23 @@ void GameState::doCannonBooming(int32_t beats)
   if(_cannon._boomFrameClock <= 0){
     _cannon._boomFrame = nomad::wrap(++_cannon._boomFrame, 0, cannonBoomFramesCount - 1);
     _cannon._boomFrameClock = _cannon._boomFrameInterval;
+  }
+}
+
+void GameState::doCannonFiring()
+{
+  if(!_cannon._isAlive)
+    return;
+
+  if(_laser._isAlive)
+    return;
+
+  if(nomad::input->isKeyPressed(Input::KEY_UP)){
+    Vector2f position = _cannon._position;
+    position._x += _cannon._width / 2;
+    position._y += _cannon._height;
+    _laser._position = position;
+    _laser._isAlive = true;
   }
 }
 
@@ -374,11 +384,11 @@ void GameState::doAlienMoving(int32_t beats)
   }
 }
 
-void GameState::doAlienFiring(int32_t beats)
+void GameState::doAlienBombing(int32_t beats)
 {
-  // Cycles determine alien fire rate. Aliens fire every N beats, thus the higher beat rate
-  // the higher the rate of fire. Randomness is added in a random deviation to the M moves fire 
-  // interval and to the alien which does the firing.
+  // Cycles determine alien bomb rate. Aliens bomb every N beats, thus the higher beat rate
+  // the higher the rate of bombing. Randomness is added in a random deviation to the bomb 
+  // interval and to the choice of alien which does the bombing.
 
   if(_isAliensFrozen)
     return;
@@ -386,11 +396,11 @@ void GameState::doAlienFiring(int32_t beats)
   if(_isAliensSpawning)
     return;
   
-  _beatsUntilFire -= beats;
-  if(_beatsUntilFire > 0)
+  _bombClock -= beats;
+  if(_bombClock > 0)
     return;
 
-  // Select the column to fire from, taking into account unpopulated columns.
+  // Select the column to bomb from, taking into account unpopulated columns.
   int32_t populatedCount = gridWidth - std::count(_columnPops.begin(), _columnPops.end(), 0);
 
   // This condition should of already been detected as a level win.
@@ -405,7 +415,7 @@ void GameState::doAlienFiring(int32_t beats)
     }
   }
 
-  // Find the alien that will do the firing.
+  // Find the alien that will do the bombing.
   Alien* alien {nullptr};
   for(int32_t row = 0; row < gridHeight; ++row){
     if(_grid[row][col]._isAlive){
@@ -418,52 +428,63 @@ void GameState::doAlienFiring(int32_t beats)
 
   const AlienClass& alienClass = _alienClasses[alien->_classId];
 
-  BulletClassId bcid = static_cast<BulletClassId>(_randAlienBulletClass());
-  const BulletClass& bulletClass = _bulletClasses[bcid]; 
+  BombClassId bcid = static_cast<BombClassId>(_randBombClass());
+  const BombClass& bombClass = _bombClasses[bcid]; 
 
   Vector2f position {};
   position._x += alien->_position._x + (alienClass._width * 0.5f);
-  position._y += alien->_position._y - bulletClass._height;
+  position._y += alien->_position._y - bombClass._height;
 
-  // If this condition does occur then increase the max bullets until it doesn't.
-  assert(_alienBulletCount != maxAlienBullets);
+  // If this condition does occur then increase the max bombs until it doesn't.
+  assert(_bombCount != maxBombs);
 
-  // Find a 'dead' bullet instance to use.
-  Bullet* bullet {nullptr};
-  for(auto& b : _alienBullets)
+  // Find a 'dead' bomb instance to use.
+  Bomb* bomb {nullptr};
+  for(auto& b : _bombs)
     if(!b._isAlive)
-      bullet = &b;
+      bomb = &b;
 
-  // If this occurs my bullet counts are off.
-  assert(bullet != nullptr);
+  // If this occurs my bomb counts are off.
+  assert(bomb != nullptr);
 
-  bullet->_classId = bcid;
-  bullet->_position = position;
-  bullet->_frame = 0;
-  bullet->_isAlive = true;
+  bomb->_classId = bcid;
+  bomb->_position = position;
+  bomb->_frame = 0;
+  bomb->_isAlive = true;
 
-  ++_alienBulletCount;
+  ++_bombCount;
 
-  // Calculate when the next bullet will be fired.
-  _beatsUntilFire = _fireIntervalBase;
+  // Calculate when the next bomb will be bombed.
+  _bombClock = _bombIntervalBase;
 }
 
-void GameState::doBulletMoving(int32_t beats, float dt)
+void GameState::doBombMoving(int32_t beats, float dt)
 {
-  for(auto& bullet : _alienBullets){
-    if(!bullet._isAlive)
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
       continue;
 
-    const BulletClass& bulletClass = _bulletClasses[bullet._classId];
+    const BombClass& bombClass = _bombClasses[bomb._classId];
 
-    bullet._position._y += bulletClass._speed * dt;
+    bomb._position._y += bombClass._speed * dt;
 
-    bullet._frameClock -= beats;
-    if(bullet._frameClock <= 0){
-      bullet._frame = nomad::wrap(++bullet._frame, 0, bulletFramesCount - 1);
-      bullet._frameClock = bulletClass._frameInterval;
+    bomb._frameClock -= beats;
+    if(bomb._frameClock <= 0){
+      bomb._frame = nomad::wrap(++bomb._frame, 0, bombFramesCount - 1);
+      bomb._frameClock = bombClass._frameInterval;
     }
   }
+}
+
+void GameState::doLaserMoving(float dt)
+{
+  if(_laser._isAlive)
+    _laser._position._y += _laser._speed * dt;
+}
+
+void GameState::doCollisions()
+{
+
 }
 
 bool GameState::incrementGridIndex(GridIndex& index)
@@ -526,6 +547,27 @@ bool GameState::testAlienBorderCollision()
   return false;
 }
 
+void GameState::onUpdate(double now, float dt)
+{
+  int32_t beats = _cycles[_activeCycle][_activeBeat]; 
+
+  doBombMoving(beats, dt);
+  doLaserMoving(dt);
+  doAlienMoving(beats);
+  doAlienBombing(beats);
+  doCannonMoving(dt);
+  doCannonBooming(beats);
+  doCannonFiring();
+
+  // TEMP - TODO- implement collision detectin to boom cannon.
+  if(nomad::input->isKeyPressed(Input::KEY_b))
+    boomCannon();
+
+  ++_activeBeat;
+  if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
+    _activeBeat = cycleStart;
+}
+
 void GameState::drawGrid()
 {
   for(const auto& row : _grid){
@@ -561,17 +603,30 @@ void GameState::drawCannon()
   renderer->blitBitmap(_cannon._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
 }
 
-void GameState::drawBullets()
+void GameState::drawBombs()
 {
-  for(auto& bullet : _alienBullets){
-    if(!bullet._isAlive)
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
       continue;
 
-    const BulletClass& bc = _bulletClasses[bullet._classId];
-    Assets::Key_t bitmapKey = bc._bitmapKeys[bullet._frame];
+    const BombClass& bc = _bombClasses[bomb._classId];
+    Assets::Key_t bitmapKey = bc._bitmapKeys[bomb._frame];
     Color3f& color = _colorPallete[bc._colorIndex];
-    renderer->blitBitmap(bullet._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
+    renderer->blitBitmap(bomb._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
   }
+}
+
+void GameState::drawLaser()
+{
+  if(!_laser._isAlive)
+    return;
+
+  renderer->blitBitmap(_laser._position, nomad::assets->getBitmap(_laser._bitmapKey, _worldScale), _colorPallete[_laser._colorIndex]);
+}
+
+void GameState::drawHitbar()
+{
+  renderer->blitBitmap({0.f, _hitbar->_height}, _hitbar->_bitmap, _colorPallete[_hitbar->_colorIndex]);
 }
 
 void GameState::onDraw(double now, float dt)
@@ -579,7 +634,9 @@ void GameState::onDraw(double now, float dt)
   renderer->clearViewport(colors::black);
   drawGrid();
   drawCannon();
-  drawBullets();
+  drawBombs();
+  drawLaser();
+  drawHitbar();
 }
 
 void GameState::onReset()
@@ -597,7 +654,7 @@ void MenuState::initialize(Vector2i worldSize, int32_t worldScale)
 
 void MenuState::onUpdate(double now, float dt)
 {
-  if(::input->isKeyPressed(Input::KEY_s))
+  if(nomad::input->isKeyPressed(Input::KEY_s))
     _app->switchState(GameState::name);
 }
 

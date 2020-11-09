@@ -25,14 +25,14 @@ public:
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
-    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_COUNT
+    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_COUNT
   };
 
   constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
-    "cannonboom0", "cannonboom1", "cannonboom2"
+    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar"
   };
 
 public:
@@ -103,26 +103,37 @@ private:
     bool _isAlive;
   };
 
-  enum BulletClassId { CROSS, ZIGZAG, ZAGZIG, LASER };
+  enum BombClassId { CROSS, ZIGZAG, ZAGZIG };
 
-  static constexpr int32_t bulletFramesCount {4};
-  struct BulletClass
+  static constexpr int32_t bombFramesCount {4};
+  struct BombClass
   {
     int32_t _width;
     int32_t _height;
-    float _speed;                                             // y-axis speed, unit: pixels per second.
+    float _speed;                                             // Unit: pixels per second.
     int32_t _colorIndex;
     int32_t _frameInterval;                                   // Beats between draw frames.
-    std::array<Assets::Key_t, bulletFramesCount> _bitmapKeys; 
+    std::array<Assets::Key_t, bombFramesCount> _bitmapKeys; 
   };
 
-  struct Bullet
+  struct Bomb
   {
-    BulletClassId _classId;
+    BombClassId _classId;
     Vector2f _position;
     int32_t _frameClock;       // unit: Cycle beats.
     int32_t _frame;            // Constraint: value=[0, 4).
     bool _isAlive;
+  };
+
+  struct Laser
+  {
+    Vector2f _position;
+    int32_t _width;
+    int32_t _height;
+    int32_t _colorIndex;
+    float _speed;             // Unit: pixels per second.
+    bool _isAlive;
+    Assets::Key_t _bitmapKey;
   };
 
   static constexpr int32_t cannonBoomFramesCount {3};
@@ -134,7 +145,7 @@ private:
     int32_t _width;
     int32_t _height;
     int32_t _moveDirection;            // -1 == left, 0 == still, +1 == right.
-    float _speed;
+    float _speed;                      // Unit: pixels per second.
     int32_t _boomInterval;             // Unit: beats - total length of boom animation.
     int32_t _boomClock;                // Unit: beats.
     int32_t _boomFrameInterval;        // Unit: beats - how many beats per frame.
@@ -144,6 +155,29 @@ private:
     bool _isAlive;
     Assets::Key_t _cannonKey;
     std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
+  };
+
+  //enum EffectClassId { };
+
+  static constexpr int32_t effectFrameCount {3};
+  struct EffectClass
+  {
+    int32_t _colorIndex;
+    int32_t _effectInterval;    // Unit: beats - total duration of effect.
+    int32_t _frameInterval;     // Unit: beats - duration of each frame.
+    std::array<Assets::Key_t, effectFrameCount> _frames;
+  };
+
+  struct Effect
+  {
+  };
+
+  struct Hitbar
+  {
+    Hitbar(const Bitmap& b, int32_t h, int32_t c) : _bitmap{b}, _height{h}, _colorIndex{c}{}
+    Bitmap _bitmap;
+    int32_t _height;
+    int32_t _colorIndex;
   };
 
   struct Level
@@ -160,14 +194,19 @@ private:
   void boomCannon();
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
+  void doCannonFiring();
   void doAlienMoving(int32_t beats);
-  void doAlienFiring(int32_t beats);
-  void doBulletMoving(int32_t beats, float dt);
+  void doAlienBombing(int32_t beats);
+  void doBombMoving(int32_t beats, float dt);
+  void doLaserMoving(float dt);
+  void doCollisions();
   bool incrementGridIndex(GridIndex& index);
   bool testAlienBorderCollision();
   void drawGrid();
   void drawCannon();
-  void drawBullets();
+  void drawBombs();
+  void drawLaser();
+  void drawHitbar();
 
 private:
   Vector2i _worldSize;
@@ -211,22 +250,24 @@ private:
   using Formation = std::array<std::array<AlienClassId, gridWidth>, gridHeight>;
   std::array<Formation, formationCount> _formations;
 
-  float _fireIntervalDeviation;                 // Max deviation in beat count.
-  int32_t _fireIntervalBase;                    // Base beat count between firing.
-  int32_t _beatsUntilFire;
+  float _bombIntervalDeviation;                 // Max deviation in beat count.
+  int32_t _bombIntervalBase;                    // Base beat count between firing.
+  int32_t _bombClock;                           // Unit: beats - used to time the firing.
   std::array<int32_t, gridWidth> _columnPops;   // Populations of alive aliens in each column.
   RandInt _randColumn;
 
-  static constexpr int32_t bulletClassCount {4};
-  std::array<BulletClass, bulletClassCount> _bulletClasses;
-  RandInt _randAlienBulletClass;
+  static constexpr int32_t bombClassCount {3};
+  std::array<BombClass, bombClassCount> _bombClasses;
+  RandInt _randBombClass;
 
-  static constexpr int32_t maxAlienBullets {20};
-  std::array<Bullet, maxAlienBullets> _alienBullets;
-  int32_t _alienBulletCount;
+  static constexpr int32_t maxBombs {20};
+  std::array<Bomb, maxBombs> _bombs;
+  int32_t _bombCount;
 
-  Bullet _laser;
+  Laser _laser;
   Cannon _cannon;
+
+  std::unique_ptr<Hitbar> _hitbar;
 
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;
