@@ -151,10 +151,14 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bombIntervalBase = 50;
 
   _bombClasses = {{
-    {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
-    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
+    {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 0, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
+    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 4, 20, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
     {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}}
   }};
+
+  _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMTOP, SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
+  _bombBoomWidth = 6 * _worldScale;
+  _bombBoomDuration = 0.4f;
 
   _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f};
   _cannon._speed = 100.f * _worldScale;
@@ -228,6 +232,10 @@ void GameState::startNextLevel()
   for(auto& bomb : _bombs)
     bomb._isAlive = false;
 
+  // Reset bomb booms.
+  for(auto& boom : _bombBooms)
+    boom._isAlive = false;
+
   _laser._isAlive = false;
 
   // Reset player cannon.
@@ -237,8 +245,14 @@ void GameState::startNextLevel()
 
   _bombClock = _bombIntervalBase;
 
-  // Create new hitbar.
-  _hitbar = std::make_unique<Hitbar>(nomad::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 16, 1);
+  // Create fresh (undamaged) hitbar.
+  _hitbar = std::make_unique<Hitbar>(
+      nomad::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 
+      _worldSize._x,
+      1 * _worldScale,
+      16, 
+      1
+  );
 }
 
 void GameState::endSpawning()
@@ -268,6 +282,24 @@ void GameState::boomCannon()
   _cannon._isAlive = false;
 
   _isAliensFrozen = true;
+}
+
+void GameState::boomBomb(Bomb& bomb, int32_t bithit, BombHit hit)
+{
+  bomb._isAlive = false;
+  --_bombCount;
+
+  auto search = std::find_if_not(_bombBooms.begin(), _bombBooms.end(), isBombBoomAlive);
+
+  assert(search != _bombBooms.end());
+
+  BombClass& bc = _bombClasses[bomb._classId];
+
+  (*search)._hit = hit;
+  (*search)._colorIndex = bc._colorIndex;
+  (*search)._position = Vector2f{bithit, _hitbar->_positionY + _hitbar->_height};
+  (*search)._boomClock = _bombBoomDuration;
+  (*search)._isAlive = true;
 }
 
 void GameState::boomAlien(Alien* alien)
@@ -515,9 +547,41 @@ void GameState::doLaserMoving(float dt)
     _laser._position._y += _laser._speed * dt;
 }
 
-void GameState::doCollisions()
+void GameState::doBombBoomBooming(float dt)
 {
+  for(auto& boom : _bombBooms){
+    if(!boom._isAlive)
+      continue;
 
+    boom._boomClock -= dt;
+    if(boom._boomClock <= 0.f)
+      boom._isAlive = false;
+  }
+}
+
+void GameState::doCollisionsBombsHitbar()
+{
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
+      continue;
+
+    if(bomb._position._y > _hitbar->_positionY)
+      continue;
+
+    BombClass& bc = _bombClasses[bomb._classId];
+
+    int32_t bithit = bomb._position._x - ((_bombBoomWidth - bc._width) / 2);
+    
+    // Apply damage to the bar.
+    for(int32_t i = 0; i < _bombBoomWidth; ++i){
+      bool bitval = (bithit + i / _worldScale) % 2;
+      for(int32_t j = 0; j < _hitbar->_height; ++j)
+        _hitbar->_bitmap.setBit(j, bithit + i, bitval, false);
+    }
+    _hitbar->_bitmap.regenerateBytes();
+
+    boomBomb(bomb, bithit, BOMBHIT_BOTTOM);
+  }
 }
 
 bool GameState::incrementGridIndex(GridIndex& index)
@@ -591,7 +655,10 @@ void GameState::onUpdate(double now, float dt)
   doCannonMoving(dt);
   doCannonBooming(beats);
   doAlienBooming(dt);
+  doBombBoomBooming(dt);
   doCannonFiring();
+
+  doCollisionsBombsHitbar();
 
   //================================================================================
   
@@ -680,6 +747,18 @@ void GameState::drawBombs()
   }
 }
 
+void GameState::drawBombBooms()
+{
+  for(auto& boom : _bombBooms){
+    if(!boom._isAlive)
+      continue;
+
+    Assets::Key_t bitmapKey = _bombBoomKeys[boom._hit];
+    Color3f& color = _colorPallete[boom._colorIndex];
+    renderer->blitBitmap(boom._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
+  }
+}
+
 void GameState::drawLaser()
 {
   if(!_laser._isAlive)
@@ -690,7 +769,7 @@ void GameState::drawLaser()
 
 void GameState::drawHitbar()
 {
-  renderer->blitBitmap({0.f, _hitbar->_height}, _hitbar->_bitmap, _colorPallete[_hitbar->_colorIndex]);
+  renderer->blitBitmap({0.f, _hitbar->_positionY}, _hitbar->_bitmap, _colorPallete[_hitbar->_colorIndex]);
 }
 
 void GameState::onDraw(double now, float dt)
@@ -699,6 +778,7 @@ void GameState::onDraw(double now, float dt)
   drawGrid();
   drawCannon();
   drawBombs();
+  drawBombBooms();
   drawLaser();
   drawHitbar();
 }

@@ -443,6 +443,7 @@ public:
   const std::vector<uint8_t>& getBytes() const {return _bytes;}
 
   void setBit(int32_t row, int32_t col, bool value, bool regen = true);
+  void regenerateBytes();
 
   void print(std::ostream& out) const;
 
@@ -450,7 +451,6 @@ private:
   Bitmap() = default;
 
   void initialize(std::vector<std::string> bits, int32_t scale = 1);
-  void generateBytes();
 
 private:
   std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops

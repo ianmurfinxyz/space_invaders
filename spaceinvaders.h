@@ -25,14 +25,16 @@ public:
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
-    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, BMK_COUNT
+    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, 
+    BMK_BOMBBOOMTOP, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_COUNT
   };
 
   constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
-    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom"
+    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboomtop",
+    "bombboombottom", "bombboommidair"
   };
 
 public:
@@ -125,6 +127,17 @@ private:
     bool _isAlive;
   };
 
+  enum BombHit { BOMBHIT_TOP, BOMBHIT_BOTTOM, BOMBHIT_MIDAIR };
+
+  struct BombBoom
+  {
+    BombHit _hit;
+    Vector2f _position;
+    int32_t _colorIndex;
+    float _boomClock;     // Unit: seconds. 
+    bool _isAlive;
+  };
+
   struct Laser
   {
     Vector2f _position;
@@ -158,26 +171,15 @@ private:
     std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
   };
 
-  //enum EffectClassId { };
-
-  static constexpr int32_t effectFrameCount {3};
-  struct EffectClass
-  {
-    int32_t _colorIndex;
-    int32_t _effectInterval;    // Unit: beats - total duration of effect.
-    int32_t _frameInterval;     // Unit: beats - duration of each frame.
-    std::array<Assets::Key_t, effectFrameCount> _frames;
-  };
-
-  struct Effect
-  {
-  };
-
   struct Hitbar
   {
-    Hitbar(const Bitmap& b, int32_t h, int32_t c) : _bitmap{b}, _height{h}, _colorIndex{c}{}
+    Hitbar(const Bitmap& b, int32_t w, int32_t h, int32_t y, int32_t c) : 
+      _bitmap{b}, _width{w}, _height{h}, _positionY{y}, _colorIndex{c}{}
+
     Bitmap _bitmap;
+    int32_t _width;
     int32_t _height;
+    int32_t _positionY;
     int32_t _colorIndex;
   };
 
@@ -193,6 +195,7 @@ private:
   void endSpawning();
   void spawnCannon();
   void boomCannon();
+  void boomBomb(Bomb& bomb, int32_t bithit, BombHit hit);
   void boomAlien(Alien* alien);
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
@@ -202,14 +205,23 @@ private:
   void doAlienBooming(float dt);
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
-  void doCollisions();
+  void doBombBoomBooming(float dt);
+  void doCollisionsBombsHitbar();
+  void doCollisionsBombsCannon();
+  void doCollisionsLaserAliens();
+  void doCollisionsLaserSky();
   bool incrementGridIndex(GridIndex& index);
   bool testAlienBorderCollision();
   void drawGrid();
   void drawCannon();
   void drawBombs();
+  void drawBombBooms();
   void drawLaser();
   void drawHitbar();
+
+  // Predicates.
+  static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
+  static bool isBombBoomAlive(const BombBoom& boom) {return boom._isAlive;}
 
 private:
   Vector2i _worldSize;
@@ -270,6 +282,11 @@ private:
   static constexpr int32_t maxBombs {20};
   std::array<Bomb, maxBombs> _bombs;
   int32_t _bombCount;
+
+  std::array<BombBoom, maxBombs> _bombBooms;
+  std::array<Assets::Key_t, 3> _bombBoomKeys;
+  int32_t _bombBoomWidth;
+  float _bombBoomDuration;                          // Unit: seconds.
 
   Laser _laser;
   Cannon _cannon;

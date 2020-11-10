@@ -739,23 +739,23 @@ void Bitmap::initialize(std::vector<std::string> bits, int32_t scale)
     _bits.push_back(brow);
   }
 
-  generateBytes();
+  regenerateBytes();
 }
 
 bool Bitmap::getBit(int32_t row, int32_t col)
 {
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
+  assert(0 <= row && row < _height);
+  assert(0 <= col && col < _width);
   return _bits[row][col];
 }
 
 void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
 {
-  assert(0 <= row && row < _width);
-  assert(0 <= col && col < _height);
+  assert(0 <= row && row < _height);
+  assert(0 <= col && col < _width);
   _bits[row][col] = value;
   if(regen)
-    generateBytes();
+    regenerateBytes();
 }
 
 void Bitmap::print(std::ostream& out) const
@@ -769,7 +769,7 @@ void Bitmap::print(std::ostream& out) const
   out << std::endl;
 }
 
-void Bitmap::generateBytes()
+void Bitmap::regenerateBytes()
 {
   _bytes.clear();
   uint8_t byte {0};
