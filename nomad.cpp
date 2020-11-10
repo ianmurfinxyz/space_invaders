@@ -932,8 +932,8 @@ static bool isAABBIntersection(const AABB& a, const AABB& b)
   return ((a._xmin <= b._xmax) && (a._xmax >= b._xmin)) && ((a._ymin <= b._ymax) && (a._ymax >= b._ymin));
 }
 
-static void GameWorld::calculateAABBOverlap(const AABB& aBounds, const AABB& bBounds, 
-                                            AABB& aOverlap, AABB& bOverlap)
+static void calculateAABBOverlap(const AABB& aBounds, const AABB& bBounds, 
+                                 AABB& aOverlap, AABB& bOverlap)
 {
   // Overlap w.r.t screen space which is common to both.
   AABB overlap;
@@ -963,9 +963,6 @@ static void findPixelIntersectionSets(const AABB& aOverlap, const Bitmap& aBitma
                                       std::vector<Vector2i>& aPixels, std::vector<Vector2i>& bPixels,
                                       bool pixelLists)
 {
-  aPixels.clear();
-  bPixels.clear();
-
   int32_t overlapWidth = aOverlap._xmax - aOverlap._xmin;
   int32_t overlapHeight = aOverlap._ymax - aOverlap._ymin;
 
@@ -994,32 +991,37 @@ static void findPixelIntersectionSets(const AABB& aOverlap, const Bitmap& aBitma
   }
 }
 
-Collision testCollision(Vector2i aPosition, const Bitmap& aBitmap, Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true)
+const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap, 
+                               Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists)
 {
-  static std::vector<Vector2i> aPixels {};
-  static std::vector<Vector2i> bPixels {};
+  static Collision c;
 
-  Collision collision {false, {}, {}, aPixels, bPixels};
+  c._isCollision = false;
+  c._aOverlap = {0, 0, 0, 0};
+  c._bOverlap = {0, 0, 0, 0};
+  c._aPixels.clear();
+  c._bPixels.clear();
 
-  AABB aBounds {aPosition._x, aPosition._x + aBitmap.getWidth(), aPosition._y + aBitmap.getHeight(), aPosition._y};
-  AABB bBounds {bPosition._x, bPosition._x + bBitmap.getWidth(), bPosition._y + bBitmap.getHeight(), bPosition._y};
+  c._aBounds = {aPosition._x, aPosition._x + aBitmap.getWidth(), 
+                aPosition._y + aBitmap.getHeight(), aPosition._y};
+  c._bBounds = {bPosition._x, bPosition._x + bBitmap.getWidth(), 
+                bPosition._y + bBitmap.getHeight(), bPosition._y};
 
-  if(!isAABBIntersection(aBounds, bBounds))
-    return collision;
+  if(!isAABBIntersection(c._aBounds, c._bBounds))
+    return c;
 
-  AABB aOverlap, bOverlap;
-  calculateAABBOverlap(aBounds, bBounds, aOverlap, bOverlap);
-  collision._aOverlap = aOverlap;
-  collision._bOverlap = bOverlap;
+  calculateAABBOverlap(c._aBounds, c._bBounds, c._aOverlap, c._bOverlap);
 
-  calculatePixelIntersectionSets(aOverlap, aBitmap, bOverlap, bBitmap, aPixels, bPixels, pixelLists);
+  findPixelIntersectionSets(c._aOverlap, aBitmap, 
+                            c._bOverlap, bBitmap, 
+                            c._aPixels, c._bPixels, pixelLists);
 
-  assert(aPixels.size() == bPixels.size());
+  assert(c._aPixels.size() == c._bPixels.size());
 
-  if(aPixels.size() != 0)
-    collision._isCollision = true;  
+  if(c._aPixels.size() != 0)
+    c._isCollision = true;  
 
-  return collision;
+  return c;
 }
 
 //===============================================================================================//

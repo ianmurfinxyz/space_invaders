@@ -272,6 +272,20 @@ void GameState::spawnCannon()
   _isAliensFrozen = false;
 }
 
+void GameState::spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex)
+{
+  auto search = std::find_if_not(_bombBooms.begin(), _bombBooms.end(), isBombBoomAlive);
+
+  // If this asserts then expand the booms array until it does not.
+  assert(search != _bombBooms.end());
+
+  (*search)._hit = hit;
+  (*search)._colorIndex = colorIndex;
+  (*search)._position = position;
+  (*search)._boomClock = _bombBoomDuration;
+  (*search)._isAlive = true;
+}
+
 void GameState::boomCannon()
 {
   _cannon._moveDirection = 0;
@@ -284,22 +298,11 @@ void GameState::boomCannon()
   _isAliensFrozen = true;
 }
 
-void GameState::boomBomb(Bomb& bomb, int32_t bithit, BombHit hit)
+void GameState::boomBomb(Bomb& bomb, Vector2i boomPosition, BombHit hit)
 {
-  bomb._isAlive = false;
   --_bombCount;
-
-  auto search = std::find_if_not(_bombBooms.begin(), _bombBooms.end(), isBombBoomAlive);
-
-  assert(search != _bombBooms.end());
-
-  BombClass& bc = _bombClasses[bomb._classId];
-
-  (*search)._hit = hit;
-  (*search)._colorIndex = bc._colorIndex;
-  (*search)._position = Vector2f{bithit, _hitbar->_positionY + _hitbar->_height};
-  (*search)._boomClock = _bombBoomDuration;
-  (*search)._isAlive = true;
+  bomb._isAlive = false;
+  spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
 }
 
 void GameState::boomAlien(Alien* alien)
@@ -309,6 +312,19 @@ void GameState::boomAlien(Alien* alien)
   _isAliensFrozen = true;
   _isAliensBooming = true;
   _cannon._isFrozen = true;
+}
+
+void GameState::boomLaser(bool makeBoom, BombHit hit)
+{
+  _laser._isAlive = false;
+
+  if(makeBoom){
+    Vector2i position {};
+    position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
+    position._y = _laser._position._y;
+
+    spawnBoom(position, hit, _laser._colorIndex);
+  }
 }
 
 void GameState::doCannonMoving(float dt)
@@ -580,7 +596,39 @@ void GameState::doCollisionsBombsHitbar()
     }
     _hitbar->_bitmap.regenerateBytes();
 
-    boomBomb(bomb, bithit, BOMBHIT_BOTTOM);
+    Vector2i boomPosition {bithit, _hitbar->_positionY + _hitbar->_height};
+    boomBomb(bomb, boomPosition, BOMBHIT_BOTTOM);
+  }
+}
+
+void GameState::doCollisionsLaserAliens()
+{
+  Vector2i aPosition {}; 
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  aPosition._x = _laser._position._x;
+  aPosition._y = _laser._position._y;
+
+  aBitmap = &(nomad::assets->getBitmap(_laser._bitmapKey, _worldScale));
+
+  for(auto& row : _grid){
+    for(auto& alien : row){
+      const AlienClass& ac = _alienClasses[alien._classId];
+
+      bPosition = alien._position; 
+      bBitmap = &(nomad::assets->getBitmap(ac._bitmapKeys[alien._frame], _worldScale));
+
+      const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+      if(c._isCollision){
+        boomAlien(&alien);
+        boomLaser(false);
+        return;
+      }
+    }
   }
 }
 
@@ -659,6 +707,7 @@ void GameState::onUpdate(double now, float dt)
   doCannonFiring();
 
   doCollisionsBombsHitbar();
+  doCollisionsLaserAliens();
 
   //================================================================================
   
@@ -755,7 +804,8 @@ void GameState::drawBombBooms()
 
     Assets::Key_t bitmapKey = _bombBoomKeys[boom._hit];
     Color3f& color = _colorPallete[boom._colorIndex];
-    renderer->blitBitmap(boom._position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
+    Vector2f position = Vector2f(boom._position._x, boom._position._y);
+    renderer->blitBitmap(position, nomad::assets->getBitmap(bitmapKey, _worldScale), color);
   }
 }
 

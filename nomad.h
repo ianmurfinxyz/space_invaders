@@ -642,11 +642,10 @@ extern std::unique_ptr<Renderer> renderer;
 //
 //  USAGE NOTES
 //
-//  The pixel lists are stored internally within the Collisions class to avoid creating new 
-//  vectors for every collision test. Consequently the lists are returned as references to these
-//  internal buffers and are thus only valid in-between collision tests, i.e. a subsequent collision
-//  test will overwrite the data of any prior test. If you need persistence then copy construct
-//  the returned lists.
+//  The collision data returned from the collision test function is stored internally and returned
+//  via constant reference to avoid allocating memory for each and every test. Consequently the
+//  data returned persists only inbetween calls to the test function and is overwritten by 
+//  subsequent calls. If you need persistence then copy construct the returned Collision struct.
 //
 //  Not every usage requires all collision data thus some collision data is optional where skipping
 //  the collection of such data can provide performance benefits, notably the pixel lists. If a 
@@ -670,13 +669,16 @@ struct AABB
 struct Collision
 {
   bool _isCollision;
+  AABB _aBounds;
+  AABB _bBounds;
   AABB _aOverlap;
   AABB _bOverlap;
-  const std::vector<Vector2i>& _aPixels;
-  const std::vector<Vector2i>& _bPixels;
+  std::vector<Vector2i> _aPixels;
+  std::vector<Vector2i> _bPixels;
 };
 
-Collision testCollision(Vector2i aPosition, const Bitmap& aBitmap, Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
+const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap, 
+                               Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //

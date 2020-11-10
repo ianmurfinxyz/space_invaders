@@ -132,7 +132,7 @@ private:
   struct BombBoom
   {
     BombHit _hit;
-    Vector2f _position;
+    Vector2i _position;
     int32_t _colorIndex;
     float _boomClock;     // Unit: seconds. 
     bool _isAlive;
@@ -194,9 +194,11 @@ private:
   void startNextLevel();
   void endSpawning();
   void spawnCannon();
+  void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void boomCannon();
-  void boomBomb(Bomb& bomb, int32_t bithit, BombHit hit);
+  void boomBomb(Bomb& bomb, Vector2i boomPosition, BombHit hit);
   void boomAlien(Alien* alien);
+  void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
   void doCannonFiring();
