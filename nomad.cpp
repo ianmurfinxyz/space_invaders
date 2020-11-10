@@ -742,7 +742,7 @@ void Bitmap::initialize(std::vector<std::string> bits, int32_t scale)
   regenerateBytes();
 }
 
-bool Bitmap::getBit(int32_t row, int32_t col)
+bool Bitmap::getBit(int32_t row, int32_t col) const
 {
   assert(0 <= row && row < _height);
   assert(0 <= col && col < _width);
@@ -922,6 +922,105 @@ Vector2i Renderer::getWindowSize() const
 }
 
 std::unique_ptr<Renderer> renderer {nullptr};
+
+//===============================================================================================//
+// ##>COLLISION DETECTION                                                                        //
+//===============================================================================================//
+
+static bool isAABBIntersection(const AABB& a, const AABB& b)
+{
+  return ((a._xmin <= b._xmax) && (a._xmax >= b._xmin)) && ((a._ymin <= b._ymax) && (a._ymax >= b._ymin));
+}
+
+static void GameWorld::calculateAABBOverlap(const AABB& aBounds, const AABB& bBounds, 
+                                            AABB& aOverlap, AABB& bOverlap)
+{
+  // Overlap w.r.t screen space which is common to both.
+  AABB overlap;
+  overlap._xmax = std::min(aBounds._xmax, bBounds._xmax);
+  overlap._xmin = std::max(aBounds._xmin, bBounds._xmin);
+  overlap._ymax = std::min(aBounds._ymax, bBounds._ymax);
+  overlap._ymin = std::max(aBounds._ymin, bBounds._ymin);
+
+  // Overlaps w.r.t each local bitmap coordinate space.
+  aOverlap._xmax = overlap._xmax - aBounds._xmin; 
+  aOverlap._xmin = overlap._xmin - aBounds._xmin;
+  aOverlap._ymax = overlap._ymax - aBounds._ymin; 
+  aOverlap._ymin = overlap._ymin - aBounds._ymin;
+
+  bOverlap._xmax = overlap._xmax - bBounds._xmin; 
+  bOverlap._xmin = overlap._xmin - bBounds._xmin;
+  bOverlap._ymax = overlap._ymax - bBounds._ymin; 
+  bOverlap._ymin = overlap._ymin - bBounds._ymin;
+
+  // The results should be the same overlap region w.r.t two different coordinate spaces.
+  assert((aOverlap._xmax - aOverlap._xmin) == (bOverlap._xmax - bOverlap._xmin));
+  assert((aOverlap._ymax - aOverlap._ymin) == (bOverlap._ymax - bOverlap._ymin));
+}
+
+static void findPixelIntersectionSets(const AABB& aOverlap, const Bitmap& aBitmap, 
+                                      const AABB& bOverlap, const Bitmap& bBitmap,
+                                      std::vector<Vector2i>& aPixels, std::vector<Vector2i>& bPixels,
+                                      bool pixelLists)
+{
+  aPixels.clear();
+  bPixels.clear();
+
+  int32_t overlapWidth = aOverlap._xmax - aOverlap._xmin;
+  int32_t overlapHeight = aOverlap._ymax - aOverlap._ymin;
+
+  int32_t aBitRow, bBitRow, aBitCol, bBitCol, aBitValue, bBitValue;
+
+  for(int32_t row = 0; row < overlapHeight; ++row){
+    for(int32_t col = 0; col < overlapWidth; ++col){
+      aBitRow = aOverlap._ymin + row;
+      aBitCol = aOverlap._xmin + col;
+
+      bBitRow = bOverlap._ymin + row;
+      bBitCol = bOverlap._xmin + col;
+
+      aBitValue = aBitmap.getBit(aBitRow, aBitCol);
+      bBitValue = bBitmap.getBit(bBitRow, bBitCol);
+
+      if(aBitValue != bBitValue)
+        continue;
+
+      aPixels.push_back({aBitRow, aBitCol});
+      bPixels.push_back({bBitRow, bBitCol});
+
+      if(!pixelLists)
+        return;
+    }
+  }
+}
+
+Collision testCollision(Vector2i aPosition, const Bitmap& aBitmap, Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true)
+{
+  static std::vector<Vector2i> aPixels {};
+  static std::vector<Vector2i> bPixels {};
+
+  Collision collision {false, {}, {}, aPixels, bPixels};
+
+  AABB aBounds {aPosition._x, aPosition._x + aBitmap.getWidth(), aPosition._y + aBitmap.getHeight(), aPosition._y};
+  AABB bBounds {bPosition._x, bPosition._x + bBitmap.getWidth(), bPosition._y + bBitmap.getHeight(), bPosition._y};
+
+  if(!isAABBIntersection(aBounds, bBounds))
+    return collision;
+
+  AABB aOverlap, bOverlap;
+  calculateAABBOverlap(aBounds, bBounds, aOverlap, bOverlap);
+  collision._aOverlap = aOverlap;
+  collision._bOverlap = bOverlap;
+
+  calculatePixelIntersectionSets(aOverlap, aBitmap, bOverlap, bBitmap, aPixels, bPixels, pixelLists);
+
+  assert(aPixels.size() == bPixels.size());
+
+  if(aPixels.size() != 0)
+    collision._isCollision = true;  
+
+  return collision;
+}
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //

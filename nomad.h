@@ -426,6 +426,9 @@ extern std::unique_ptr<Assets> assets;
 //         0 |█| |█| | |█| |█|           i.e bit[0][0] is the bottom-left most bit.
 //           +-----------------> col
 //            0 1 2 3 4 5 6 7
+//
+// Thus the bitmap can be considered to be a coordinate space in which the origin is the bottom-
+// left most pixel of the bitmap.
 class Bitmap final
 {
   friend Assets;
@@ -437,7 +440,7 @@ public:
   Bitmap& operator=(Bitmap&&) = default;
   ~Bitmap() = default;
 
-  bool getBit(int32_t row, int32_t col);
+  bool getBit(int32_t row, int32_t col) const;
   int32_t getWidth() const {return _width;}
   int32_t getHeight() const {return _height;}
   const std::vector<uint8_t>& getBytes() const {return _bytes;}
@@ -594,6 +597,86 @@ private:
 };
 
 extern std::unique_ptr<Renderer> renderer;
+
+//===============================================================================================//
+// ##>COLLISION DETECTION                                                                        //
+//===============================================================================================//
+
+// COLLISION RESULTS
+//
+// The following is an explanation of the data returned from a collision test between two bitmaps,
+// say bitmap A and bitmap B.
+//
+// To test for pixel perfect collisions between two bitmaps, each bitmap is considered to be
+// bounded by an axis-aligned bounding box (AABB) calculated from the positions of the bitmaps
+// and their dimensions. Two overlap AABBs are calculated from any intersection, one for each
+// bitmap. The overlaps represent the local overlap (i.e. coordinates w.r.t the bitmap coordinates,
+// see class Bitmap) of each bitmap, illustrated in figure 1.
+//
+//               Wa=20                     KEY
+//           +----------+                  ===
+//           |          |                  Pn = position of bitmap N
+//     Ha=20 |          |                  Wn = width of bitmap N
+//           |     +----|-----+            Hn = height of bitmap N
+//           | A   | S  |     |
+// Pa(20,20) o-----|----+     | Hb=20      S = overlap region of bitmaps A and B.
+//                 |          |
+//                 | B        |            There is only a single overlap region S for any collision.
+//       Pb(30,10) o----------+            However this region can be expressed w.r.t the coordinate
+//                     Wb=20               space of each bitmap.
+//    
+//     y                                   Both expressions will be returned. In this example we
+//     ^                                   will have the result:
+//     |  screen                                          left, right, top, bottom
+//     |   axes                               aOverlap = {10  , 20   , 10 , 0 }
+//     o-----> x                              bOverlap = {0   , 10   , 20 , 10}
+//
+//                                        Note that the overlap S w.r.t the screen would be:
+//                                             Overlap = {30  , 40   , 30 , 20}
+//                            [ figure 1]
+//
+//  Further, lists of all pixel intersections can also be returned. Intersecting pixels are returned
+//  as two lists: the set of all pixels in bitmap A which intersect a pixel in bitmap B (aPixels)
+//  and the set of all pixels in bitmap B which intersect a pixel in bitmap A (bPixels). The
+//  pixels in the lists are expressed in coordinates w.r.t their bitmaps coordinate space.
+//
+//  USAGE NOTES
+//
+//  The pixel lists are stored internally within the Collisions class to avoid creating new 
+//  vectors for every collision test. Consequently the lists are returned as references to these
+//  internal buffers and are thus only valid in-between collision tests, i.e. a subsequent collision
+//  test will overwrite the data of any prior test. If you need persistence then copy construct
+//  the returned lists.
+//
+//  Not every usage requires all collision data thus some collision data is optional where skipping
+//  the collection of such data can provide performance benefits, notably the pixel lists. If a 
+//  pixel list is not required the test resolution can shortcut with a positive result upon 
+//  detecting the first pixel intersection. By default lists are generated.
+
+// AABB:
+//              +-------x (xmax, ymax)       y
+//              |       |                    ^  screen
+//              | AABB  |                    |   axes
+//              |       |                    |   
+// (xmin, ymin) o-------+                    o------> x
+struct AABB
+{
+  int32_t _xmin;
+  int32_t _ymin;
+  int32_t _xmax;
+  int32_t _ymax;
+};
+
+struct Collision
+{
+  bool _isCollision;
+  AABB _aOverlap;
+  AABB _bOverlap;
+  const std::vector<Vector2i>& _aPixels;
+  const std::vector<Vector2i>& _bPixels;
+};
+
+Collision testCollision(Vector2i aPosition, const Bitmap& aBitmap, Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //
