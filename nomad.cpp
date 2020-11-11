@@ -758,15 +758,27 @@ void Bitmap::setBit(int32_t row, int32_t col, bool value, bool regen)
     regenerateBytes();
 }
 
-void Bitmap::print(std::ostream& out) const
+void Bitmap::setRect(int32_t rowMin, int32_t colMin, int32_t rowMax, int32_t colMax, bool value, bool regen)
 {
-  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
-    for(bool bit : *iter){
-      out << bit;
-    }
-    out << '\n';
-  }
-  out << std::endl;
+  // note - inclusive range of rows and columns, i.e. [rowMin, rowMax] and [colMin, colMax]
+  
+  assert(rowMin >= 0 && rowMax < _height);
+  assert(colMin >= 0 && colMax < _width);
+
+  for(int32_t row = rowMin; row <= rowMax; ++row)
+    for(int32_t col = colMin; col <= colMax; ++col)
+      _bits[row][col] = value;
+
+  if(regen)
+    regenerateBytes();
+}
+
+void Font::initialize(Meta meta, std::vector<Glyph> glyphs)
+  // predicate: expects glyphs for all ascii codes in the range 33-126 inclusive.
+  // predicate: expects glyphs to be in ascending order of ascii code.
+{
+  _meta = meta;
+  _glyphs = std::move(glyphs);
 }
 
 void Bitmap::regenerateBytes()
@@ -791,12 +803,40 @@ void Bitmap::regenerateBytes()
   }
 }
 
-void Font::initialize(Meta meta, std::vector<Glyph> glyphs)
-  // predicate: expects glyphs for all ascii codes in the range 33-126 inclusive.
-  // predicate: expects glyphs to be in ascending order of ascii code.
+bool Bitmap::isEmpty()
 {
-  _meta = meta;
-  _glyphs = std::move(glyphs);
+  for(const auto& row : _bits)
+    for(const auto& bit : row)
+      if(bit)
+        return false;
+
+  return true;
+}
+
+bool Bitmap::isApproxEmpty(int32_t threshold)
+{
+  int32_t count {0};
+  for(const auto& row : _bits){
+    for(const auto& bit : row){
+      if(bit){
+        ++count;
+        if(count > threshold)
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
+void Bitmap::print(std::ostream& out) const
+{
+  for(auto iter = _bits.rbegin(); iter != _bits.rend(); ++iter){
+    for(bool bit : *iter){
+      out << bit;
+    }
+    out << '\n';
+  }
+  out << std::endl;
 }
 
 Renderer::Renderer(const Config& config)

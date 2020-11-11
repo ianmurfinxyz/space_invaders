@@ -294,6 +294,7 @@ private:
   int32_t _bombIntervalBase;                    // Base beat count between firing.
   int32_t _bombClock;                           // Unit: beats - used to time the firing.
   std::array<int32_t, gridWidth> _columnPops;   // Populations of alive aliens in each column.
+  std::array<int32_t, gridHeight> _rowPops;     // Populations of alive aliens in each row.
   RandInt _randColumn;
 
   static constexpr int32_t bombClassCount {3};

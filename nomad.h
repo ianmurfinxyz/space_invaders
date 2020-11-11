@@ -447,7 +447,12 @@ public:
   const std::vector<uint8_t>& getBytes() const {return _bytes;}
 
   void setBit(int32_t row, int32_t col, bool value, bool regen = true);
+  void setRect(int32_t rowMin, int32_t colMin, int32_t rowMax, int32_t colMax, bool value, bool regen = true);
+  
   void regenerateBytes();
+
+  bool isEmpty();
+  bool isApproxEmpty(int32_t threshold);
 
   void print(std::ostream& out) const;
 
@@ -457,7 +462,7 @@ private:
   void initialize(std::vector<std::string> bits, int32_t scale = 1);
 
 private:
-  std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops
+  std::vector<std::vector<bool>> _bits;  // used for bit manipulation ops - indexed [row][col]
   std::vector<uint8_t> _bytes;           // used for rendering
   int32_t _width;
   int32_t _height;

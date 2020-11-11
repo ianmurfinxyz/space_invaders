@@ -240,6 +240,7 @@ void GameState::startNextLevel()
   }
 
   std::fill(_columnPops.begin(), _columnPops.end(), gridHeight);
+  std::fill(_rowPops.begin(), _rowPops.end(), gridWidth);
   _alienPopulation = gridWidth * gridHeight;
 
   // Reset bombs.
@@ -372,6 +373,7 @@ void GameState::boomAlien(Alien& alien)
   _isAliensBooming = true;
   _cannon._isFrozen = true;
   --(_columnPops[alien._col]);
+  --(_rowPops[alien._row]);
   --_alienPopulation;
 }
 
@@ -547,6 +549,9 @@ void GameState::doAlienBombing(int32_t beats)
   // Cycles determine alien bomb rate. Aliens bomb every N beats, thus the higher beat rate
   // the higher the rate of bombing. Randomness is added in a random deviation to the bomb 
   // interval and to the choice of alien which does the bombing.
+  
+  if(true)
+    return;
 
   if(_isAliensFrozen)
     return;
@@ -873,10 +878,10 @@ void GameState::doCollisionsBunkersBombs()
       const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
       if(c._isCollision){
-        Vector2i position {};
-        position._x = bomb._position._x - ((_bombBoomWidth - bc._width) / 2);
-        position._y = bomb._position._y;
-        boomBomb(bomb, true, position, BOMBHIT_MIDAIR);
+        //Vector2i position {};
+        //position._x = bomb._position._x - ((_bombBoomWidth - bc._width) / 2);
+        //position._y = bomb._position._y;
+        boomBomb(bomb);//, true, position, BOMBHIT_MIDAIR);
         boomBunker(*bunker, c._bPixels.front());
         return;
       }
@@ -886,10 +891,88 @@ void GameState::doCollisionsBunkersBombs()
 
 void GameState::doCollisionsBunkersLaser()
 {
+  if(!_laser._isAlive)
+    return;
+
+  if(_bunkerCount <= 0)
+    return;
+
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  aPosition._x = _laser._position._x;
+  aPosition._y = _laser._position._y;
+
+  aBitmap = &(nomad::assets->getBitmap(_laser._bitmapKey, _worldScale));
+
+  for(auto& bunker : _bunkers){
+    bPosition._x = bunker->_position._x;
+    bPosition._y = bunker->_position._y;
+
+    bBitmap = &(bunker->_bitmap);
+
+    const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+    
+    if(c._isCollision){
+      boomLaser(false);
+      boomBunker(*bunker, c._bPixels.front());
+      return;
+    }
+  }
 }
 
 void GameState::doCollisionsBunkersAliens()
 {
+  if(_isAliensSpawning)
+    return;
+
+  if(_isAliensFrozen)
+    return;
+
+  if(_bunkerCount == 0)
+    return;
+
+  if(_alienPopulation == 0)
+    return;
+
+  int32_t bottomRow {0};
+  while(_rowPops[bottomRow] == 0)
+    ++bottomRow;
+
+  if(_grid[bottomRow][0]._position._y > _bunkerSpawnY + _bunkerHeight)
+    return;
+
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  for(const auto& alien : _grid[bottomRow]){
+    aPosition._x = alien._position._x;
+    aPosition._y = alien._position._y;
+
+    const AlienClass& ac = _alienClasses[alien._classId];
+    Assets::Key_t bitmapKey = ac._bitmapKeys[alien._frame];
+    aBitmap = &(nomad::assets->getBitmap(bitmapKey, _worldScale));
+
+    for(auto& bunker : _bunkers){
+      bPosition._x = bunker->_position._x;
+      bPosition._y = bunker->_position._y;
+
+      bBitmap = &(bunker->_bitmap);
+
+      const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+      if(c._isCollision){
+        bunker->_bitmap.setRect(c._bOverlap._ymin, c._bOverlap._xmin, 
+                                 c._bOverlap._ymax - 1, c._bOverlap._xmax - 1, false);
+      }
+    }
+  }
 }
 
 bool GameState::incrementGridIndex(GridIndex& index)
@@ -929,6 +1012,8 @@ void GameState::onUpdate(double now, float dt)
   doCollisionsBombsCannon();
   doCollisionsLaserAliens();
   doCollisionsBunkersBombs();
+  doCollisionsBunkersLaser();
+  doCollisionsBunkersAliens();
   doCollisionsLaserSky();
 
   //================================================================================
