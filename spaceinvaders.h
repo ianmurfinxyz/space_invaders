@@ -101,6 +101,8 @@ private:
   {
     AlienClassId _classId;
     Vector2i _position;
+    int32_t _row;
+    int32_t _col;
     bool _frame;
     bool _isAlive;
   };
@@ -194,10 +196,11 @@ private:
   void startNextLevel();
   void endSpawning();
   void spawnCannon();
+  void spawnBomb(Vector2f position, BombClassId classId);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void boomCannon();
-  void boomBomb(Bomb& bomb, Vector2i boomPosition, BombHit hit);
-  void boomAlien(Alien* alien);
+  void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
+  void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
@@ -212,8 +215,8 @@ private:
   void doCollisionsBombsCannon();
   void doCollisionsLaserAliens();
   void doCollisionsLaserSky();
+  bool doCollisionsAliensBorders();
   bool incrementGridIndex(GridIndex& index);
-  bool testAlienBorderCollision();
   void drawGrid();
   void drawCannon();
   void drawBombs();
@@ -244,8 +247,10 @@ private:
   int32_t _worldMargin;
   int32_t _worldLeftBorderX;
   int32_t _worldRightBorderX;
+  int32_t _worldTopBorderY;
   int32_t _alienMoveDirection;            // Limited to values -1 for left, +1 for right.
   int32_t _dropsDone;
+  int32_t _alienPopulation;               // Count of the number of aliens alive.
   GridIndex _nextMover;                   // The alien to move in the next tick.
   Alien* _alienBoomer;                    // The alien going BOOM! (not your dad).
   float _alienBoomClock;                  // Unit: seconds.

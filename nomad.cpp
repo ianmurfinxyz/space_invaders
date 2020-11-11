@@ -1002,10 +1002,10 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
   c._aPixels.clear();
   c._bPixels.clear();
 
-  c._aBounds = {aPosition._x, aPosition._x + aBitmap.getWidth(), 
-                aPosition._y + aBitmap.getHeight(), aPosition._y};
-  c._bBounds = {bPosition._x, bPosition._x + bBitmap.getWidth(), 
-                bPosition._y + bBitmap.getHeight(), bPosition._y};
+  c._aBounds = {aPosition._x, aPosition._y, 
+                aPosition._x + aBitmap.getWidth(), aPosition._y + aBitmap.getHeight()};
+  c._bBounds = {bPosition._x, bPosition._y, 
+                bPosition._x + bBitmap.getWidth(), bPosition._y + bBitmap.getHeight()};
 
   if(!isAABBIntersection(c._aBounds, c._bBounds))
     return c;

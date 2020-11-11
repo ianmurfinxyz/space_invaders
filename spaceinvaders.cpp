@@ -90,8 +90,9 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _worldLeftBorderX = _worldMargin;
   _worldRightBorderX = _worldSize._x - _worldMargin;
+  _worldTopBorderY = _worldSize._y - 20.f;
 
-  _alienBoomDuration = 2.0f;
+  _alienBoomDuration = 0.1f;
 
 
   // Each update tick the game performs a number of 'beats'. The beat rate controls the speed of
@@ -157,10 +158,10 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMTOP, SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
-  _bombBoomWidth = 6 * _worldScale;
+  _bombBoomWidth = 8 * _worldScale;
   _bombBoomDuration = 0.4f;
 
-  _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f};
+  _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f * _worldScale};
   _cannon._speed = 100.f * _worldScale;
   _cannon._width = 13 * _worldScale;
   _cannon._height = 8 * _worldScale;
@@ -172,7 +173,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _laser._width = 1 * _worldScale;
   _laser._height = 6 * _worldScale;
   _laser._colorIndex = 6;
-  _laser._speed = 100.f * _worldScale;
+  _laser._speed = 200.f * _worldScale;
   _laser._bitmapKey = SpaceInvaders::BMK_LASER0;
 
   _levels = {{
@@ -221,12 +222,16 @@ void GameState::startNextLevel()
       alien._position._x = _aliensSpawnPosition._x + (col * _alienXSeperation);
       alien._position._y = _aliensSpawnPosition._y + (row * _alienYSeperation);
 
+      alien._row = row;
+      alien._col = col;
+
       alien._frame = false;
       alien._isAlive = true;
     }
   }
 
   std::fill(_columnPops.begin(), _columnPops.end(), gridHeight);
+  _alienPopulation = gridWidth * gridHeight;
 
   // Reset bombs.
   for(auto& bomb : _bombs)
@@ -250,7 +255,7 @@ void GameState::startNextLevel()
       nomad::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 
       _worldSize._x,
       1 * _worldScale,
-      16, 
+      16 * _worldScale, 
       1
   );
 }
@@ -298,20 +303,50 @@ void GameState::boomCannon()
   _isAliensFrozen = true;
 }
 
-void GameState::boomBomb(Bomb& bomb, Vector2i boomPosition, BombHit hit)
+void GameState::spawnBomb(Vector2f position, BombClassId classId)
+{
+  // If this condition does occur then increase the max bombs until it doesn't.
+  assert(_bombCount != maxBombs);
+
+  // Find a 'dead' bomb instance to use.
+  Bomb* bomb {nullptr};
+  for(auto& b : _bombs)
+    if(!b._isAlive)
+      bomb = &b;
+
+  // If this occurs my bomb counts are off.
+  assert(bomb != nullptr);
+
+  bomb->_classId = classId;
+  bomb->_position = position;
+  bomb->_frame = 0;
+  bomb->_isAlive = true;
+
+  ++_bombCount;
+
+  // Calculate when the next bomb will be dropped.
+  _bombClock = _bombIntervalBase;
+}
+
+void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombHit hit)
 {
   --_bombCount;
   bomb._isAlive = false;
-  spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
+
+  if(makeBoom)
+    spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
 }
 
-void GameState::boomAlien(Alien* alien)
+void GameState::boomAlien(Alien& alien)
 {
-  _alienBoomer = alien;
+  alien._isAlive = false;
+  _alienBoomer = &alien;
   _alienBoomClock = _alienBoomDuration;
   _isAliensFrozen = true;
   _isAliensBooming = true;
   _cannon._isFrozen = true;
+  --(_columnPops[alien._col]);
+  --_alienPopulation;
 }
 
 void GameState::boomLaser(bool makeBoom, BombHit hit)
@@ -417,6 +452,9 @@ void GameState::doAlienMoving(int32_t beats)
   if(_isAliensFrozen)
     return;
 
+  if(_alienPopulation == 0)
+    return;
+
   for(int i = 0; i < beats; ++i){
     Alien& alien = _grid[_nextMover._row][_nextMover._col];
 
@@ -444,7 +482,7 @@ void GameState::doAlienMoving(int32_t beats)
           _alienMoveDirection *= -1;
         }
       }
-      else if(testAlienBorderCollision()){
+      else if(doCollisionsAliensBorders()){
         _isAliensDropping = true;
       }
     }
@@ -462,6 +500,9 @@ void GameState::doAlienBombing(int32_t beats)
 
   if(_isAliensSpawning)
     return;
+
+  if(_alienPopulation == 0)
+    return;
   
   _bombClock -= beats;
   if(_bombClock > 0)
@@ -474,13 +515,13 @@ void GameState::doAlienBombing(int32_t beats)
   assert(populatedCount != 0);
 
   int32_t colShift = _randColumn() % populatedCount;
-  int32_t col {0};
-  while(--colShift >= 0){
+  int32_t col {-1};
+  do {
     ++col;
-    while(_columnPops[col] == 0){
+    while(_columnPops[col] == 0) 
       ++col;
-    }
   }
+  while(--colShift >= 0);
 
   // Find the alien that will do the bombing.
   Alien* alien {nullptr};
@@ -491,43 +532,26 @@ void GameState::doAlienBombing(int32_t beats)
     }
   }
 
-  assert(alien != nullptr);   // The column selection should ensure this never happens.
-
+  assert(alien != nullptr); // The column selection should ensure this never happens.
+  
   const AlienClass& alienClass = _alienClasses[alien->_classId];
 
-  BombClassId bcid = static_cast<BombClassId>(_randBombClass());
-  const BombClass& bombClass = _bombClasses[bcid]; 
+  BombClassId classId = static_cast<BombClassId>(_randBombClass());
+  const BombClass& bombClass = _bombClasses[classId]; 
 
   Vector2f position {};
   position._x += alien->_position._x + (alienClass._width * 0.5f);
   position._y += alien->_position._y - bombClass._height;
 
-  // If this condition does occur then increase the max bombs until it doesn't.
-  assert(_bombCount != maxBombs);
-
-  // Find a 'dead' bomb instance to use.
-  Bomb* bomb {nullptr};
-  for(auto& b : _bombs)
-    if(!b._isAlive)
-      bomb = &b;
-
-  // If this occurs my bomb counts are off.
-  assert(bomb != nullptr);
-
-  bomb->_classId = bcid;
-  bomb->_position = position;
-  bomb->_frame = 0;
-  bomb->_isAlive = true;
-
-  ++_bombCount;
-
-  // Calculate when the next bomb will be bombed.
-  _bombClock = _bombIntervalBase;
+  spawnBomb(position, classId);
 }
 
 void GameState::doAlienBooming(float dt)
 {
   if(!_isAliensBooming)
+    return;
+
+  if(_alienPopulation == 0)
     return;
 
   _alienBoomClock -= dt;
@@ -559,8 +583,10 @@ void GameState::doBombMoving(int32_t beats, float dt)
 
 void GameState::doLaserMoving(float dt)
 {
-  if(_laser._isAlive)
-    _laser._position._y += _laser._speed * dt;
+  if(!_laser._isAlive)
+    return;
+
+  _laser._position._y += _laser._speed * dt;
 }
 
 void GameState::doBombBoomBooming(float dt)
@@ -597,12 +623,66 @@ void GameState::doCollisionsBombsHitbar()
     _hitbar->_bitmap.regenerateBytes();
 
     Vector2i boomPosition {bithit, _hitbar->_positionY + _hitbar->_height};
-    boomBomb(bomb, boomPosition, BOMBHIT_BOTTOM);
+    boomBomb(bomb, true, boomPosition, BOMBHIT_BOTTOM);
+  }
+}
+
+void GameState::doCollisionsBombsCannon()
+{
+  if(!_cannon._isAlive)
+    return;
+
+  if(_cannon._isBooming)
+    return;
+
+  if(_bombCount == 0)
+    return;
+
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  aPosition._x = _cannon._position._x;
+  aPosition._y = _cannon._position._y;
+
+  aBitmap = &(nomad::assets->getBitmap(_cannon._cannonKey, _worldScale));
+
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
+      continue;
+  
+    bPosition._x = bomb._position._x;
+    bPosition._y = bomb._position._y;
+
+    BombClass& bc = _bombClasses[bomb._classId];
+
+    bBitmap = &(nomad::assets->getBitmap(bc._bitmapKeys[bomb._frame], _worldScale));
+
+    const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+    if(c._isCollision){
+      boomCannon();
+      boomBomb(bomb);
+    }
   }
 }
 
 void GameState::doCollisionsLaserAliens()
 {
+  if(!_laser._isAlive)
+    return;
+
+  if(_isAliensSpawning)
+    return;
+
+  if(_isAliensFrozen)
+    return;
+
+  if(_alienPopulation == 0)
+    return;
+
   Vector2i aPosition {}; 
   Vector2i bPosition {};
 
@@ -616,6 +696,9 @@ void GameState::doCollisionsLaserAliens()
 
   for(auto& row : _grid){
     for(auto& alien : row){
+      if(!alien._isAlive)
+        continue;
+
       const AlienClass& ac = _alienClasses[alien._classId];
 
       bPosition = alien._position; 
@@ -624,7 +707,7 @@ void GameState::doCollisionsLaserAliens()
       const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
       if(c._isCollision){
-        boomAlien(&alien);
+        boomAlien(alien);
         boomLaser(false);
         return;
       }
@@ -632,27 +715,32 @@ void GameState::doCollisionsLaserAliens()
   }
 }
 
-bool GameState::incrementGridIndex(GridIndex& index)
+void GameState::doCollisionsLaserSky()
 {
-  // Increments index from left-to-right along the columns, moving up a row and back to the left
-  // most column upon reaching the end of the current column. Loops back to the bottom left most
-  // column of the bottom row upon reaching the top-right of the grid. Returns true to indicate
-  // a loop.
-  
-  ++index._col;
-  if(index._col >= gridWidth){
-    index._col = 0;
-    ++index._row;
-    if(index._row >= gridHeight){
-      index._row = 0;
-      return true;
-    }
-  }
-  return false;
+  if(!_laser._isAlive)
+    return;
+
+  if(_laser._position._y + _laser._height < _worldTopBorderY)
+    return;
+
+  _laser._isAlive = false;
+  Vector2i position {};
+  position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
+  position._y = _laser._position._y;
+  spawnBoom(position, BOMBHIT_MIDAIR, _laser._colorIndex);
 }
 
-bool GameState::testAlienBorderCollision()
+bool GameState::doCollisionsAliensBorders()
 {
+  if(_isAliensSpawning)
+    return false;
+
+  if(_isAliensFrozen)
+    return false;
+
+  if(_alienPopulation == 0)
+    return false;
+
   switch(_alienMoveDirection){
 
     // If moving left test against left border.
@@ -692,6 +780,25 @@ bool GameState::testAlienBorderCollision()
   return false;
 }
 
+bool GameState::incrementGridIndex(GridIndex& index)
+{
+  // Increments index from left-to-right along the columns, moving up a row and back to the left
+  // most column upon reaching the end of the current column. Loops back to the bottom left most
+  // column of the bottom row upon reaching the top-right of the grid. Returns true to indicate
+  // a loop.
+  
+  ++index._col;
+  if(index._col >= gridWidth){
+    index._col = 0;
+    ++index._row;
+    if(index._row >= gridHeight){
+      index._row = 0;
+      return true;
+    }
+  }
+  return false;
+}
+
 void GameState::onUpdate(double now, float dt)
 {
   int32_t beats = _cycles[_activeCycle][_activeBeat]; 
@@ -707,7 +814,9 @@ void GameState::onUpdate(double now, float dt)
   doCannonFiring();
 
   doCollisionsBombsHitbar();
+  doCollisionsBombsCannon();
   doCollisionsLaserAliens();
+  doCollisionsLaserSky();
 
   //================================================================================
   
@@ -720,8 +829,7 @@ void GameState::onUpdate(double now, float dt)
     for(auto& row : _grid){
       for(auto& alien : row){
         if(alien._isAlive){
-          alien._isAlive = false;
-          boomAlien(&alien);
+          boomAlien(alien);
           goto BOOMED;
         }
       }
@@ -730,6 +838,9 @@ void GameState::onUpdate(double now, float dt)
   BOOMED:
 
   //================================================================================
+  
+  if(_alienPopulation == 0)
+    startNextLevel();
 
   ++_activeBeat;
   if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
