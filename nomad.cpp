@@ -979,11 +979,11 @@ static void findPixelIntersectionSets(const AABB& aOverlap, const Bitmap& aBitma
       aBitValue = aBitmap.getBit(aBitRow, aBitCol);
       bBitValue = bBitmap.getBit(bBitRow, bBitCol);
 
-      if(aBitValue != bBitValue)
+      if(aBitValue == 0 || bBitValue == 0)
         continue;
 
-      aPixels.push_back({aBitRow, aBitCol});
-      bPixels.push_back({bBitRow, bBitCol});
+      aPixels.push_back({aBitCol, aBitRow});
+      bPixels.push_back({bBitCol, bBitRow});
 
       if(!pixelLists)
         return;

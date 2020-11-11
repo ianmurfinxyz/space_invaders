@@ -429,6 +429,7 @@ extern std::unique_ptr<Assets> assets;
 //
 // Thus the bitmap can be considered to be a coordinate space in which the origin is the bottom-
 // left most pixel of the bitmap.
+
 class Bitmap final
 {
   friend Assets;
@@ -638,7 +639,8 @@ extern std::unique_ptr<Renderer> renderer;
 //  Further, lists of all pixel intersections can also be returned. Intersecting pixels are returned
 //  as two lists: the set of all pixels in bitmap A which intersect a pixel in bitmap B (aPixels)
 //  and the set of all pixels in bitmap B which intersect a pixel in bitmap A (bPixels). The
-//  pixels in the lists are expressed in coordinates w.r.t their bitmaps coordinate space.
+//  pixels in the lists are expressed in coordinates w.r.t their bitmaps coordinate space. Note 
+//  pixels are returned as 2D vectors where [x,y] = [col][row]. 
 //
 //  USAGE NOTES
 //

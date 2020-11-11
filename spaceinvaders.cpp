@@ -159,6 +159,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMTOP, SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
   _bombBoomWidth = 8 * _worldScale;
+  _bombBoomHeight = 8 * _worldScale;
   _bombBoomDuration = 0.4f;
 
   _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f * _worldScale};
@@ -175,6 +176,14 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _laser._colorIndex = 6;
   _laser._speed = 200.f * _worldScale;
   _laser._bitmapKey = SpaceInvaders::BMK_LASER0;
+
+  _bunkerColorIndex = 0;
+  _bunkerSpawnX = 32 * _worldScale;
+  _bunkerSpawnY = 48 * _worldScale;
+  _bunkerSpawnGapX = 45 * _worldScale;
+  _bunkerSpawnCount = 4;
+  _bunkerWidth = 22 * _worldScale;
+  _bunkerHeight = 16 * _worldScale;
 
   _levels = {{
     {0, 5},
@@ -237,6 +246,8 @@ void GameState::startNextLevel()
   for(auto& bomb : _bombs)
     bomb._isAlive = false;
 
+  _bombCount = 0;
+
   // Reset bomb booms.
   for(auto& boom : _bombBooms)
     boom._isAlive = false;
@@ -258,6 +269,15 @@ void GameState::startNextLevel()
       16 * _worldScale, 
       1
   );
+
+  // Create fresh bunkers.
+  _bunkers.clear();
+  Vector2f position {_bunkerSpawnX, _bunkerSpawnY};
+  for(int i = 0; i < _bunkerSpawnCount; ++i){
+    spawnBunker(position, SpaceInvaders::BMK_BUNKER);
+    position._x += _bunkerSpawnGapX;
+  }
+  _bunkerCount = _bunkerSpawnCount;
 }
 
 void GameState::endSpawning()
@@ -289,6 +309,12 @@ void GameState::spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex)
   (*search)._position = position;
   (*search)._boomClock = _bombBoomDuration;
   (*search)._isAlive = true;
+}
+
+void GameState::spawnBunker(Vector2f position, Assets::Key_t bitmapKey)
+{
+  const Bitmap& bitmap = nomad::assets->getBitmap(bitmapKey, _worldScale);
+  _bunkers.emplace_back(std::make_unique<Bunker>(bitmap, position));
 }
 
 void GameState::boomCannon()
@@ -360,6 +386,33 @@ void GameState::boomLaser(bool makeBoom, BombHit hit)
 
     spawnBoom(position, hit, _laser._colorIndex);
   }
+}
+
+void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
+{
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap& aBitmap {bunker._bitmap};
+  const Bitmap& bBitmap {nomad::assets->getBitmap(SpaceInvaders::BMK_BOMBBOOMMIDAIR, _worldScale)};
+
+  aPosition._x = bunker._position._x;
+  aPosition._y = bunker._position._y;
+
+  bPosition._x = bunker._position._x + pixelHit._x - (_bombBoomWidth / 2);
+  bPosition._y = bunker._position._y + pixelHit._y - (_bombBoomHeight / 2);
+
+  const Collision& c = testCollision(aPosition, aBitmap, bPosition, bBitmap, true);
+
+  // If this asserts then the mask used to blit off damage is not intersecting any pixels
+  // on the bitmap, the result is that no change is made. This creates the situation in which
+  // parts of the bunker cannot be destroyed. Thus if this happens redesign the damage mask.
+  assert(c._isCollision);
+
+  for(auto& pixel : c._aPixels)
+    bunker._bitmap.setBit(pixel._y, pixel._x, 0, false);
+
+  bunker._bitmap.regenerateBytes();
 }
 
 void GameState::doCannonMoving(float dt)
@@ -780,6 +833,65 @@ bool GameState::doCollisionsAliensBorders()
   return false;
 }
 
+void GameState::doCollisionsBunkersBombs()
+{
+  if(_bombCount <= 0)
+    return;
+
+  if(_bunkerCount <= 0)
+    return;
+
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
+      continue;
+
+    aPosition._y = bomb._position._y;
+
+    if(aPosition._y < _bunkerSpawnY)
+      continue;
+
+    if(aPosition._y > _bunkerSpawnY + _bunkerHeight)
+      continue;
+
+    aPosition._x = bomb._position._x;
+
+    const BombClass& bc = _bombClasses[bomb._classId];
+    aBitmap = &(nomad::assets->getBitmap(bc._bitmapKeys[bomb._frame], _worldScale));
+
+    for(auto& bunker : _bunkers){
+      bPosition._x = bunker->_position._x;
+      bPosition._y = bunker->_position._y;
+
+      bBitmap = &(bunker->_bitmap);
+
+      const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+      if(c._isCollision){
+        Vector2i position {};
+        position._x = bomb._position._x - ((_bombBoomWidth - bc._width) / 2);
+        position._y = bomb._position._y;
+        boomBomb(bomb, true, position, BOMBHIT_MIDAIR);
+        boomBunker(*bunker, c._bPixels.front());
+        return;
+      }
+    }
+  }
+}
+
+void GameState::doCollisionsBunkersLaser()
+{
+}
+
+void GameState::doCollisionsBunkersAliens()
+{
+}
+
 bool GameState::incrementGridIndex(GridIndex& index)
 {
   // Increments index from left-to-right along the columns, moving up a row and back to the left
@@ -816,6 +928,7 @@ void GameState::onUpdate(double now, float dt)
   doCollisionsBombsHitbar();
   doCollisionsBombsCannon();
   doCollisionsLaserAliens();
+  doCollisionsBunkersBombs();
   doCollisionsLaserSky();
 
   //================================================================================
@@ -933,6 +1046,12 @@ void GameState::drawHitbar()
   renderer->blitBitmap({0.f, _hitbar->_positionY}, _hitbar->_bitmap, _colorPallete[_hitbar->_colorIndex]);
 }
 
+void GameState::drawBunkers()
+{
+  for(const auto& bunker : _bunkers)
+    renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPallete[_bunkerColorIndex]);
+}
+
 void GameState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::black);
@@ -941,6 +1060,7 @@ void GameState::onDraw(double now, float dt)
   drawBombs();
   drawBombBooms();
   drawLaser();
+  drawBunkers();
   drawHitbar();
 }
 

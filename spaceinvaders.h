@@ -26,7 +26,7 @@ public:
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
     BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, 
-    BMK_BOMBBOOMTOP, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_COUNT
+    BMK_BOMBBOOMTOP, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
   };
 
   constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
@@ -34,7 +34,7 @@ public:
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboomtop",
-    "bombboombottom", "bombboommidair"
+    "bombboombottom", "bombboommidair", "bunker"
   };
 
 public:
@@ -185,6 +185,14 @@ private:
     int32_t _colorIndex;
   };
 
+  struct Bunker
+  {
+    Bunker(const Bitmap& b, Vector2f p) : _bitmap{b}, _position{p}{}
+
+    Bitmap _bitmap;
+    Vector2f _position;
+  };
+
   struct Level
   {
     int32_t _startCycle;      // The start rate of beats (start game speed).
@@ -198,10 +206,12 @@ private:
   void spawnCannon();
   void spawnBomb(Vector2f position, BombClassId classId);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
+  void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
+  void boomBunker(Bunker& bunker, Vector2i hitPixel);
   void doCannonMoving(float dt);
   void doCannonBooming(int32_t beats);
   void doCannonFiring();
@@ -216,6 +226,9 @@ private:
   void doCollisionsLaserAliens();
   void doCollisionsLaserSky();
   bool doCollisionsAliensBorders();
+  void doCollisionsBunkersBombs();
+  void doCollisionsBunkersLaser();
+  void doCollisionsBunkersAliens();
   bool incrementGridIndex(GridIndex& index);
   void drawGrid();
   void drawCannon();
@@ -223,6 +236,7 @@ private:
   void drawBombBooms();
   void drawLaser();
   void drawHitbar();
+  void drawBunkers();
 
   // Predicates.
   static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
@@ -293,12 +307,23 @@ private:
   std::array<BombBoom, maxBombs> _bombBooms;
   std::array<Assets::Key_t, 3> _bombBoomKeys;
   int32_t _bombBoomWidth;
+  int32_t _bombBoomHeight;
   float _bombBoomDuration;                          // Unit: seconds.
 
   Laser _laser;
   Cannon _cannon;
 
   std::unique_ptr<Hitbar> _hitbar;
+
+  std::vector<std::unique_ptr<Bunker>> _bunkers;
+  int32_t _bunkerCount;
+  int32_t _bunkerColorIndex;
+  int32_t _bunkerSpawnX;
+  int32_t _bunkerSpawnY;
+  int32_t _bunkerSpawnGapX;
+  int32_t _bunkerSpawnCount;
+  int32_t _bunkerWidth;
+  int32_t _bunkerHeight;
 
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;
