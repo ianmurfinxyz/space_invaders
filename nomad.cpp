@@ -1223,7 +1223,7 @@ void Engine::initialize(std::unique_ptr<Application> app)
   input = std::make_unique<Input>();
   assets = std::make_unique<Assets>();
 
-  Assets::Manifest_t manifest {{debugFontKey, debugFontName, debugFontScale}};
+  Assets::Manifest_t manifest {{engineFontKey, engineFontName, engineFontScale}};
   assets->loadFonts(manifest);
 
   Vector2i windowSize = nomad::renderer->getWindowSize();
@@ -1326,7 +1326,7 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
   renderer->setViewport({0, 0, std::min(300, windowSize._x), std::min(70, windowSize._y)});
   renderer->clearViewport(colors::blue);
 
-  const Font& debugFont = assets->getFont(debugFontKey, debugFontScale);
+  const Font& engineFont = assets->getFont(engineFontKey, engineFontScale);
 
   std::stringstream ss {};
 
@@ -1336,7 +1336,7 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
      << "  UTA:" << tick->_ticksAccumulated
      << "  UTD:" << tick->_ticksDoneThisFrame
      << "  UTT:"  << tick->_metronome.getTotalTicks();
-  renderer->blitText({5.f, 50.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({5.f, 50.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
 
@@ -1346,38 +1346,38 @@ void Engine::drawPerformanceStats(Duration_t realDt, Duration_t gameDt)
      << "  DTA:" << tick->_ticksAccumulated
      << "  DTD:" << tick->_ticksDoneThisFrame
      << "  DTT:" << tick->_metronome.getTotalTicks();
-  renderer->blitText({5.f, 40.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({5.f, 40.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
   
   ss << std::setprecision(3);
   ss << "FPS:"  << _fpsMeter.getTPS() << "hz"
      << "  FNo:" << _frameNo;
-  renderer->blitText({5.f, 30.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({5.f, 30.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
   
   ss << std::setprecision(3);
   ss << "Gdt:"   << durationToMilliseconds(gameDt) << "ms";
-  renderer->blitText({5.f, 20.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({5.f, 20.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
 
   ss << std::setprecision(3);
   ss << "  Rdt:" << durationToMilliseconds(realDt) << "ms";
-  renderer->blitText({120.f, 20.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({120.f, 20.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
 
   ss << std::setprecision(3);
   ss << "GNow:"     << durationToMinutes(_gameClock.getNow()) << "min";
-  renderer->blitText({5.f, 10.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({5.f, 10.f}, ss.str(), engineFont, colors::white); 
 
   std::stringstream().swap(ss);
 
   ss << std::setprecision(3);
   ss << "  Uptime:" << durationToMinutes(_realClock.getNow()) << "min";
-  renderer->blitText({120.f, 10.f}, ss.str(), debugFont, colors::white); 
+  renderer->blitText({120.f, 10.f}, ss.str(), engineFont, colors::white); 
 }
 
 void Engine::drawPauseDialog()
@@ -1385,13 +1385,13 @@ void Engine::drawPauseDialog()
   Vector2i windowSize = renderer->getWindowSize();
   renderer->setViewport({0, 0, windowSize._x, windowSize._y});
 
-  const Font& debugFont = assets->getFont(debugFontKey, debugFontScale);
+  const Font& engineFont = assets->getFont(engineFontKey, engineFontScale);
 
   Vector2f position {};
   position._x = (windowSize._x / 2.f) - 20.f; 
   position._y = (windowSize._y / 2.f) - 5.f;
 
-  renderer->blitText(position, "PAUSED", debugFont, colors::white); 
+  renderer->blitText(position, "PAUSED", engineFont, colors::white); 
 }
 
 void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)

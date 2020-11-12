@@ -34,7 +34,11 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
     manifest.push_back({i, _bitmapNames[i], _worldScale}); 
   }
 
-  assets->loadBitmaps(std::move(manifest));
+  nomad::assets->loadBitmaps(manifest);
+
+  manifest.clear();
+  manifest.push_back({fontKey, fontName, _worldScale});
+  nomad::assets->loadFonts(manifest);
 
   std::unique_ptr<ApplicationState> game {new GameState{this}};
   std::unique_ptr<ApplicationState> menu {new MenuState{this}};
@@ -67,6 +71,8 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _worldSize = worldSize;
   _worldScale = worldScale;
 
+  _font = &(nomad::assets->getFont(SpaceInvaders::fontKey, _worldScale));
+
   _colorPallete = {     // index:
     colors::red,        // 0
     colors::green,      // 1
@@ -90,7 +96,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _worldLeftBorderX = _worldMargin;
   _worldRightBorderX = _worldSize._x - _worldMargin;
-  _worldTopBorderY = _worldSize._y - 20.f;
+  _worldTopBorderY = _worldSize._y - (30.f * _worldScale);
 
   _alienBoomDuration = 0.1f;
 
@@ -157,7 +163,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
     {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}}
   }};
 
-  _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMTOP, SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
+  _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
   _bombBoomWidth = 8 * _worldScale;
   _bombBoomHeight = 8 * _worldScale;
   _bombBoomDuration = 0.4f;
@@ -170,6 +176,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _cannon._boomInterval = _cannon._boomFrameInterval * 12;
   _cannon._cannonKey = SpaceInvaders::BMK_CANNON0;
   _cannon._boomKeys = {{SpaceInvaders::BMK_CANNONBOOM0, SpaceInvaders::BMK_CANNONBOOM1, SpaceInvaders::BMK_CANNONBOOM2}};
+  _cannon._colorIndex = 0;
 
   _laser._width = 1 * _worldScale;
   _laser._height = 6 * _worldScale;
@@ -184,6 +191,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bunkerSpawnCount = 4;
   _bunkerWidth = 22 * _worldScale;
   _bunkerHeight = 16 * _worldScale;
+  _bunkerDeleteThreshold = 20 * _worldScale;
 
   _levels = {{
     {0, 5},
@@ -199,14 +207,35 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _levelIndex = -1;
-  _levelNo = 0;
+  _round = -1;
+
+  _score = 0;
+  _lives = 5; // requires 1 life for initial spawn, thus actually start with 4.
+  _credit = 0;
+  _isGameOver = false;
+  _gameOverDuration = 5.f;
+
+  // Set HUD elements.
+  
+  _gameOverLabel = {{72.f * _worldScale, 188.f * _worldScale}, "GAME OVER", 3};
+  _scoreLabel = {{10.f * _worldScale, 240.f * _worldScale}, "SCORE", 4};
+  _recordLabel = {{90.f * _worldScale, 240.f * _worldScale}, "RECORD", 0};
+  _roundLabel = {{170.f * _worldScale, 240.f * _worldScale}, "ROUND", 5};
+  _creditLabel = {{130.f * _worldScale, 6.f * _worldScale}, "CREDIT", 3};
+  _scoreValueLabel = {{16.f * _worldScale, 230.f * _worldScale}, &_score, 6};
+  _recordValueLabel = {{96.f * _worldScale, 230.f * _worldScale}, &_score, 1};
+  _roundValueLabel = {{190.f * _worldScale, 230.f * _worldScale}, &_round, 3};
+  _creditValueLabel = {{190.f * _worldScale, 6.f * _worldScale}, &_credit, 4};
+  _lifeValueLabel = {{10.f * _worldScale, 6.f * _worldScale}, &_lives, 5};
+  _lifeCannonLabel = {{20.f * _worldScale, 6.f * _worldScale}, SpaceInvaders::BMK_CANNON0, 4};
+  _lifeCannonSpacingX = 16 * _worldScale;
 
   startNextLevel();
 }
 
 void GameState::startNextLevel()
 {
-  ++_levelNo;
+  ++_round;
   ++_levelIndex;
   if(_levelIndex == levelCount)
     --_levelIndex;
@@ -278,7 +307,8 @@ void GameState::startNextLevel()
     spawnBunker(position, SpaceInvaders::BMK_BUNKER);
     position._x += _bunkerSpawnGapX;
   }
-  _bunkerCount = _bunkerSpawnCount;
+
+  _showHud = false;
 }
 
 void GameState::endSpawning()
@@ -286,15 +316,22 @@ void GameState::endSpawning()
   _isAliensSpawning = false;
   _isAliensDropping = false;
   spawnCannon();
+  _showHud = true;
 }
 
 void GameState::spawnCannon()
 {
+  --_lives;
+  if(_lives == 0){
+    _isGameOver = true;
+    _gameOverClock = _gameOverDuration;
+    return;
+  }
+
   _cannon._position = _cannon._spawnPosition;
   _cannon._moveDirection = 0;
   _cannon._isBooming = false;
   _cannon._isAlive = true;
-
   _isAliensFrozen = false;
 }
 
@@ -348,6 +385,7 @@ void GameState::spawnBomb(Vector2f position, BombClassId classId)
   bomb->_position = position;
   bomb->_frame = 0;
   bomb->_isAlive = true;
+  bomb->_frameClock = _bombClasses[classId]._frameInterval;
 
   ++_bombCount;
 
@@ -366,6 +404,8 @@ void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombH
 
 void GameState::boomAlien(Alien& alien)
 {
+  _score += _alienClasses[alien._classId]._scoreValue;
+
   alien._isAlive = false;
   _alienBoomer = &alien;
   _alienBoomClock = _alienBoomDuration;
@@ -475,7 +515,7 @@ void GameState::doCannonFiring()
   if(_laser._isAlive)
     return;
 
-  if(nomad::input->isKeyPressed(Input::KEY_UP)){
+  if(nomad::input->isKeyDown(Input::KEY_UP)){
     Vector2f position = _cannon._position;
     position._x += _cannon._width / 2;
     position._y += _cannon._height;
@@ -549,9 +589,6 @@ void GameState::doAlienBombing(int32_t beats)
   // Cycles determine alien bomb rate. Aliens bomb every N beats, thus the higher beat rate
   // the higher the rate of bombing. Randomness is added in a random deviation to the bomb 
   // interval and to the choice of alien which does the bombing.
-  
-  if(true)
-    return;
 
   if(_isAliensFrozen)
     return;
@@ -843,7 +880,7 @@ void GameState::doCollisionsBunkersBombs()
   if(_bombCount <= 0)
     return;
 
-  if(_bunkerCount <= 0)
+  if(_bunkers.size() <= 0)
     return;
 
   Vector2i aPosition {};
@@ -869,20 +906,21 @@ void GameState::doCollisionsBunkersBombs()
     const BombClass& bc = _bombClasses[bomb._classId];
     aBitmap = &(nomad::assets->getBitmap(bc._bitmapKeys[bomb._frame], _worldScale));
 
-    for(auto& bunker : _bunkers){
-      bPosition._x = bunker->_position._x;
-      bPosition._y = bunker->_position._y;
+    for(auto iter = _bunkers.begin(); iter != _bunkers.end(); ++iter){
+      Bunker& bunker = *(*iter);
 
-      bBitmap = &(bunker->_bitmap);
+      bPosition._x = bunker._position._x;
+      bPosition._y = bunker._position._y;
+
+      bBitmap = &bunker._bitmap;
 
       const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
       if(c._isCollision){
-        //Vector2i position {};
-        //position._x = bomb._position._x - ((_bombBoomWidth - bc._width) / 2);
-        //position._y = bomb._position._y;
-        boomBomb(bomb);//, true, position, BOMBHIT_MIDAIR);
-        boomBunker(*bunker, c._bPixels.front());
+        boomBomb(bomb);
+        boomBunker(bunker, c._bPixels.front());
+        if(bunker._bitmap.isApproxEmpty(_bunkerDeleteThreshold))
+          _bunkers.erase(iter);
         return;
       }
     }
@@ -894,7 +932,7 @@ void GameState::doCollisionsBunkersLaser()
   if(!_laser._isAlive)
     return;
 
-  if(_bunkerCount <= 0)
+  if(_bunkers.size() == 0)
     return;
 
   Vector2i aPosition {};
@@ -908,17 +946,21 @@ void GameState::doCollisionsBunkersLaser()
 
   aBitmap = &(nomad::assets->getBitmap(_laser._bitmapKey, _worldScale));
 
-  for(auto& bunker : _bunkers){
-    bPosition._x = bunker->_position._x;
-    bPosition._y = bunker->_position._y;
+  for(auto iter = _bunkers.begin(); iter != _bunkers.end(); ++iter){
+    Bunker& bunker = *(*iter);
 
-    bBitmap = &(bunker->_bitmap);
+    bPosition._x = bunker._position._x;
+    bPosition._y = bunker._position._y;
+
+    bBitmap = &(bunker._bitmap);
 
     const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
     
     if(c._isCollision){
       boomLaser(false);
-      boomBunker(*bunker, c._bPixels.front());
+      boomBunker(bunker, c._bPixels.front());
+      if(bunker._bitmap.isApproxEmpty(_bunkerDeleteThreshold))
+        _bunkers.erase(iter);
       return;
     }
   }
@@ -932,7 +974,7 @@ void GameState::doCollisionsBunkersAliens()
   if(_isAliensFrozen)
     return;
 
-  if(_bunkerCount == 0)
+  if(_bunkers.size() == 0)
     return;
 
   if(_alienPopulation == 0)
@@ -959,17 +1001,24 @@ void GameState::doCollisionsBunkersAliens()
     Assets::Key_t bitmapKey = ac._bitmapKeys[alien._frame];
     aBitmap = &(nomad::assets->getBitmap(bitmapKey, _worldScale));
 
-    for(auto& bunker : _bunkers){
-      bPosition._x = bunker->_position._x;
-      bPosition._y = bunker->_position._y;
+    for(auto iter = _bunkers.begin(); iter != _bunkers.end(); ++iter){
+      Bunker& bunker = *(*iter);
 
-      bBitmap = &(bunker->_bitmap);
+      bPosition._x = bunker._position._x;
+      bPosition._y = bunker._position._y;
+
+      bBitmap = &(bunker._bitmap);
 
       const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
       if(c._isCollision){
-        bunker->_bitmap.setRect(c._bOverlap._ymin, c._bOverlap._xmin, 
-                                 c._bOverlap._ymax - 1, c._bOverlap._xmax - 1, false);
+        bunker._bitmap.setRect(c._bOverlap._ymin, c._bOverlap._xmin, 
+                               c._bOverlap._ymax - 1, c._bOverlap._xmax - 1, false);
+
+        if(bunker._bitmap.isApproxEmpty(_bunkerDeleteThreshold))
+          _bunkers.erase(iter);
+
+        return;
       }
     }
   }
@@ -1036,6 +1085,12 @@ void GameState::onUpdate(double now, float dt)
   BOOMED:
 
   //================================================================================
+  
+  if(_isGameOver){
+    _gameOverClock -= dt;
+    if(_gameOverClock <= 0)
+      _app->switchState(MenuState::name);
+  }
   
   if(_alienPopulation == 0)
     startNextLevel();
@@ -1137,6 +1192,34 @@ void GameState::drawBunkers()
     renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPallete[_bunkerColorIndex]);
 }
 
+void GameState::drawHud()
+{
+  if(!_showHud)
+    return;
+
+  renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPallete[_scoreLabel._colorIndex]);
+  renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPallete[_recordLabel._colorIndex]);
+  renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPallete[_roundLabel._colorIndex]);
+  renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPallete[_creditLabel._colorIndex]);
+
+  renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPallete[_scoreValueLabel._colorIndex]);
+  renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPallete[_recordValueLabel._colorIndex]);
+  renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPallete[_roundValueLabel._colorIndex]);
+  renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPallete[_creditValueLabel._colorIndex]);
+  renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPallete[_lifeValueLabel._colorIndex]);
+
+  const Bitmap& cannonBitmap = nomad::assets->getBitmap(_lifeCannonLabel._bitmapKey, _worldScale);
+  Vector2f position {};
+  for(int i = 0; i < _lives - 1; ++i){
+    position._x = _lifeCannonLabel._position._x + (_lifeCannonSpacingX * i);
+    position._y = _lifeCannonLabel._position._y;
+    renderer->blitBitmap(position, cannonBitmap, _colorPallete[_lifeCannonLabel._colorIndex]);
+  }
+
+  if(_isGameOver)
+    renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPallete[_gameOverLabel._colorIndex]);
+}
+
 void GameState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::black);
@@ -1147,6 +1230,7 @@ void GameState::onDraw(double now, float dt)
   drawLaser();
   drawBunkers();
   drawHitbar();
+  drawHud();
 }
 
 void GameState::onReset()
@@ -1200,6 +1284,9 @@ void MenuState::onDraw(double now, float dt)
   renderer->blitBitmap(Vector2f{430.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZAGZIG3, _worldScale), colors::blue);
 
   renderer->blitBitmap(Vector2f{440.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_LASER0, _worldScale), colors::blue);
+
+  const Font& font = nomad::assets->getFont(SpaceInvaders::fontKey, _worldScale);
+  renderer->blitText({10.f, 200.f}, "this is some text", font, colors::white);
 }
 
 void MenuState::onReset()

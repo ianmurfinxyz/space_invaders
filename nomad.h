@@ -765,9 +765,9 @@ public:
   constexpr static Duration_t oneMinute {60'000'000'000};
   constexpr static Duration_t minFramePeriod {1'000'000};
 
-  constexpr static Assets::Key_t debugFontKey {0}; // engine reserves this font key for itself.
-  constexpr static Assets::Name_t debugFontName {"debug"};
-  constexpr static Assets::Scale_t debugFontScale {1};
+  constexpr static Assets::Key_t engineFontKey {0}; // engine reserves this font key for itself.
+  constexpr static Assets::Name_t engineFontName {"engine"};
+  constexpr static Assets::Scale_t engineFontScale {1};
 
   class RealClock
   {

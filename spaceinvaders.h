@@ -26,16 +26,19 @@ public:
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
     BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, 
-    BMK_BOMBBOOMTOP, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
+    BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
   };
 
-  constexpr static std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
+  static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
-    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboomtop",
-    "bombboombottom", "bombboommidair", "bunker"
+    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
+    "bombboommidair", "bunker"
   };
+
+  static constexpr Assets::Key_t fontKey {1};
+  static constexpr Assets::Name_t fontName {"space"};
 
 public:
   SpaceInvaders() = default;
@@ -129,7 +132,7 @@ private:
     bool _isAlive;
   };
 
-  enum BombHit { BOMBHIT_TOP, BOMBHIT_BOTTOM, BOMBHIT_MIDAIR };
+  enum BombHit { BOMBHIT_BOTTOM, BOMBHIT_MIDAIR };
 
   struct BombBoom
   {
@@ -200,6 +203,30 @@ private:
     int32_t _formationIndex;  // The grid formation used for this level.
   };
 
+  // TEMP - TODO - replace this with UI elements or something once the UI is done. Preferable
+  // one in which the text can draw over time for the game over label.
+  
+  struct TextLabel
+  {
+    Vector2f _position;
+    std::string _message;
+    int32_t _colorIndex;
+  };
+
+  struct IntLabel
+  {
+    Vector2f _position;
+    int32_t* _value;
+    int32_t _colorIndex;
+  };
+
+  struct BitmapLabel
+  {
+    Vector2f _position;
+    Assets::Key_t _bitmapKey;
+    int32_t _colorIndex;
+  };
+
 private:
   void startNextLevel();
   void endSpawning();
@@ -237,12 +264,15 @@ private:
   void drawLaser();
   void drawHitbar();
   void drawBunkers();
+  void drawHud();
 
   // Predicates.
   static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
   static bool isBombBoomAlive(const BombBoom& boom) {return boom._isAlive;}
 
 private:
+  const Font* _font;
+
   Vector2i _worldSize;
   int32_t _worldScale;
 
@@ -306,7 +336,7 @@ private:
   int32_t _bombCount;
 
   std::array<BombBoom, maxBombs> _bombBooms;
-  std::array<Assets::Key_t, 3> _bombBoomKeys;
+  std::array<Assets::Key_t, 2> _bombBoomKeys;
   int32_t _bombBoomWidth;
   int32_t _bombBoomHeight;
   float _bombBoomDuration;                          // Unit: seconds.
@@ -317,7 +347,6 @@ private:
   std::unique_ptr<Hitbar> _hitbar;
 
   std::vector<std::unique_ptr<Bunker>> _bunkers;
-  int32_t _bunkerCount;
   int32_t _bunkerColorIndex;
   int32_t _bunkerSpawnX;
   int32_t _bunkerSpawnY;
@@ -325,11 +354,32 @@ private:
   int32_t _bunkerSpawnCount;
   int32_t _bunkerWidth;
   int32_t _bunkerHeight;
+  int32_t _bunkerDeleteThreshold; // The bunker will be deleted if it has threshold or fewer pixels.
 
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;
   int32_t _levelIndex;                        // Active level (index into _levels data).
-  int32_t _levelNo;                           // Real level number (total levels completed).
+  int32_t _round;
+  int32_t _score;
+  int32_t _lives;
+  int32_t _credit;
+  bool _isGameOver;
+  float _gameOverDuration;                    // Unit: seconds. Time to display game over message.
+  float _gameOverClock;                       // Unit: seconds.
+
+  TextLabel _gameOverLabel;
+  TextLabel _scoreLabel;
+  TextLabel _recordLabel;
+  TextLabel _roundLabel;
+  TextLabel _creditLabel;
+  IntLabel _scoreValueLabel;
+  IntLabel _recordValueLabel;
+  IntLabel _roundValueLabel;
+  IntLabel _creditValueLabel;
+  IntLabel _lifeValueLabel;
+  BitmapLabel _lifeCannonLabel;
+  int32_t _lifeCannonSpacingX;
+  bool _showHud;
 };
 
 //===============================================================================================//
