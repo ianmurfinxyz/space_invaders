@@ -100,7 +100,6 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _alienBoomDuration = 0.1f;
 
-
   // Each update tick the game performs a number of 'beats'. The beat rate controls the speed of
   // the game; speed of alien shifts and firing etc. Beats are composed into sets called cycles 
   // where each element of the set (cycle) represents a number of beats to perform in an update
@@ -116,18 +115,19 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
     {1,  1, 2, cycleEnd},  // ticks:42.00   freq:1.43
     {1,  2, cycleEnd, 0},  // ticks:37.00   freq:1.60
     {2,  cycleEnd, 0, 0},  // ticks:27.50   freq:2.18
-    {2,  2, 3, cycleEnd},  // ticks:23.57   freq:2.54
     {2,  3, cycleEnd, 0},  // ticks:22.00   freq:2.70
-    {3,  cycleEnd, 0, 0},  // ticks:18.33   freq:3.33
-    {4,  cycleEnd, 0, 0},  // ticks:13.75   freq:4.35
-    {5,  cycleEnd, 0, 0},  // ticks:11.00   freq:5.56
-    {6,  cycleEnd, 0, 0},  // ticks:9.17    freq:6.67
-    {7,  cycleEnd, 0, 0},  // ticks:7.86    freq:7.69
-    {8,  cycleEnd, 0, 0},  // ticks:6.88    freq:9.09
-    {9,  cycleEnd, 0, 0},  // ticks:6.11    freq:9.81
-    {10, cycleEnd, 0, 0},  // ticks:5.50    freq:10.90
-    {11, cycleEnd, 0, 0}   // ticks:5.00    freq:12.00
+    {5,  cycleEnd, 0, 0},  // ticks:18.33   freq:3.33
+    {7,  cycleEnd, 0, 0},  // ticks:13.75   freq:4.35
+    {10, cycleEnd, 0, 0},  // ticks:11.00   freq:5.56
+    {14, cycleEnd, 0, 0},  // ticks:9.17    freq:6.67
+    {19, cycleEnd, 0, 0},  // ticks:7.86    freq:7.69
+    {25, cycleEnd, 0, 0},  // ticks:6.88    freq:9.09
+    {34, cycleEnd, 0, 0},  // ticks:6.11    freq:9.81
+    {46, cycleEnd, 0, 0}   // ticks:5.00    freq:12.00
   }};
+
+  // The alien population that triggers the cycle.
+  _cycleTransitions = {49, 42, 35, 28, 21, 14, 10, 7, 5, 4, 3, 2, 0};
 
   _alienClasses = {{
     {8  * _worldScale, 8 * _worldScale, 30, 1, {SpaceInvaders::BMK_SQUID0  , SpaceInvaders::BMK_SQUID1  }},
@@ -155,7 +155,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _bombIntervalDeviation = 0.5f; // Maximum 50% deviation from base.
-  _bombIntervalBase = 50;
+  _bombIntervals = {80, 80, 100, 120, 140, 180, 240, 300, 400, 500, 650, 800, 1100};
 
   _bombClasses = {{
     {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 0, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
@@ -194,16 +194,16 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bunkerDeleteThreshold = 20 * _worldScale;
 
   _levels = {{
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
-    {0, 5},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
+    {5, 0},
   }};
 
   _levelIndex = -1;
@@ -240,7 +240,7 @@ void GameState::startNextLevel()
   if(_levelIndex == levelCount)
     --_levelIndex;
 
-  _activeCycle = _levels[_levelIndex]._startCycle;
+  _activeCycle = 5;
   _activeBeat = cycleStart;
   _nextMover = {0, 0};
   _alienMoveDirection = 1;
@@ -289,7 +289,7 @@ void GameState::startNextLevel()
   _cannon._isAlive = false;
   _cannon._isFrozen = false;
 
-  _bombClock = _bombIntervalBase;
+  _bombClock = _bombIntervals[_activeCycle];
 
   // Create fresh (undamaged) hitbar.
   _hitbar = std::make_unique<Hitbar>(
@@ -311,12 +311,22 @@ void GameState::startNextLevel()
   _showHud = false;
 }
 
+void GameState::updateActiveCycle()
+{
+  _activeCycle = 0;
+  while(_alienPopulation < _cycleTransitions[_activeCycle])
+    ++_activeCycle;
+  std::cout << "_activeCycle=" << _activeCycle << std::endl;
+  std::cout << "population=" << _alienPopulation << std::endl;
+}
+
 void GameState::endSpawning()
 {
   _isAliensSpawning = false;
   _isAliensDropping = false;
   spawnCannon();
   _showHud = true;
+  _activeCycle = 0;
 }
 
 void GameState::spawnCannon()
@@ -388,9 +398,6 @@ void GameState::spawnBomb(Vector2f position, BombClassId classId)
   bomb->_frameClock = _bombClasses[classId]._frameInterval;
 
   ++_bombCount;
-
-  // Calculate when the next bomb will be dropped.
-  _bombClock = _bombIntervalBase;
 }
 
 void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombHit hit)
@@ -415,6 +422,7 @@ void GameState::boomAlien(Alien& alien)
   --(_columnPops[alien._col]);
   --(_rowPops[alien._row]);
   --_alienPopulation;
+  updateActiveCycle();
 }
 
 void GameState::boomLaser(bool makeBoom, BombHit hit)
@@ -639,6 +647,8 @@ void GameState::doAlienBombing(int32_t beats)
   position._y += alien->_position._y - bombClass._height;
 
   spawnBomb(position, classId);
+
+  _bombClock = _bombIntervals[_activeCycle];
 }
 
 void GameState::doAlienBooming(float dt)
@@ -994,6 +1004,9 @@ void GameState::doCollisionsBunkersAliens()
   const Bitmap* bBitmap {nullptr};
 
   for(const auto& alien : _grid[bottomRow]){
+    if(!alien._isAlive)
+      continue;
+
     aPosition._x = alien._position._x;
     aPosition._y = alien._position._y;
 

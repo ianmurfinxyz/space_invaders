@@ -198,7 +198,6 @@ private:
 
   struct Level
   {
-    int32_t _startCycle;      // The start rate of beats (start game speed).
     int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
     int32_t _formationIndex;  // The grid formation used for this level.
   };
@@ -229,6 +228,7 @@ private:
 
 private:
   void startNextLevel();
+  void updateActiveCycle();
   void endSpawning();
   void spawnCannon();
   void spawnBomb(Vector2f position, BombClassId classId);
@@ -304,12 +304,13 @@ private:
   bool _isAliensDropping;
   bool _isAliensFrozen;
 
-  static constexpr int32_t cycleCount {15};
+  static constexpr int32_t cycleCount {13};
   static constexpr int32_t cycleLength {4};
   static constexpr int32_t cycleStart {0};
   static constexpr int32_t cycleEnd {-1};
   using Cycle = std::array<int32_t, cycleLength>;
   std::array<Cycle, cycleCount> _cycles;
+  std::array<int32_t, cycleCount> _cycleTransitions;
   int32_t _activeCycle;
   int32_t _activeBeat;  // A beat is an element of a cycle.
 
@@ -320,11 +321,12 @@ private:
   using Formation = std::array<std::array<AlienClassId, gridWidth>, gridHeight>;
   std::array<Formation, formationCount> _formations;
 
-  float _bombIntervalDeviation;                 // Max deviation in beat count.
-  int32_t _bombIntervalBase;                    // Base beat count between firing.
-  int32_t _bombClock;                           // Unit: beats - used to time the firing.
-  std::array<int32_t, gridWidth> _columnPops;   // Populations of alive aliens in each column.
-  std::array<int32_t, gridHeight> _rowPops;     // Populations of alive aliens in each row.
+  float _bombIntervalDeviation;                    // Max deviation in bomb drop beat count.
+  std::array<int32_t, cycleCount> _bombIntervals;  // Beats between bomb drops.
+  int32_t _bombInterval;                           // Base beat count between firing.
+  int32_t _bombClock;                              // Unit: beats - used to time the firing.
+  std::array<int32_t, gridWidth> _columnPops;      // Populations of alive aliens in each column.
+  std::array<int32_t, gridHeight> _rowPops;        // Populations of alive aliens in each row.
   RandInt _randColumn;
 
   static constexpr int32_t bombClassCount {3};
