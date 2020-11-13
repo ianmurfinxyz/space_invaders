@@ -688,9 +688,10 @@ std::unique_ptr<Assets> assets {nullptr};
 void Bitmap::initialize(std::vector<std::string> bits, int32_t scale)
   // predicate: bit strings must contain only 0's and 1's
 {
-  // strip redundant data
+  // Strip trailing 0's on all rows leaving atleast one 0 on rows consisting of all zeros. 
+  // This permits 'padding rows' to be created in bitmaps whilst stripping surplus data.
   for(auto& row : bits){
-    while(row.back() == '0'){
+    while(row.back() == '0' && row.size() != 1){
       row.pop_back();
     }
   }
