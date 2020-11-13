@@ -23,6 +23,7 @@ public:
   enum BitmapKey : Assets::Key_t
   {
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
+    BMK_CUTTLE0, BMK_CUTTLE1, BMK_CUTTLETWIN,
     BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
     BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
     BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, 
@@ -30,7 +31,8 @@ public:
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
-    "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", 
+    "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", "cuttle0", "cuttle1",
+    "cuttletwin",
     "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
@@ -88,7 +90,7 @@ private:
     int32_t _col;
   };
 
-  enum AlienClassId { SQUID, CRAB, OCTOPUS, GAP };
+  enum AlienClassId { SQUID, CRAB, OCTOPUS, CUTTLE, CUTTLETWIN };
 
   static constexpr int32_t alienFramesCount {2};
   struct AlienClass
@@ -107,6 +109,14 @@ private:
     int32_t _row;
     int32_t _col;
     bool _frame;
+    bool _isAlive;
+  };
+
+  struct CuttleTwin
+  {
+    int32_t _row;
+    int32_t _col;
+    float _lifeClock;
     bool _isAlive;
   };
 
@@ -162,13 +172,13 @@ private:
     int32_t _colorIndex;
     int32_t _width;
     int32_t _height;
-    int32_t _moveDirection;            // -1 == left, 0 == still, +1 == right.
-    float _speed;                      // Unit: pixels per second.
-    int32_t _boomInterval;             // Unit: beats - total length of boom animation.
-    int32_t _boomClock;                // Unit: beats.
-    int32_t _boomFrameInterval;        // Unit: beats - how many beats per frame.
-    int32_t _boomFrame;                // Current boom animation frame.
-    int32_t _boomFrameClock;           // Unit: beats.
+    int32_t _moveDirection;          // -1 == left, 0 == still, +1 == right.
+    float _speed;                    // Unit: pixels per second.
+    float _boomDuration;             // Unit: seconds - total length of boom animation.
+    float _boomClock;                // Unit: seconds.
+    float _boomFrameDuration;        // Unit: seconds - how many beats per frame.
+    int32_t _boomFrame;              // Current boom animation frame.
+    float _boomFrameClock;           // Unit: seconds.
     bool _isBooming;
     bool _isAlive;
     bool _isFrozen;
@@ -200,6 +210,7 @@ private:
   {
     int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
     int32_t _formationIndex;  // The grid formation used for this level.
+    bool _isCuttlesOn;        // Do cuttle fish spawn from crabs in this level?
   };
 
   // TEMP - TODO - replace this with UI elements or something once the UI is done. Preferable
@@ -234,13 +245,15 @@ private:
   void spawnBomb(Vector2f position, BombClassId classId);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
+  void morphAlien(Alien& alien);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
+  void doAlienMorphing(float dt);
   void doCannonMoving(float dt);
-  void doCannonBooming(int32_t beats);
+  void doCannonBooming(float dt);
   void doCannonFiring();
   void doAlienMoving(int32_t beats);
   void doAlienBombing(int32_t beats);
@@ -299,6 +312,10 @@ private:
   Alien* _alienBoomer;                    // The alien going BOOM! (not your dad).
   float _alienBoomClock;                  // Unit: seconds.
   float _alienBoomDuration;               // Unit: seconds.
+  Alien* _alienMorpher;                   // The alien morphing into a cuttle fish.
+  float _alienMorphClock;
+  float _alienMorphDuration;              // Unit: seconds. How long it takes to morph into a cuttle fish.
+  bool _isAliensMorphing;
   bool _isAliensBooming;
   bool _isAliensSpawning;
   bool _isAliensDropping;
@@ -314,7 +331,7 @@ private:
   int32_t _activeCycle;
   int32_t _activeBeat;  // A beat is an element of a cycle.
 
-  static constexpr int32_t alienClassCount {3};
+  static constexpr int32_t alienClassCount {5};
   std::array<AlienClass, alienClassCount> _alienClasses;
 
   static constexpr int32_t formationCount {2};

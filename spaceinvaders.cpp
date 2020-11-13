@@ -99,6 +99,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _worldTopBorderY = _worldSize._y - (30.f * _worldScale);
 
   _alienBoomDuration = 0.1f;
+  _alienMorphDuration = 0.2f;
 
   // Each update tick the game performs a number of 'beats'. The beat rate controls the speed of
   // the game; speed of alien shifts and firing etc. Beats are composed into sets called cycles 
@@ -130,9 +131,11 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _cycleTransitions = {49, 42, 35, 28, 21, 14, 10, 7, 5, 4, 3, 2, 0};
 
   _alienClasses = {{
-    {8  * _worldScale, 8 * _worldScale, 30, 1, {SpaceInvaders::BMK_SQUID0  , SpaceInvaders::BMK_SQUID1  }},
-    {11 * _worldScale, 8 * _worldScale, 20, 4, {SpaceInvaders::BMK_CRAB0   , SpaceInvaders::BMK_CRAB1   }},
-    {12 * _worldScale, 8 * _worldScale, 10, 3, {SpaceInvaders::BMK_OCTOPUS0, SpaceInvaders::BMK_OCTOPUS1}}
+    {8  * _worldScale, 8 * _worldScale, 30, 1, {SpaceInvaders::BMK_SQUID0    , SpaceInvaders::BMK_SQUID1    }},
+    {11 * _worldScale, 8 * _worldScale, 20, 4, {SpaceInvaders::BMK_CRAB0     , SpaceInvaders::BMK_CRAB1     }},
+    {12 * _worldScale, 8 * _worldScale, 10, 3, {SpaceInvaders::BMK_OCTOPUS0  , SpaceInvaders::BMK_OCTOPUS1  }},
+    {8  * _worldScale, 8 * _worldScale, 30, 5, {SpaceInvaders::BMK_CUTTLE0   , SpaceInvaders::BMK_CUTTLE1   }},
+    {19 * _worldScale, 8 * _worldScale, 60, 5, {SpaceInvaders::BMK_CUTTLETWIN, SpaceInvaders::BMK_CUTTLETWIN}},
   }};
 
   _formations = {{  // note formations look inverted here as array[0] is the bottom row, but they are not.
@@ -169,11 +172,11 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bombBoomDuration = 0.4f;
 
   _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f * _worldScale};
-  _cannon._speed = 100.f * _worldScale;
+  _cannon._speed = 50.f * _worldScale;
   _cannon._width = 13 * _worldScale;
   _cannon._height = 8 * _worldScale;
-  _cannon._boomFrameInterval = 10;
-  _cannon._boomInterval = _cannon._boomFrameInterval * 12;
+  _cannon._boomFrameDuration = 0.2f;
+  _cannon._boomDuration = _cannon._boomFrameDuration * 5;
   _cannon._cannonKey = SpaceInvaders::BMK_CANNON0;
   _cannon._boomKeys = {{SpaceInvaders::BMK_CANNONBOOM0, SpaceInvaders::BMK_CANNONBOOM1, SpaceInvaders::BMK_CANNONBOOM2}};
   _cannon._colorIndex = 0;
@@ -181,7 +184,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _laser._width = 1 * _worldScale;
   _laser._height = 6 * _worldScale;
   _laser._colorIndex = 6;
-  _laser._speed = 200.f * _worldScale;
+  _laser._speed = 300.f * _worldScale;
   _laser._bitmapKey = SpaceInvaders::BMK_LASER0;
 
   _bunkerColorIndex = 0;
@@ -194,16 +197,16 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bunkerDeleteThreshold = 20 * _worldScale;
 
   _levels = {{
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
-    {5, 0},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
+    {5, 0, true},
   }};
 
   _levelIndex = -1;
@@ -246,6 +249,7 @@ void GameState::startNextLevel()
   _alienMoveDirection = 1;
   _dropsDone = 0;
   _isAliensBooming = false;
+  _isAliensMorphing = false;
   _isAliensDropping = true;
   _isAliensSpawning = true;
   _isAliensFrozen = false;
@@ -359,24 +363,6 @@ void GameState::spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex)
   (*search)._isAlive = true;
 }
 
-void GameState::spawnBunker(Vector2f position, Assets::Key_t bitmapKey)
-{
-  const Bitmap& bitmap = nomad::assets->getBitmap(bitmapKey, _worldScale);
-  _bunkers.emplace_back(std::make_unique<Bunker>(bitmap, position));
-}
-
-void GameState::boomCannon()
-{
-  _cannon._moveDirection = 0;
-  _cannon._boomClock = _cannon._boomInterval;
-  _cannon._boomFrame = 0;
-  _cannon._boomFrameClock = _cannon._boomFrameInterval;
-  _cannon._isBooming = true;
-  _cannon._isAlive = false;
-
-  _isAliensFrozen = true;
-}
-
 void GameState::spawnBomb(Vector2f position, BombClassId classId)
 {
   // If this condition does occur then increase the max bombs until it doesn't.
@@ -400,6 +386,45 @@ void GameState::spawnBomb(Vector2f position, BombClassId classId)
   ++_bombCount;
 }
 
+void GameState::spawnBunker(Vector2f position, Assets::Key_t bitmapKey)
+{
+  const Bitmap& bitmap = nomad::assets->getBitmap(bitmapKey, _worldScale);
+  _bunkers.emplace_back(std::make_unique<Bunker>(bitmap, position));
+}
+
+void GameState::morphAlien(Alien& alien)
+  // predicate: alien->_col != gridWidth - 1
+{
+  _score += _alienClasses[alien._classId]._scoreValue;
+
+  alien._classId = CUTTLETWIN;
+  _alienMorpher = &alien;
+  _alienMorphClock = _alienMorphDuration;
+  _isAliensFrozen = true;
+  _isAliensMorphing = true;
+  _cannon._isFrozen = true;
+
+  Alien& neighbour = _grid[alien._row][alien._col + 1];
+  if(neighbour._isAlive){
+    neighbour._isAlive = false;
+    --(_columnPops[neighbour._col]);
+    --(_rowPops[neighbour._row]);
+    --_alienPopulation;
+  }
+}
+
+void GameState::boomCannon()
+{
+  _cannon._moveDirection = 0;
+  _cannon._boomClock = _cannon._boomDuration;
+  _cannon._boomFrame = 0;
+  _cannon._boomFrameClock = _cannon._boomFrameDuration;
+  _cannon._isBooming = true;
+  _cannon._isAlive = false;
+
+  _isAliensFrozen = true;
+}
+
 void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombHit hit)
 {
   --_bombCount;
@@ -408,6 +433,7 @@ void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombH
   if(makeBoom)
     spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
 }
+
 
 void GameState::boomAlien(Alien& alien)
 {
@@ -465,6 +491,34 @@ void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
   bunker._bitmap.regenerateBytes();
 }
 
+void GameState::doAlienMorphing(float dt)
+  // predicate: _alienMorpher->_col != gridWidth - 1
+{
+  if(!_isAliensMorphing)
+    return;
+
+  if(_alienPopulation == 0)
+    return;
+
+  _alienMorphClock -= dt;
+  if(_alienMorphClock > 0)
+    return;
+
+  _alienMorpher->_classId = CUTTLE;
+
+  Alien& neighbour = _grid[_alienMorpher->_row][_alienMorpher->_col + 1];
+  neighbour._classId = CUTTLE;
+  neighbour._isAlive = true;
+  ++(_columnPops[neighbour._col]);
+  ++(_rowPops[neighbour._row]);
+  ++_alienPopulation;
+
+  _isAliensMorphing = false;
+  _isAliensFrozen = false;
+  _cannon._isFrozen = false;
+  _alienMorpher = nullptr;
+}
+
 void GameState::doCannonMoving(float dt)
 {
   if(!_cannon._isAlive)
@@ -493,22 +547,22 @@ void GameState::doCannonMoving(float dt)
   );
 }
 
-void GameState::doCannonBooming(int32_t beats)
+void GameState::doCannonBooming(float dt)
 {
   if(!_cannon._isBooming)
     return;
 
-  _cannon._boomClock -= beats;
+  _cannon._boomClock -= dt;
   if(_cannon._boomClock <= 0){
     _cannon._isBooming = false;
     spawnCannon();
     return;
   }
 
-  _cannon._boomFrameClock -= beats;
+  _cannon._boomFrameClock -= dt;
   if(_cannon._boomFrameClock <= 0){
     _cannon._boomFrame = nomad::wrap(++_cannon._boomFrame, 0, cannonBoomFramesCount - 1);
-    _cannon._boomFrameClock = _cannon._boomFrameInterval;
+    _cannon._boomFrameClock = _cannon._boomFrameDuration;
   }
 }
 
@@ -812,7 +866,15 @@ void GameState::doCollisionsLaserAliens()
       const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
       if(c._isCollision){
-        boomAlien(alien);
+        if(alien._classId == CUTTLETWIN){
+          _alienMorpher = nullptr;
+          _isAliensMorphing = false;
+        }
+        if(_levels[_levelIndex]._isCuttlesOn && alien._classId == CRAB && alien._col != gridWidth - 1)
+          morphAlien(alien);
+        else
+          boomAlien(alien);
+
         boomLaser(false);
         return;
       }
@@ -1060,12 +1122,13 @@ void GameState::onUpdate(double now, float dt)
 {
   int32_t beats = _cycles[_activeCycle][_activeBeat]; 
 
+  doAlienMorphing(dt);
   doBombMoving(beats, dt);
   doLaserMoving(dt);
   doAlienMoving(beats);
   doAlienBombing(beats);
   doCannonMoving(dt);
-  doCannonBooming(beats);
+  doCannonBooming(dt);
   doAlienBooming(dt);
   doBombBoomBooming(dt);
   doCannonFiring();
