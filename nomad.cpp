@@ -930,6 +930,15 @@ void Renderer::blitText(Vector2f position, const std::string& text,  const Font&
 
 void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color)
 {
+  // For viewports which are a subegion of the window the glBitmap function will overdraw
+  // the viewport bounds if the bitmap position is within the viewport but the bitmap itself
+  // partially falls outside the viewport. Hence will clip any overdraw manually.
+  if(position._x + bitmap.getWidth() >= _viewport._w)
+    return;
+
+  if(position._y + bitmap.getHeight() >= _viewport._h)
+    return;
+
   glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
   glRasterPos2f(position._x, position._y);
   glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());

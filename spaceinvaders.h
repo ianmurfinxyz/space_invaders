@@ -23,17 +23,17 @@ public:
   enum BitmapKey : Assets::Key_t
   {
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
-    BMK_CUTTLE0, BMK_CUTTLE1, BMK_CUTTLETWIN,
-    BMK_SAUCER0, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, 
-    BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0,
-    BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, 
-    BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
+    BMK_CUTTLE0, BMK_CUTTLE1, BMK_CUTTLETWIN, BMK_SAUCER, BMK_SCHRODINGER, BMK_UFOBOOM, 
+    BMK_SAUCERSCORE, BMK_SCHRODINGERSCORE, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, 
+    BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, 
+    BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, 
+    BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", "cuttle0", "cuttle1",
-    "cuttletwin",
-    "saucer0", "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
+    "cuttletwin", "saucer", "schrodinger", "ufoboom", "saucerscore", "schrodingerscore",
+    "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
     "bombboommidair", "bunker"
@@ -112,11 +112,26 @@ private:
     bool _isAlive;
   };
 
-  struct CuttleTwin
+  enum UfoClassId { SAUCER, SCHRODINGER };
+
+  struct UfoClass
   {
-    int32_t _row;
-    int32_t _col;
-    float _lifeClock;
+    int32_t _width;
+    int32_t _height;
+    int32_t _scoreValue;
+    int32_t _colorIndex;
+    Assets::Key_t _shipKey;
+    Assets::Key_t _boomKey;
+    Assets::Key_t _scoreKey;
+  };
+
+  struct Ufo
+  {
+    UfoClassId _classId;
+    Vector2f _position;
+    float _age;
+    float _phaseClock;
+    bool _phase;
     bool _isAlive;
   };
 
@@ -210,7 +225,9 @@ private:
   {
     int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
     int32_t _formationIndex;  // The grid formation used for this level.
+    int32_t _ufoSpawnRate;    // Unit: alien deaths - spawn every rate deaths.
     bool _isCuttlesOn;        // Do cuttle fish spawn from crabs in this level?
+    bool _isSchrodingerOn;
   };
 
   // TEMP - TODO - replace this with UI elements or something once the UI is done. Preferable
@@ -245,22 +262,28 @@ private:
   void spawnBomb(Vector2f position, BombClassId classId);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
+  void spawnUfo(UfoClassId classId);
   void morphAlien(Alien& alien);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
+  void doUfoSpawning();
   void doAlienMorphing(float dt);
   void doCannonMoving(float dt);
   void doCannonBooming(float dt);
   void doCannonFiring();
   void doAlienMoving(int32_t beats);
-  void doAlienBombing(int32_t beats);
-  void doAlienBooming(float dt);
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
+  void doUfoMoving(float dt);
+  void doAlienBombing(int32_t beats);
+  void doAlienBooming(float dt);
+  void doUfoBooming(float dt);
   void doBombBoomBooming(float dt);
+  void doUfoReinforcing(float dt);
+  void doUfoAging(float dt);
   void doCollisionsBombsHitbar();
   void doCollisionsBombsCannon();
   void doCollisionsLaserAliens();
@@ -271,6 +294,7 @@ private:
   void doCollisionsBunkersAliens();
   bool incrementGridIndex(GridIndex& index);
   void drawGrid();
+  void drawUfo();
   void drawCannon();
   void drawBombs();
   void drawBombBooms();
@@ -284,6 +308,8 @@ private:
   static bool isBombBoomAlive(const BombBoom& boom) {return boom._isAlive;}
 
 private:
+  RandInt _rand0To100;   // General use random integer within range [0,100].
+
   const Font* _font;
 
   Vector2i _worldSize;
@@ -320,6 +346,23 @@ private:
   bool _isAliensSpawning;
   bool _isAliensDropping;
   bool _isAliensFrozen;
+
+  static constexpr int32_t ufoClassCount {2};
+  std::array<UfoClass, ufoClassCount> _ufoClasses;
+  Ufo _ufo;
+  int32_t _ufoSpawnNo;
+  int32_t _schrodingerSpawnNo;           // Which ufo becomes the schrodinger? spawn 0? spawn 4?
+  int32_t _ufoLastSpawnPop;              // Population of grid when last ufo spawned.
+  int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
+  float _ufoSpawnY;                      // Height of ufos.
+  float _ufoLifetime;                    // Unit: seconds.
+  float _ufoSpeed;                       // Unit: pixels per second.
+  float _ufoBoomDuration;                // Unit: seconds.
+  float _ufoScoreDuration;               // Unit: seconds.
+  float _ufoPhaseDuration;               // Unit: seconds.
+  float _ufoBoomScoreClock;
+  bool _isUfoBooming;
+  bool _isUfoScoring;                    // Is the score displaying after the ufo was destroyed?
 
   static constexpr int32_t cycleCount {13};
   static constexpr int32_t cycleLength {4};
