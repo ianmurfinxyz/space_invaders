@@ -1075,6 +1075,182 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
 }
 
 //===============================================================================================//
+// ##>UI                                                                                         //
+//===============================================================================================//
+
+UI::TextLabel::TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay, bool phase, bool flash) :
+  _position{p},
+  _color{c},
+  _text{t},
+  _value{},
+  _charNo{0},
+  _activeTime{activeDelay},
+  _isActive{false},
+  _isVisible{true},
+  _phase{phase},
+  _flash{flash}
+{
+  _value.reserve(_text.length());
+}
+
+UI::IntLabel::IntLabel(Vector2i p, Color3f c, const int32_t& s, float activeDelay, bool flash) :
+  _position{p},
+  _color{c},
+  _source{s},
+  _value{s},
+  _text{std::to_string(_value)},
+  _activeTime{activeDelay},
+  _isActive{false},
+  _isVisible{true},
+  _flash{flash}
+{}
+
+UI::BitmapLabel::BitmapLabel(Vector2i p, Color3f c, Assets::Key_t k, float activeDelay, bool flash) :
+  _position{p},
+  _color{c},
+  _bitmapKey{k},
+  _activeTime{activeDelay},
+  _isActive{false},
+  _isVisible{true},
+  _flash{flash}
+{}
+
+void UI::initialize(Renderer* renderer, const Font* font, float flashPeriod, float phaseInPeriod)
+{
+  _renderer = renderer;
+  _font = font;
+  _flashPeriod = flashPeriod;
+  _phaseInPeriod = phaseInPeriod;
+  _flashClock = 0.f;
+  _phaseClock = 0.f;
+}
+
+void UI::addTextLabel(TextLabel label)
+{
+  label._activeTime += _masterClock;
+  _textLabels.push_back(std::move(label));
+}
+
+void UI::addIntLabel(IntLabel label)
+{
+  label._activeTime += _masterClock;
+  _intLabels.push_back(std::move(label));
+}
+
+void UI::addBitmapLabel(BitmapLabel label)
+{
+  label._activeTime += _masterClock;
+  _bitmapLabels.push_back(std::move(label));
+}
+
+void UI::onReset()
+{
+  for(auto& label : _textLabels){
+    label._charNo = 0;
+    label._isVisible = true;
+  }
+
+  for(auto& label : _intLabels){
+    label._value = label._source;
+    label._text = std::to_string(label._value);
+    label._isVisible = true;
+  }
+
+  for(auto& label : _bitmapLabels)
+    label._isVisible = true;
+
+  _masterClock = 0.f;
+  _phaseClock = 0.f;
+  _flashClock = 0.f;
+}
+
+void UI::onUpdate(float dt)
+{
+  _masterClock += dt;
+
+  _flashClock += dt;
+  if(_flashClock >= _flashPeriod){
+    flashLabels();
+    _flashClock = 0.f;
+  }
+
+  _phaseClock += dt;
+  if(_phaseClock >= _phasePeriod){
+    phaseLabels();
+    _phaseClock = 0.f;
+  }
+
+  updateIntLabels();
+  activateLabels();
+}
+
+void UI::onDraw()
+{
+  for(auto& label : _textLabels)
+    if(label._isActive && label._isVisible)
+      _renderer->blitText(label._position, label._value, label._color);
+
+  for(auto& label : _intLabels){
+    if(label._isActive && label._isVisible)
+      _renderer->blitText(label._position, label._value, label._color);
+  }
+
+  for(auto& label : _bitmapLabels)
+    if(label._isActive && label._isVisible)
+      _renderer->blitBitmap(label._position, label._bitmap, label._color);
+}
+
+void UI::flashLabels()
+{
+  for(auto& label : _textLabels)
+    if(label._flash)
+      label._isVisible = !label._isVisible;
+
+  for(auto& label : _intLabels)
+    if(label._flash)
+      label._isVisible = !label._isVisible;
+
+  for(auto& label : _bitmapLabels)
+    if(label._flash)
+      label._isVisible = !label._isVisible;
+}
+
+void UI::phaseLabels()
+{
+  for(auto& label : _textLabels){
+    if(label._phase && label._charNo != _text.length()){
+      label._value += _text[charNo];
+      label._charNo++;
+    }
+  }
+}
+
+void UI::updateIntLabels()
+{
+  for(auto& label : _intLabels){
+    if(label._value != label._source){
+      label._value = label._source;
+      label._text = std::to_string(label._value);
+    }
+  }
+}
+
+void UI::activateLabels()
+{
+  for(auto& label : _textLabels)
+    if(!label._isActive && label._activeTime < _masterClock)
+      label._isActive = true;
+
+  for(auto& label : _intLabels)
+    if(!label._isActive && label._activeTime < _masterClock)
+      label._isActive = true;
+
+  for(auto& label : _bitmapLabels)
+    if(!label._isActive && label._activeTime < _masterClock)
+      label._isActive = true;
+}
+
+//===============================================================================================//
 // ##>APPLICATION                                                                                //
 //===============================================================================================//
 
