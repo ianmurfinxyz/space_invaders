@@ -64,6 +64,72 @@ private:
 #endif
 
 //===============================================================================================//
+// ##>SPLASH STATE                                                                               //
+//===============================================================================================//
+
+class SplashState final : public ApplicationState
+{
+  static constexpr const char* name = "splash";
+
+public:
+  void initialize(Vector2i worldSize, int32_t worldScale);
+  void onUpdate(double now, float dt);
+  void onDraw(double now, float dt);
+  void onReset();
+
+  std::string getName() {return name;}
+
+private:
+  enum EventId
+  {
+    EVENT_SHOW_SPACE_SIGN,
+    EVENT_TRIGGER_SPACE_SIGN,
+    EVENT_SHOW_INVADERS_SIGN,
+    EVENT_TRIGGER_INVADERS_SIGN,
+    EVENT_SHOW_PART_II_SIGN,
+    EVENT_SHOW_AUTHOR_CREDITS,
+    EVENT_END,
+    EVENT_COUNT
+  };
+
+private:
+  void reset();
+
+private:
+  float _masterClock;
+  std::array<std::pair<float, EventId>, EVENT_COUNT> _sequence;
+  int32_t _nextEvent;
+
+  static constexpr int32_t spaceWidth {48};
+  static constexpr int32_t spaceHeight {16};
+  std::array<std::array<int32_t, spaceWidth>, spaceHeight>> _spaceSign;
+  Vector2i _spacePosition;
+  bool _spaceTriggered;
+  bool _showSpace;
+
+  static constexpr int32_t invadersWidth {48};
+  static constexpr int32_t invadersHeight {8};
+  std::array<std::array<int32_t, invadersWidth>, invadersHeight>> _invadersSign;
+  Vector2i _invadersPosition;
+  bool _invadersTriggered;
+  bool _showInvaders;
+
+  std::pair<int32_t, int32_t> _signIndex; // [row][col] index into a sign; used when animating.
+  float _pixelClock;                      // Unit: seconds.
+  float _pixelLag;                        // Unit: seconds. Lag between each sign pixel appearing.
+  int32_t _pixelSpace;                    // Unit: pixels. Space between each pixel block in a sign.
+  int32_t _pixelSize;                     // Unit: pixels. Dimension of each pixel block in a sign.
+
+  std::unique_ptr<Bitmap> _pixelBlock;
+
+  Vector2i _partiiPosition;
+  Vector2i _authorPosition;
+
+  bool _partiiTriggered;
+  bool _authorTriggered;
+};
+
+//===============================================================================================//
 // ##>GAME STATE                                                                                 //
 //===============================================================================================//
 
