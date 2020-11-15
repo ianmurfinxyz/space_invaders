@@ -1075,16 +1075,17 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
 }
 
 //===============================================================================================//
-// ##>UI                                                                                         //
+// ##>HUD                                                                                        //
 //===============================================================================================//
 
-UI::TextLabel::TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay, bool phase, bool flash) :
+HUD::TextLabel::TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay, bool phase, bool flash) :
   _position{p},
   _color{c},
   _text{t},
   _value{},
   _charNo{0},
-  _activeTime{activeDelay},
+  _activeDelay{activeDelay},
+  _activeTime{0},
   _isActive{false},
   _isVisible{true},
   _phase{phase},
@@ -1093,78 +1094,136 @@ UI::TextLabel::TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay
   _value.reserve(_text.length());
 }
 
-UI::IntLabel::IntLabel(Vector2i p, Color3f c, const int32_t& s, float activeDelay, bool flash) :
+HUD::IntLabel::IntLabel(Vector2i p, Color3f c, const int32_t* s, float activeDelay, bool flash) :
   _position{p},
   _color{c},
   _source{s},
-  _value{s},
+  _value{*s},
   _text{std::to_string(_value)},
-  _activeTime{activeDelay},
+  _activeDelay{activeDelay},
+  _activeTime{0},
   _isActive{false},
   _isVisible{true},
   _flash{flash}
 {}
 
-UI::BitmapLabel::BitmapLabel(Vector2i p, Color3f c, Assets::Key_t k, float activeDelay, bool flash) :
+HUD::BitmapLabel::BitmapLabel(Vector2i p, Color3f c, const Bitmap* b, float activeDelay, bool flash) :
   _position{p},
   _color{c},
-  _bitmapKey{k},
-  _activeTime{activeDelay},
+  _bitmap{b},
+  _activeDelay{activeDelay},
+  _activeTime{0},
   _isActive{false},
   _isVisible{true},
   _flash{flash}
 {}
 
-void UI::initialize(Renderer* renderer, const Font* font, float flashPeriod, float phaseInPeriod)
+void HUD::initialize(Renderer* renderer, const Font* font, float flashPeriod, float phasePeriod)
 {
   _renderer = renderer;
   _font = font;
+  _nextUid = 0;
   _flashPeriod = flashPeriod;
-  _phaseInPeriod = phaseInPeriod;
+  _phasePeriod = phasePeriod;
+  _masterClock = 0.f;
   _flashClock = 0.f;
   _phaseClock = 0.f;
 }
 
-void UI::addTextLabel(TextLabel label)
+HUD::uid_t HUD::addTextLabel(TextLabel label)
 {
-  label._activeTime += _masterClock;
+  label._uid = _nextUid++;
+  label._activeTime = _masterClock + label._activeDelay;
   _textLabels.push_back(std::move(label));
+  return label._uid;
 }
 
-void UI::addIntLabel(IntLabel label)
+HUD::uid_t HUD::addIntLabel(IntLabel label)
 {
-  label._activeTime += _masterClock;
+  label._uid = _nextUid++;
+  label._activeTime = _masterClock + label._activeDelay;
   _intLabels.push_back(std::move(label));
+  return label._uid;
 }
 
-void UI::addBitmapLabel(BitmapLabel label)
+HUD::uid_t HUD::addBitmapLabel(BitmapLabel label)
 {
-  label._activeTime += _masterClock;
+  label._uid = _nextUid++;
+  label._activeTime = _masterClock + label._activeDelay;
   _bitmapLabels.push_back(std::move(label));
+  return label._uid;
 }
 
-void UI::onReset()
+bool HUD::removeTextLabel(uid_t uid)
+{
+  for(auto iter = _textLabels.begin(); iter != _textLabels.end(); ++iter){
+    if((*iter)._uid == uid){
+      _textLabels.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HUD::removeIntLabel(uid_t uid)
+{
+  for(auto iter = _intLabels.begin(); iter != _intLabels.end(); ++iter){
+    if((*iter)._uid == uid){
+      _intLabels.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HUD::removeBitmapLabel(uid_t uid)
+{
+  for(auto iter = _bitmapLabels.begin(); iter != _bitmapLabels.end(); ++iter){
+    if((*iter)._uid == uid){
+      _bitmapLabels.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+
+void HUD::clear()
+{
+  _textLabels.clear();
+  _intLabels.clear();
+  _bitmapLabels.clear();
+  _nextUid = 0;
+}
+
+void HUD::onReset()
 {
   for(auto& label : _textLabels){
     label._charNo = 0;
+    label._activeTime = label._activeDelay;
+    label._isActive = false;
     label._isVisible = true;
   }
 
   for(auto& label : _intLabels){
-    label._value = label._source;
+    label._value = *(label._source);
     label._text = std::to_string(label._value);
+    label._activeTime = label._activeDelay;
+    label._isActive = false;
     label._isVisible = true;
   }
 
-  for(auto& label : _bitmapLabels)
+  for(auto& label : _bitmapLabels){
+    label._activeTime = label._activeDelay;
+    label._isActive = false;
     label._isVisible = true;
+  }
 
   _masterClock = 0.f;
   _phaseClock = 0.f;
   _flashClock = 0.f;
 }
 
-void UI::onUpdate(float dt)
+void HUD::onUpdate(float dt)
 {
   _masterClock += dt;
 
@@ -1184,58 +1243,58 @@ void UI::onUpdate(float dt)
   activateLabels();
 }
 
-void UI::onDraw()
+void HUD::onDraw()
 {
   for(auto& label : _textLabels)
     if(label._isActive && label._isVisible)
-      _renderer->blitText(label._position, label._value, label._color);
+      _renderer->blitText(label._position, label._value, *_font, label._color);
 
   for(auto& label : _intLabels){
     if(label._isActive && label._isVisible)
-      _renderer->blitText(label._position, label._value, label._color);
+      _renderer->blitText(label._position, label._text, *_font, label._color);
   }
 
   for(auto& label : _bitmapLabels)
     if(label._isActive && label._isVisible)
-      _renderer->blitBitmap(label._position, label._bitmap, label._color);
+      _renderer->blitBitmap(label._position, *(label._bitmap), label._color);
 }
 
-void UI::flashLabels()
+void HUD::flashLabels()
 {
   for(auto& label : _textLabels)
-    if(label._flash)
+    if(label._isActive && label._flash)
       label._isVisible = !label._isVisible;
 
   for(auto& label : _intLabels)
-    if(label._flash)
+    if(label._isActive && label._flash)
       label._isVisible = !label._isVisible;
 
   for(auto& label : _bitmapLabels)
-    if(label._flash)
+    if(label._isActive && label._flash)
       label._isVisible = !label._isVisible;
 }
 
-void UI::phaseLabels()
+void HUD::phaseLabels()
 {
   for(auto& label : _textLabels){
-    if(label._phase && label._charNo != _text.length()){
-      label._value += _text[charNo];
+    if(label._isActive && label._phase && label._charNo != label._text.length()){
+      label._value += label._text[label._charNo];
       label._charNo++;
     }
   }
 }
 
-void UI::updateIntLabels()
+void HUD::updateIntLabels()
 {
   for(auto& label : _intLabels){
-    if(label._value != label._source){
-      label._value = label._source;
+    if(label._isActive && label._value != *(label._source)){
+      label._value = *(label._source);
       label._text = std::to_string(label._value);
     }
   }
 }
 
-void UI::activateLabels()
+void HUD::activateLabels()
 {
   for(auto& label : _textLabels)
     if(!label._isActive && label._activeTime < _masterClock)

@@ -48,28 +48,63 @@ struct Vector2i
   constexpr Vector2i(int32_t x, int32_t y) : _x{x}, _y{y} {}
   constexpr Vector2i(const Vector2f& v);
 
+  Vector2i(const Vector2i&) = default;
+  Vector2i(Vector2i&&) = default;
+  Vector2i& operator=(const Vector2i&) = default;
+  Vector2i& operator=(Vector2i&&) = default;
+
   void zero() {_x = _y = 0;}
   bool isZero() {return _x == 0 && _y == 0;}
   Vector2i operator+(const Vector2i& v) const {return Vector2i{_x + v._x, _y + v._y};}
   void operator+=(const Vector2i& v) {_x += v._x; _y += v._y;}
   Vector2i operator-(const Vector2i& v) const {return Vector2i{_x - v._x, _y - v._y};}
   void operator-=(const Vector2i& v) {_x -= v._x; _y -= v._y;}
-  Vector2i operator*(float scale) const {return Vector2i{_x * scale, _y * scale};}
-  Vector2i operator*(int32_t scale) const {return Vector2i{_x * scale, _y * scale};}
+  Vector2i operator*(float scale) const {return Vector2i(_x * scale, _y * scale);}
   void operator*=(float scale) {_x *= scale; _y *= scale;}
   void operator*=(int32_t scale) {_x *= scale; _y *= scale;}
   float dot(const Vector2i& v) {return (_x * v._x) + (_y * v._y);}
   float cross(const Vector2i& v) const {return (_x * v._y) - (_y * v._x);}
   float length() const {return std::hypot(_x, _y);}
   float lengthSquared() const {return (_x * _x) + (_y * _y);}
-  inline Vector2i normalized() const
-  inline void normalize()
+  inline Vector2i normalized() const;
+  inline void normalize();
 
   int32_t _x;
   int32_t _y;
 };
 
-Vector2i::Vector2i(const Vector2f& v) :
+struct Vector2f
+{
+  constexpr Vector2f() : _x{0.f}, _y{0.f} {}
+  constexpr Vector2f(float x, float y) : _x{x}, _y{y} {}
+  constexpr Vector2f(const Vector2i& v);
+
+  Vector2f(const Vector2f&) = default;
+  Vector2f(Vector2f&&) = default;
+  Vector2f& operator=(const Vector2f&) = default;
+  Vector2f& operator=(Vector2f&&) = default;
+
+  void zero() {_x = _y = 0.f;}
+  bool isZero() {return _x == 0.f && _y == 0.f;}
+  Vector2f operator+(const Vector2f& v) const {return Vector2f{_x + v._x, _y + v._y};}
+  void operator+=(const Vector2f& v) {_x += v._x; _y += v._y;}
+  Vector2f operator-(const Vector2f& v) const {return Vector2f{_x - v._x, _y - v._y};}
+  void operator-=(const Vector2f& v) {_x -= v._x; _y -= v._y;}
+  Vector2f operator*(float scale) const {return Vector2f{_x * scale, _y * scale};}
+  void operator*=(float scale) {_x *= scale; _y *= scale;}
+  void operator*=(int32_t scale) {_x *= scale; _y *= scale;}
+  float dot(const Vector2f& v) {return (_x * v._x) + (_y * v._y);}
+  float cross(const Vector2f& v) const {return (_x * v._y) - (_y * v._x);}
+  float length() const {return std::hypot(_x, _y);}
+  float lengthSquared() const {return (_x * _x) + (_y * _y);}
+  inline Vector2f normalized() const;
+  inline void normalize();
+
+  float _x;
+  float _y;
+};
+
+constexpr Vector2i::Vector2i(const Vector2f& v) :
   _x{static_cast<int32_t>(v._x)},
   _y{static_cast<int32_t>(v._y)}
 {}
@@ -91,36 +126,9 @@ void Vector2i::normalize()
   }
 }
 
-struct Vector2f
-{
-  constexpr Vector2f() : _x{0}, _y{0} {}
-  constexpr Vector2f(int32_t x, int32_t y) : _x{x}, _y{y} {}
-  constexpr Vector2f(const Vector2i& v);
-
-  void zero() {_x = _y = 0;}
-  bool isZero() {return _x == 0 && _y == 0;}
-  Vector2f operator+(const Vector2f& v) const {return Vector2f{_x + v._x, _y + v._y};}
-  void operator+=(const Vector2f& v) {_x += v._x; _y += v._y;}
-  Vector2f operator-(const Vector2f& v) const {return Vector2f{_x - v._x, _y - v._y};}
-  void operator-=(const Vector2f& v) {_x -= v._x; _y -= v._y;}
-  Vector2f operator*(float scale) const {return Vector2f{_x * scale, _y * scale};}
-  Vector2f operator*(int32_t scale) const {return Vector2f{_x * scale, _y * scale};}
-  void operator*=(float scale) {_x *= scale; _y *= scale;}
-  void operator*=(int32_t scale) {_x *= scale; _y *= scale;}
-  float dot(const Vector2f& v) {return (_x * v._x) + (_y * v._y);}
-  float cross(const Vector2f& v) const {return (_x * v._y) - (_y * v._x);}
-  float length() const {return std::hypot(_x, _y);}
-  float lengthSquared() const {return (_x * _x) + (_y * _y);}
-  inline Vector2f normalized() const
-  inline void normalize()
-
-  int32_t _x;
-  int32_t _y;
-};
-
-Vector2f::Vector2f(const Vector2i& v) :
-  _x{static_cast<int32_t>(v._x)},
-  _y{static_cast<int32_t>(v._y)}
+constexpr Vector2f::Vector2f(const Vector2i& v) :
+  _x{static_cast<float>(v._x)},
+  _y{static_cast<float>(v._y)}
 {}
 
 Vector2f Vector2f::normalized() const
@@ -744,22 +752,31 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
                                Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
 
 //===============================================================================================//
-// ##>UI                                                                                         //
+// ##>HUD                                                                                        //
 //===============================================================================================//
 
-class UI
+class HUD
 {
 public:
+  using uid_t = int32_t;
+
   struct TextLabel
   {
     TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay = 0.f, bool phase = false, bool flash = false);
 
+    TextLabel(const TextLabel&) = default;
+    TextLabel(TextLabel&&) = default;
+    TextLabel& operator=(const TextLabel&) = default;
+    TextLabel& operator=(TextLabel&&) = default;
+
+    uid_t _uid;
     Vector2i _position;
     Color3f _color;
     std::string _text;       // Source text.
     std::string _value;      // The text being shown.
     int32_t _charNo;         // The index into '_text' of the last character shown if '_phaseIn' = true.
-    float _activeTime;        // Label will not appear until delay time has elapsed.
+    float _activeDelay;
+    float _activeTime;
     bool _isActive;
     bool _isVisible;
     bool _phase;
@@ -768,14 +785,21 @@ public:
 
   struct IntLabel
   {
-    IntLabel(Vector2i p, Color3f c, const int32_t& s, float activeDelay = 0.f, bool flash = false);
+    IntLabel(Vector2i p, Color3f c, const int32_t* s, float activeDelay = 0.f, bool flash = false);
 
+    IntLabel(const IntLabel&) = default;
+    IntLabel(IntLabel&&) = default;
+    IntLabel& operator=(const IntLabel&) = default;
+    IntLabel& operator=(IntLabel&&) = default;
+
+    uid_t _uid;
     Vector2i _position;
     Color3f _color;
-    const int32_t& _source;  // The integer whom's value to display.
+    const int32_t* _source;  // The integer whom's value to display.
     int32_t _value;          // The current value of the source.
     std::string _text;       // Text generated from the value.
-    float _activeTime;        // Label will not appear until delay time has elapsed.
+    float _activeDelay;
+    float _activeTime;
     bool _isActive;
     bool _isVisible;
     bool _flash;
@@ -783,37 +807,50 @@ public:
 
   struct BitmapLabel
   {
-    BitmapLabel(Vector2i p, Color3f c, Assets::Key_t k, float activeDelay = 0.f, bool flash = false);
+    BitmapLabel(Vector2i p, Color3f c, const Bitmap* b, float activeDelay = 0.f, bool flash = false);
 
+    BitmapLabel(const BitmapLabel&) = default;
+    BitmapLabel(BitmapLabel&&) = default;
+    BitmapLabel& operator=(const BitmapLabel&) = default;
+    BitmapLabel& operator=(BitmapLabel&&) = default;
+
+    uid_t _uid;
     Vector2i _position;
     Color3f _color;
-    const Bitmap& _bitmap;
-    float _activeTime;        // Label will not appear until delay time has elapsed.
+    const Bitmap* _bitmap;
+    float _activeDelay;
+    float _activeTime;
     bool _isActive;
     bool _isVisible;
     bool _flash;
   };
 
 public:
-  UI() = default;
-  ~UI() = default;
-  UI(const UI&) = default;
-  UI(UI&&) = default;
-  UI& operator=(const UI&) = default;
-  UI& operator=(UI&&) = default;
+  HUD() = default;
+  ~HUD() = default;
+  HUD(const HUD&) = default;
+  HUD(HUD&&) = default;
+  HUD& operator=(const HUD&) = default;
+  HUD& operator=(HUD&&) = default;
 
   void initialize(Renderer* renderer, const Font* font, float flashPeriod, float phaseInPeriod);
 
-  void addTextLabel(TextLabel label);
-  void addIntLabel(IntLabel label);
-  void addBitmapLabel(BitmapLabel label);
+  uid_t addTextLabel(TextLabel label);
+  uid_t addIntLabel(IntLabel label);
+  uid_t addBitmapLabel(BitmapLabel label);
+
+  bool removeTextLabel(uid_t uid);
+  bool removeIntLabel(uid_t uid);
+  bool removeBitmapLabel(uid_t uid);
+
+  void clear();
 
   void onReset();
   void onUpdate(float dt);
   void onDraw();
 
   void setRenderer(Renderer* renderer) {_renderer = renderer;}
-  void setFont(const Font* _font) {_font = font;}
+  void setFont(const Font* font) {_font = font;}
   void setFlashPeriod(float period) {_flashPeriod = period;}
   void setPhasePeriod(float period) {_phasePeriod = period;}
 
@@ -829,7 +866,9 @@ private:
 
   std::vector<TextLabel> _textLabels;
   std::vector<IntLabel> _intLabels;
-  std::vector<BitmapLabels> _bitmapLabels;
+  std::vector<BitmapLabel> _bitmapLabels;
+
+  int32_t _nextUid;
 
   float _masterClock;     // Unit: seconds. Master timeline which all timing is relative to.
   float _flashPeriod;     // Unit: seconds. Inverse of the frequency of flashing.
