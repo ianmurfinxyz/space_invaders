@@ -54,7 +54,58 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   switchState(SplashState::name);
 
+  _score = 0;
+  _hiscore = 0;
+  _round = 0;
+  _credit = 0;
+  _isHudVisible = false;
+
+  _hud.initialize(&(nomad::assets->getFont(fontKey, _worldScale)), flashPeriod, phasePeriod);
+
+  _uidScoreText = _hud.addTextLabel({Vector2i{10, 240} * _worldScale, nomad::colors::magenta, "SCORE"});
+  _uidScoreValue = _hud.addIntLabel({Vector2i{10, 230} * _worldScale, nomad::colors::white, &_score, 5});
+  _uidHiScoreText = _hud.addTextLabel({Vector2i{90, 240} * _worldScale, nomad::colors::red, "HI-SCORE"});
+  _uidHiScoreValue = _hud.addIntLabel({Vector2i{100, 230} * _worldScale, nomad::colors::green, &_hiscore, 5});
+  _uidRoundText = _hud.addTextLabel({Vector2i{170, 240} * _worldScale, nomad::colors::yellow, "ROUND"});
+  _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, nomad::colors::magenta, &_round, 5});
+  _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, nomad::colors::magenta, "CREDIT"});
+  _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, nomad::colors::cyan, &_credit, 1});
+
   return true;
+}
+
+void SpaceInvaders::onUpdate(double now, float dt)
+{
+  Application::onUpdate(now, dt);
+  _hud.onUpdate(dt);
+}
+
+void SpaceInvaders::onDraw(double now, float dt)
+{
+  Application::onDraw(now ,dt);
+
+  if(_isHudVisible && !isWindowTooSmall())
+    _hud.onDraw();
+}
+
+void SpaceInvaders::hideHudTop()
+{
+  _hud.hideTextLabel(_uidScoreText);
+  _hud.hideIntLabel(_uidScoreValue);
+  _hud.hideTextLabel(_uidHiScoreText);
+  _hud.hideIntLabel(_uidHiScoreValue);
+  _hud.hideTextLabel(_uidRoundText);
+  _hud.hideIntLabel(_uidRoundValue);
+}
+
+void SpaceInvaders::unhideHudTop()
+{
+  _hud.unhideTextLabel(_uidScoreText);
+  _hud.unhideIntLabel(_uidScoreValue);
+  _hud.unhideTextLabel(_uidHiScoreText);
+  _hud.unhideIntLabel(_uidHiScoreValue);
+  _hud.unhideTextLabel(_uidRoundText);
+  _hud.unhideIntLabel(_uidRoundValue);
 }
 
 //===============================================================================================//
@@ -78,8 +129,8 @@ void SplashState::initialize(Vector2i worldSize, int32_t worldScale)
     {4.5f, EVENT_SHOW_INVADERS_SIGN},
     {5.5f, EVENT_TRIGGER_INVADERS_SIGN},
     {7.3f, EVENT_SHOW_PART_II},
-    {8.3f, EVENT_SHOW_AUTHOR_CREDITS},
-    {10.f, EVENT_END},
+    {8.3f, EVENT_SHOW_HUD},
+    {50.f, EVENT_END},
   }};
 
   _blockSize = 3 * _worldScale;
@@ -140,6 +191,12 @@ void SplashState::initialize(Vector2i worldSize, int32_t worldScale)
     _blockSize
   });
 
+  _partiiPosition = Vector2i{80, 48} * _worldScale;
+  _partiiColor = nomad::colors::red;
+  _partiiVisible = false;
+
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  si->hideHud();
 }
 
 void SplashState::doEvents()
@@ -162,12 +219,23 @@ void SplashState::doEvents()
     case EVENT_SHOW_PART_II:
       _partiiVisible = true;
       break;
-    case EVENT_SHOW_AUTHOR_CREDITS:
-      _authorVisible = true;
+    case EVENT_SHOW_HUD:
+      {
+      SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+      HUD& hud = si->getHud();
+      std::string text {"*Cloned by Ian Murfin*"};
+      _uidAuthor = hud.addTextLabel({Vector2i{32, 24} * _worldScale, nomad::colors::cyan, text});
+      si->unhideHud();
       break;
+      }
     case EVENT_END:
-      _app->switchState(MenuState::name);
+      {
+      SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+      HUD& hud = si->getHud();
+      hud.removeTextLabel(_uidAuthor);
+      si->switchState(MenuState::name);
       break;
+      }
     default:
       break;
   }
@@ -204,6 +272,11 @@ void SplashState::onDraw(double now, float dt)
     _spaceSign->draw();
   if(_invadersVisible)
     _invadersSign->draw();
+  if(_partiiVisible){
+    nomad::renderer->blitBitmap(_partiiPosition, 
+                                nomad::assets->getBitmap(SpaceInvaders::BMK_PARTII, _worldScale), 
+                                _partiiColor);
+  }
 }
 
 //===============================================================================================//

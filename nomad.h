@@ -757,6 +757,10 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
 // ##>HUD                                                                                        //
 //===============================================================================================//
 
+//
+// TODO - There is a fair amount of diplicate code in this class. Could be improved.
+//
+
 class HUD
 {
 public:
@@ -779,15 +783,16 @@ public:
     int32_t _charNo;         // The index into '_text' of the last character shown if '_phaseIn' = true.
     float _activeDelay;
     float _activeTime;
-    bool _isActive;
-    bool _isVisible;
+    bool _isActive;          // Allows delayed activation.
+    bool _isVisible;         // Used internally to flash the label.
+    bool _isHidden;          // Allows manual hiding.
     bool _phase;
     bool _flash;
   };
 
   struct IntLabel
   {
-    IntLabel(Vector2i p, Color3f c, const int32_t* s, float activeDelay = 0.f, bool flash = false);
+    IntLabel(Vector2i p, Color3f c, const int32_t* s, int32_t precision, float activeDelay = 0.f, bool flash = false);
 
     IntLabel(const IntLabel&) = default;
     IntLabel(IntLabel&&) = default;
@@ -799,11 +804,13 @@ public:
     Color3f _color;
     const int32_t* _source;  // The integer whom's value to display.
     int32_t _value;          // The current value of the source.
+    int32_t _precision;      // Number of digits to display.
     std::string _text;       // Text generated from the value.
     float _activeDelay;
     float _activeTime;
     bool _isActive;
     bool _isVisible;
+    bool _isHidden;
     bool _flash;
   };
 
@@ -824,6 +831,7 @@ public:
     float _activeTime;
     bool _isActive;
     bool _isVisible;
+    bool _isHidden;
     bool _flash;
   };
 
@@ -835,7 +843,7 @@ public:
   HUD& operator=(const HUD&) = default;
   HUD& operator=(HUD&&) = default;
 
-  void initialize(Renderer* renderer, const Font* font, float flashPeriod, float phaseInPeriod);
+  void initialize(const Font* font, float flashPeriod, float phaseInPeriod);
 
   uid_t addTextLabel(TextLabel label);
   uid_t addIntLabel(IntLabel label);
@@ -847,11 +855,24 @@ public:
 
   void clear();
 
+  void hideTextLabel(uid_t uid);
+  void hideIntLabel(uid_t uid);
+  void hideBitmapLabel(uid_t uid);
+  void unhideTextLabel(uid_t uid);
+  void unhideIntLabel(uid_t uid);
+  void unhideBitmapLabel(uid_t uid);
+
+  void startTextLabelFlash(uid_t uid);
+  void startIntLabelFlash(uid_t uid);
+  void startBitmapLabelFlash(uid_t uid);
+  void stopTextLabelFlash(uid_t uid);
+  void stopIntLabelFlash(uid_t uid);
+  void stopBitmapLabelFlash(uid_t uid);
+
   void onReset();
   void onUpdate(float dt);
   void onDraw();
 
-  void setRenderer(Renderer* renderer) {_renderer = renderer;}
   void setFont(const Font* font) {_font = font;}
   void setFlashPeriod(float period) {_flashPeriod = period;}
   void setPhasePeriod(float period) {_phasePeriod = period;}
@@ -863,7 +884,6 @@ private:
   void activateLabels();
 
 private:
-  Renderer* _renderer;
   const Font* _font;
 
   std::vector<TextLabel> _textLabels;
@@ -918,8 +938,8 @@ public:
   virtual int32_t getVersionMinor() const = 0;
 
   void onWindowResize(int32_t windowWidth, int32_t windowHeight);
-  void onUpdate(double now, float dt);
-  void onDraw(double now, float dt);
+  virtual void onUpdate(double now, float dt);
+  virtual void onDraw(double now, float dt);
 
   void switchState(const std::string& name);
 

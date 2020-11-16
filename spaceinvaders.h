@@ -27,7 +27,8 @@ public:
     BMK_SAUCERSCORE, BMK_SCHRODINGERSCORE, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, 
     BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, 
     BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, 
-    BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_COUNT
+    BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII,
+    BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
@@ -36,7 +37,7 @@ public:
     "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
-    "bombboommidair", "bunker"
+    "bombboommidair", "bunker", "partii"
   };
 
   static constexpr Assets::Key_t fontKey {1};
@@ -51,14 +52,52 @@ public:
   int32_t getVersionMinor() const {return version_minor;}
 
   bool initialize(Engine* engine, int32_t windowWidth, int32_t windowHeight);
+  void onUpdate(double now, float dt);
+  void onDraw(double now, float dt);
 
-private:
+  HUD& getHud() {return _hud;}
+  void hideHud(){_isHudVisible = false;}
+  void unhideHud(){_isHudVisible = true;}
+  void hideHudTop();
+  void unhideHudTop();
+  bool isHudVisible() const {return _isHudVisible;}
+
+  void setScore(int32_t score){_score = score;}
+  void addScore(int32_t score){_score += score;}
+  int32_t getScore() const {return _score;}
+
+  void setRound(int32_t round){_round = round;}
+  void addRound(int32_t round){_round += round;}
+  int32_t getRound() const {return _round;}
+
+  void setCredit(int32_t credit){_credit = credit;}
+  void addCredit(int32_t credit){_credit += credit;}
+  int32_t getCredit() const {return _credit;}
+
   Vector2i getWorldSize() const {return _worldSize;}
   int32_t getWorldScale() const {return _worldScale;}
 
 private:
+  static constexpr float flashPeriod {0.1f};  // Inverse frequency of HUD label flashing.
+  static constexpr float phasePeriod {0.1f};  // Inverse frequency of HUD label letter phase in.
+
   Vector2i _worldSize;
   int32_t _worldScale;
+
+  HUD _hud;
+  HUD::uid_t _uidScoreText;
+  HUD::uid_t _uidScoreValue;
+  HUD::uid_t _uidHiScoreText;
+  HUD::uid_t _uidHiScoreValue;
+  HUD::uid_t _uidRoundText;
+  HUD::uid_t _uidRoundValue;
+  HUD::uid_t _uidCreditText;
+  HUD::uid_t _uidCreditValue;
+  int32_t _score;
+  int32_t _hiscore;
+  int32_t _round;
+  int32_t _credit;
+  bool _isHudVisible;
 };
 
 #endif
@@ -89,7 +128,7 @@ private:
     EVENT_SHOW_INVADERS_SIGN,
     EVENT_TRIGGER_INVADERS_SIGN,
     EVENT_SHOW_PART_II,
-    EVENT_SHOW_AUTHOR_CREDITS,
+    EVENT_SHOW_HUD,
     EVENT_END,
     EVENT_COUNT
   };
@@ -222,9 +261,10 @@ private:
   bool _invadersVisible;
 
   Vector2i _partiiPosition;
-  Vector2i _authorPosition;
+  Color3f _partiiColor;
   bool _partiiVisible;
-  bool _authorVisible;
+
+  HUD::uid_t _uidAuthor;
 };
 
 //===============================================================================================//
