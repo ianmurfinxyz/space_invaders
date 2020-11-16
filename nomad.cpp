@@ -678,8 +678,20 @@ const Font& Assets::getFont(Key_t key, Scale_t scale) const
   return *((_fonts.at(key))[scale]);
 }
 
-std::unique_ptr<Assets> assets {nullptr};
+Bitmap Assets::makeBlockBitmap(int32_t width, int32_t height)
+{
+  std::vector<std::string> bits;
+  std::string bitrow {};
+  for(int32_t col = 0; col < width; ++col)
+    bitrow += '1';
+  for(int32_t row = 0; row < height; ++row)
+    bits.push_back(bitrow);
+  Bitmap b {};
+  b.initialize(bits);
+  return b;
+}
 
+std::unique_ptr<Assets> assets {nullptr};
 
 //===============================================================================================//
 // ##>GRAPHICS                                                                                   //

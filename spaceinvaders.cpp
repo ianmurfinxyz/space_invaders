@@ -40,16 +40,19 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   manifest.push_back({fontKey, fontName, _worldScale});
   nomad::assets->loadFonts(manifest);
 
-  std::unique_ptr<ApplicationState> game {new GameState{this}};
-  std::unique_ptr<ApplicationState> menu {new MenuState{this}};
+  std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
+  std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
+  std::unique_ptr<ApplicationState> splash = std::make_unique<SplashState>(this);
 
   game->initialize(_worldSize, _worldScale);
   menu->initialize(_worldSize, _worldScale);
+  splash->initialize(_worldSize, _worldScale);
 
   addState(std::move(game));
   addState(std::move(menu));
+  addState(std::move(splash));
 
-  switchState(MenuState::name);
+  switchState(SplashState::name);
 
   return true;
 }
@@ -58,42 +61,149 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 // ##>SPLASH STATE                                                                               //
 //===============================================================================================//
 
+SplashState::SplashState(Application* app) :
+  ApplicationState{app}
+{}
+
 void SplashState::initialize(Vector2i worldSize, int32_t worldScale)
 {
+  _worldSize = worldSize;
+  _worldScale = worldScale;
+
+  _masterClock = 0.f;
+  _nextNode = 0;
+  _sequence = {{
+    {1.f, EVENT_SHOW_SPACE_SIGN},
+    {2.f, EVENT_TRIGGER_SPACE_SIGN},
+    {4.5f, EVENT_SHOW_INVADERS_SIGN},
+    {5.5f, EVENT_TRIGGER_INVADERS_SIGN},
+    {7.3f, EVENT_SHOW_PART_II},
+    {8.3f, EVENT_SHOW_AUTHOR_CREDITS},
+    {10.f, EVENT_END},
+  }};
+
+  _blockSize = 3 * _worldScale;
+  _blockSpace = 1 * _worldScale;
+  _signX = 16 * _worldScale;
+  _spaceY = 192 * _worldScale;
+  _invadersY = 112 * _worldScale;
+
+  _spaceTriggered = false;
+  _spaceVisible = false;
+  _spaceSign = std::make_unique<Sign<spaceW, spaceH>>(Sign<spaceW, spaceH>{
+    {{
+      {1,2,2,2,2,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,1,1,1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2,2,2,2},
+      {2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,1,1,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2},
+      {2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2},
+      {2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2},
+      {2,2,1,1,1,2,2,2,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,1,1,1},
+      {2,2,2,1,1,2,2,2,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,1,1,1},
+      {1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,1,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,1,1},
+      {1,2,2,2,2,2,1,1,1,1,2,2,2,2,2,2,2,2,2,1,2,2,2,1,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,1,1,1},
+      {1,1,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,1,1,1},
+      {1,1,1,1,2,2,2,2,2,1,1,2,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,1,1,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,1,1,1},
+      {1,1,1,1,1,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1},
+      {1,1,1,2,2,1,1,2,2,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,2,2,1,1,1,1,1,1,1},
+      {1,1,1,2,2,1,1,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,1,1,1,1,1,1,1},
+      {1,1,1,2,2,2,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,1,2,2,2,2,2,2,1,1,1,1},
+      {1,1,1,1,2,2,2,2,1,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,1,2,2,2,2,2,1,1,2,2,2,2,2,2,1,1,1,1},
+      {1,1,1,1,1,2,2,1,1,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,1,1,2,2,2,1,1,1,2,2,2,2,2,2,1,1,1,1},
+    }},
+    std::make_unique<Bitmap>(nomad::assets->makeBlockBitmap(_blockSize, _blockSize)),
+    {_signX, _spaceY},
+    nomad::colors::green,
+    nomad::colors::cyan,
+    0.002f,
+    _blockSpace,
+    _blockSize
+  });
+
+  _invadersTriggered = false;
+  _invadersVisible = false;
+  _invadersSign = std::make_unique<Sign<invadersW, invadersH>>(Sign<invadersW, invadersH>{
+    {{
+      {1,2,2,1,2,2,1,1,2,2,1,2,2,1,1,2,2,1,1,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,2,2,1,1,1,2,2,2,1,1},
+      {1,2,2,1,2,2,1,1,2,2,1,2,2,1,1,2,2,1,1,2,2,2,1,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1},
+      {1,2,2,1,2,2,2,1,2,2,1,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,1,1,1},
+      {1,2,2,1,2,2,2,2,2,2,1,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,1,1,1},
+      {1,2,2,1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,1,2,2,1,2,2,2,2,2,1,2,2,2,2,1,1,1,2,2,2,1,1},
+      {1,2,2,1,2,2,1,2,2,2,1,1,2,2,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,1,1,1,2,2,1},
+      {1,2,2,1,2,2,1,1,2,2,1,1,1,2,2,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1},
+      {1,2,2,1,2,2,1,1,2,2,1,1,1,2,2,1,1,1,2,2,1,2,2,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,1,2,2,1,1,2,2,2,1,1},
+    }},
+    std::make_unique<Bitmap>(nomad::assets->makeBlockBitmap(_blockSize, _blockSize)),
+    {_signX, _invadersY},
+    nomad::colors::magenta,
+    nomad::colors::yellow,
+    0.002f,
+    _blockSpace,
+    _blockSize
+  });
 
 }
 
-void SplashState::reset()
+void SplashState::doEvents()
 {
-  _spaceSign = {{
-    {1,2,2,2,2,1,1,1,1,1,2,2,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,1,1,1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2,2,2,2},
-    {2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,1,1,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2},
-    {2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2},
-    {2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2},
-    {2,2,1,1,1,2,2,2,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,1,1,1},
-    {2,2,2,1,1,2,2,2,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,2,2,1,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,1,1,1},
-    {1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,1,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,1,1},
-    {1,2,2,2,2,2,1,1,1,1,2,2,2,2,2,2,2,2,2,1,2,2,2,1,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,1,1,1},
-    {1,1,2,2,2,2,2,2,1,1,1,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,1,1,1},
-    {1,1,1,1,2,2,2,2,2,1,1,2,2,2,2,2,2,1,1,1,1,1,2,2,2,2,2,1,1,1,2,2,2,1,1,1,1,1,1,2,2,2,2,2,2,1,1,1},
-    {1,1,1,1,1,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1},
-    {1,1,1,2,2,1,1,2,2,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,2,2,2,1,2,2,2,1,1,2,2,1,1,1,1,1,1,1},
-    {1,1,1,2,2,1,1,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,1,1,1,1,1,1,1},
-    {1,1,1,2,2,2,2,2,2,1,1,2,2,2,1,1,1,1,1,1,2,2,2,1,1,1,2,2,2,1,2,2,2,2,2,2,2,1,2,2,2,2,2,2,1,1,1,1},
-    {1,1,1,1,2,2,2,2,1,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,1,2,2,2,2,2,1,1,2,2,2,2,2,2,1,1,1,1},
-    {1,1,1,1,1,2,2,1,1,1,1,2,2,2,1,1,1,1,1,1,1,2,2,2,1,2,2,2,1,1,1,1,2,2,2,1,1,1,2,2,2,2,2,2,1,1,1,1},
-  }};
+  if(_sequence[_nextNode]._time > _masterClock) 
+    return;
+  switch(_sequence[_nextNode]._event){
+    case EVENT_SHOW_SPACE_SIGN:
+      _spaceVisible = true;
+      break;
+    case EVENT_TRIGGER_SPACE_SIGN:
+      _spaceTriggered = true;
+      break;
+    case EVENT_SHOW_INVADERS_SIGN:
+      _invadersVisible = true;
+      break;
+    case EVENT_TRIGGER_INVADERS_SIGN:
+      _invadersTriggered = true;
+      break;
+    case EVENT_SHOW_PART_II:
+      _partiiVisible = true;
+      break;
+    case EVENT_SHOW_AUTHOR_CREDITS:
+      _authorVisible = true;
+      break;
+    case EVENT_END:
+      _app->switchState(MenuState::name);
+      break;
+    default:
+      break;
+  }
+  ++_nextNode;
+}
 
-  _invadersSign = {{
-    {1,2,2,1,2,2,1,1,2,2,1,2,2,1,1,2,2,1,1,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,2,2,1,1,1,2,2,2,1,1},
-    {1,2,2,1,2,2,1,1,2,2,1,2,2,1,1,2,2,1,1,2,2,2,1,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1},
-    {1,2,2,1,2,2,2,1,2,2,1,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,1,1,1},
-    {1,2,2,1,2,2,2,2,2,2,1,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,1,1,1},
-    {1,2,2,1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,1,2,2,1,2,2,2,2,2,1,2,2,2,2,1,1,1,2,2,2,1,1},
-    {1,2,2,1,2,2,1,2,2,2,1,1,2,2,2,2,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,1,1,1,2,2,1},
-    {1,2,2,1,2,2,1,1,2,2,1,1,1,2,2,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,1,1,1,2,2,1,2,2,1,2,2,1,2,2,1},
-    {1,2,2,1,2,2,1,1,2,2,1,1,1,2,2,1,1,1,2,2,1,2,2,1,2,2,2,2,1,1,2,2,2,2,2,1,2,2,1,2,2,1,1,2,2,2,1,1},
-  }};
+void SplashState::onReset()
+{
+  _masterClock = 0.f;
+  _nextNode = 0;
+  _spaceSign.reset();
+  _invadersSign.reset();
+  _spaceTriggered = false;
+  _spaceVisible = false;
+  _invadersTriggered = false;
+  _invadersVisible = false;
+
+}
+
+void SplashState::onUpdate(double now, float dt)
+{
+  _masterClock += dt;
+  doEvents();
+  if(_spaceTriggered)
+    _spaceSign->updateBlocks(dt);
+  if(_invadersTriggered)
+    _invadersSign->updateBlocks(dt);
+}
+
+void SplashState::onDraw(double now, float dt)
+{
+  renderer->clearViewport(colors::black);
+  if(_spaceVisible)
+    _spaceSign->draw();
+  if(_invadersVisible)
+    _invadersSign->draw();
 }
 
 

@@ -402,6 +402,8 @@ public:
   const Bitmap& getBitmap(Key_t key, Scale_t scale) const;
   const Font& getFont(Key_t key, Scale_t scale) const;
 
+  Bitmap makeBlockBitmap(int32_t width, int32_t height);
+
 private:
   static constexpr const char path_seperator = '/';
 
