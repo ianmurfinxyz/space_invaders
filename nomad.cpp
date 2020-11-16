@@ -945,10 +945,10 @@ void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f
   // For viewports which are a subegion of the window the glBitmap function will overdraw
   // the viewport bounds if the bitmap position is within the viewport but the bitmap itself
   // partially falls outside the viewport. Hence will clip any overdraw manually.
-  if(position._x + bitmap.getWidth() >= _viewport._w)
+  if(position._x + bitmap.getWidth() > _viewport._w)
     return;
 
-  if(position._y + bitmap.getHeight() >= _viewport._h)
+  if(position._y + bitmap.getHeight() > _viewport._h)
     return;
 
   glColor3f(color.getRed(), color.getGreen(), color.getBlue());  
