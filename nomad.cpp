@@ -97,6 +97,7 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
     case SDLK_w: return KEY_w;
     case SDLK_x: return KEY_x;
     case SDLK_y: return KEY_y;
+    case SDLK_RETURN: return KEY_ENTER;
     case SDLK_LEFT: return KEY_LEFT;
     case SDLK_RIGHT: return KEY_RIGHT;
     case SDLK_DOWN: return KEY_DOWN;
@@ -1478,6 +1479,7 @@ void Application::switchState(const std::string& name)
 {
   assert(_states.find(name) != _states.end());
   _activeState = &_states[name];
+  (*_activeState)->onReset();
 }
 
 void Application::drawWindowTooSmall()
@@ -1636,6 +1638,7 @@ void Engine::mainloop()
           _isDrawingPerformanceStats = !_isDrawingPerformanceStats;
           break;
         }
+        // FALLTHROUGH
       case SDL_KEYUP:
         nomad::input->onKeyEvent(event);
         break;

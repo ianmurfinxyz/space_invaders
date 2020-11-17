@@ -64,8 +64,8 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   _uidScoreText = _hud.addTextLabel({Vector2i{10, 240} * _worldScale, nomad::colors::magenta, "SCORE"});
   _uidScoreValue = _hud.addIntLabel({Vector2i{10, 230} * _worldScale, nomad::colors::white, &_score, 5});
-  _uidHiScoreText = _hud.addTextLabel({Vector2i{90, 240} * _worldScale, nomad::colors::red, "HI-SCORE"});
-  _uidHiScoreValue = _hud.addIntLabel({Vector2i{100, 230} * _worldScale, nomad::colors::green, &_hiscore, 5});
+  _uidHiScoreText = _hud.addTextLabel({Vector2i{85, 240} * _worldScale, nomad::colors::red, "HI-SCORE"});
+  _uidHiScoreValue = _hud.addIntLabel({Vector2i{95, 230} * _worldScale, nomad::colors::green, &_hiscore, 5});
   _uidRoundText = _hud.addTextLabel({Vector2i{170, 240} * _worldScale, nomad::colors::yellow, "ROUND"});
   _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, nomad::colors::magenta, &_round, 5});
   _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, nomad::colors::magenta, "CREDIT"});
@@ -130,7 +130,7 @@ void SplashState::initialize(Vector2i worldSize, int32_t worldScale)
     {5.5f, EVENT_TRIGGER_INVADERS_SIGN},
     {7.3f, EVENT_SHOW_PART_II},
     {8.3f, EVENT_SHOW_HUD},
-    {50.f, EVENT_END},
+    {11.f, EVENT_END},
   }};
 
   _blockSize = 3 * _worldScale;
@@ -246,13 +246,13 @@ void SplashState::onReset()
 {
   _masterClock = 0.f;
   _nextNode = 0;
-  _spaceSign.reset();
-  _invadersSign.reset();
+  (*_spaceSign).reset();
+  (*_invadersSign).reset();
   _spaceTriggered = false;
   _spaceVisible = false;
   _invadersTriggered = false;
   _invadersVisible = false;
-
+  _partiiVisible = false;
 }
 
 void SplashState::onUpdate(double now, float dt)
@@ -1649,48 +1649,67 @@ void MenuState::initialize(Vector2i worldSize, int32_t worldScale)
 
 void MenuState::onUpdate(double now, float dt)
 {
-  if(nomad::input->isKeyPressed(Input::KEY_s))
+  if(nomad::input->isKeyPressed(Input::KEY_ENTER)){
+    depopulateHud();
     _app->switchState(GameState::name);
+  }
+  if(nomad::input->isKeyPressed(Input::KEY_s)){
+    depopulateHud();
+    _app->switchState(SplashState::name);
+  }
 }
 
 void MenuState::onDraw(double now, float dt)
 {
-  renderer->clearViewport(colors::magenta);
-  renderer->blitBitmap(Vector2f{0.f, 0.f}, assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale), colors::white);
-
-  renderer->blitBitmap(Vector2f{60.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{90.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SQUID1, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{120.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CRAB0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{150.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CRAB1, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{180.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_OCTOPUS0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{210.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_OCTOPUS1, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{240.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_SAUCER, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{280.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CROSS0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{300.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CROSS1, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{310.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CROSS2, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{320.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_CROSS3, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{330.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZIGZAG0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{340.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZIGZAG1, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{360.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZIGZAG2, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{380.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZIGZAG3, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{390.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZAGZIG0, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{410.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZAGZIG1, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{420.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZAGZIG2, _worldScale), colors::blue);
-  renderer->blitBitmap(Vector2f{430.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_ZAGZIG3, _worldScale), colors::blue);
-
-  renderer->blitBitmap(Vector2f{440.f, 100.f}, assets->getBitmap(SpaceInvaders::BMK_LASER0, _worldScale), colors::blue);
-
-  const Font& font = nomad::assets->getFont(SpaceInvaders::fontKey, _worldScale);
-  renderer->blitText({10.f, 200.f}, "this is some text", font, colors::white);
+  renderer->clearViewport(colors::black);
 }
 
 void MenuState::onReset()
 {
+  populateHud();
+}
+
+void MenuState::populateHud()
+{
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  HUD& hud = si->getHud();
+  _uidMenuText = hud.addTextLabel({Vector2i{91, 204} * _worldScale, nomad::colors::cyan, "*MENU*"});
+  _uidMenuBitmap = hud.addBitmapLabel({Vector2i{56, 182} * _worldScale, nomad::colors::white, &(nomad::assets->getBitmap(SpaceInvaders::BMK_MENU, _worldScale))});
+  _uidControlsText = hud.addTextLabel({Vector2i{76, 162} * _worldScale, nomad::colors::cyan, "*CONTROLS*"});
+  _uidControlsBitmap = hud.addBitmapLabel({Vector2i{58, 134} * _worldScale, nomad::colors::white, &(nomad::assets->getBitmap(SpaceInvaders::BMK_CONTROLS, _worldScale))});
+  _uidTablesText = hud.addTextLabel({Vector2i{40, 108} * _worldScale, nomad::colors::cyan, "*SCORE ADVANCE TABLE*"});
+  _uidSchroBitmap = hud.addBitmapLabel({Vector2i{62, 90} * _worldScale, nomad::colors::magenta, &(nomad::assets->getBitmap(SpaceInvaders::BMK_SCHRODINGER, _worldScale))});
+  _uidSaucerBitmap = hud.addBitmapLabel({Vector2i{62, 74} * _worldScale, nomad::colors::magenta, &(nomad::assets->getBitmap(SpaceInvaders::BMK_SAUCER, _worldScale))});
+  _uidSquidBitmap = hud.addBitmapLabel({Vector2i{66, 58} * _worldScale, nomad::colors::yellow, &(nomad::assets->getBitmap(SpaceInvaders::BMK_SQUID0, _worldScale))});
+  _uidCuttleBitmap = hud.addBitmapLabel({Vector2i{52, 58} * _worldScale, nomad::colors::yellow, &(nomad::assets->getBitmap(SpaceInvaders::BMK_CUTTLE0, _worldScale))});
+  _uidCrabBitmap = hud.addBitmapLabel({Vector2i{64, 42} * _worldScale, nomad::colors::yellow, &(nomad::assets->getBitmap(SpaceInvaders::BMK_CRAB0, _worldScale))});
+  _uidOctopusBitmap = hud.addBitmapLabel({Vector2i{64, 26} * _worldScale, nomad::colors::red, &(nomad::assets->getBitmap(SpaceInvaders::BMK_OCTOPUS0, _worldScale))});
+  _uid500PointsText = hud.addTextLabel({Vector2i{82, 90} * _worldScale, nomad::colors::magenta, "= 500 POINTS", 0.f, true});
+  _uidMysteryPointsText = hud.addTextLabel({Vector2i{82, 74} * _worldScale, nomad::colors::magenta, "= ? MYSTERY", 1.f, true});
+  _uid30PointsText = hud.addTextLabel({Vector2i{82, 58} * _worldScale, nomad::colors::yellow, "= 30 POINTS", 2.f, true});
+  _uid20PointsText = hud.addTextLabel({Vector2i{82, 42} * _worldScale, nomad::colors::yellow, "= 20 POINTS", 3.f, true});
+  _uid10PointsText = hud.addTextLabel({Vector2i{82, 26} * _worldScale, nomad::colors::red, "= 10 POINTS", 4.f, true});
+}
+
+void MenuState::depopulateHud()
+{
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  HUD& hud = si->getHud();
+  hud.removeTextLabel(_uidMenuText);
+  hud.removeTextLabel(_uidControlsText);
+  hud.removeTextLabel(_uidTablesText);
+  hud.removeTextLabel(_uid500PointsText);
+  hud.removeTextLabel(_uidMysteryPointsText);
+  hud.removeTextLabel(_uid30PointsText);
+  hud.removeTextLabel(_uid20PointsText);
+  hud.removeTextLabel(_uid10PointsText);
+  hud.removeBitmapLabel(_uidMenuBitmap);
+  hud.removeBitmapLabel(_uidControlsBitmap);
+  hud.removeBitmapLabel(_uidSchroBitmap);
+  hud.removeBitmapLabel(_uidSaucerBitmap);
+  hud.removeBitmapLabel(_uidSquidBitmap);
+  hud.removeBitmapLabel(_uidCuttleBitmap);
+  hud.removeBitmapLabel(_uidCrabBitmap);
+  hud.removeBitmapLabel(_uidOctopusBitmap);
 }
 

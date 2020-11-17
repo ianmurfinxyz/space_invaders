@@ -28,7 +28,7 @@ public:
     BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, 
     BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, 
     BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII,
-    BMK_COUNT
+    BMK_CONTROLS, BMK_MENU, BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
@@ -37,7 +37,7 @@ public:
     "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
-    "bombboommidair", "bunker", "partii"
+    "bombboommidair", "bunker", "partii", "controls", "menu"
   };
 
   static constexpr Assets::Key_t fontKey {1};
@@ -175,6 +175,8 @@ private:
       // Must run the update to its conclusion first else the sign data will be corrupted.
       if(!_isDone) 
         return;
+      _row = 0;
+      _col = 0;
       _isDone = false;
       _blockClock = 0.f;
       for(auto& row : _blocks)
@@ -667,6 +669,27 @@ public:
   std::string getName(){return name;}
 
 private:
+  void populateHud();
+  void depopulateHud();
+
+private:
   int32_t _worldScale;
+
+  HUD::uid_t _uidMenuText;
+  HUD::uid_t _uidMenuBitmap;
+  HUD::uid_t _uidControlsText;
+  HUD::uid_t _uidControlsBitmap;
+  HUD::uid_t _uidTablesText;
+  HUD::uid_t _uidSchroBitmap;
+  HUD::uid_t _uidSaucerBitmap;
+  HUD::uid_t _uidSquidBitmap;
+  HUD::uid_t _uidCuttleBitmap;
+  HUD::uid_t _uidCrabBitmap;
+  HUD::uid_t _uidOctopusBitmap;
+  HUD::uid_t _uid500PointsText;
+  HUD::uid_t _uidMysteryPointsText;
+  HUD::uid_t _uid30PointsText;
+  HUD::uid_t _uid20PointsText;
+  HUD::uid_t _uid10PointsText;
 };
 
