@@ -39,7 +39,8 @@ std::unique_ptr<Log> log {nullptr};
 // ##>INPUT                                                                                      //
 //===============================================================================================//
 
-Input::Input()
+Input::Input() : 
+  _history{}
 {
   for(auto& key : _keys)
     key._isDown = key._isReleased = key._isPressed = false;
@@ -57,6 +58,7 @@ void Input::onKeyEvent(const SDL_Event& event)
   if(event.type == SDL_KEYDOWN){
     _keys[key]._isDown = true;
     _keys[key]._isPressed = true;
+    _history.push_back(key);
   }
   else{
     _keys[key]._isDown = false;
@@ -68,6 +70,7 @@ void Input::onUpdate()
 {
   for(auto& key : _keys)
     key._isPressed = key._isReleased = false;
+  _history.clear();
 }
 
 Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
@@ -93,17 +96,54 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
     case SDLK_r: return KEY_r;
     case SDLK_s: return KEY_s;
     case SDLK_t: return KEY_t;
+    case SDLK_u: return KEY_u;
     case SDLK_v: return KEY_v;
     case SDLK_w: return KEY_w;
     case SDLK_x: return KEY_x;
     case SDLK_y: return KEY_y;
+    case SDLK_z: return KEY_z;
+    case SDLK_SPACE: return KEY_SPACE;
+    case SDLK_BACKSPACE: return KEY_BACKSPACE;
     case SDLK_RETURN: return KEY_ENTER;
     case SDLK_LEFT: return KEY_LEFT;
     case SDLK_RIGHT: return KEY_RIGHT;
     case SDLK_DOWN: return KEY_DOWN;
     case SDLK_UP: return KEY_UP;
-    case SDLK_SPACE: return KEY_SPACE;
     default: return KEY_COUNT;
+  }
+}
+
+int32_t Input::keyToAsciiCode(KeyCode key)
+{
+  switch(key){
+    case KEY_a: return 'a';
+    case KEY_b: return 'b';
+    case KEY_c: return 'c';
+    case KEY_d: return 'd';
+    case KEY_e: return 'e';
+    case KEY_f: return 'f';
+    case KEY_g: return 'g';
+    case KEY_h: return 'h';
+    case KEY_i: return 'i';
+    case KEY_j: return 'j';
+    case KEY_k: return 'k';
+    case KEY_l: return 'l';
+    case KEY_m: return 'm';
+    case KEY_n: return 'n';
+    case KEY_o: return 'o';
+    case KEY_p: return 'p';
+    case KEY_q: return 'q';
+    case KEY_r: return 'r';
+    case KEY_s: return 's';
+    case KEY_t: return 't';
+    case KEY_u: return 'u';
+    case KEY_v: return 'v';
+    case KEY_w: return 'w';
+    case KEY_x: return 'x';
+    case KEY_y: return 'y';
+    case KEY_z: return 'z';
+    case KEY_SPACE: return ' ';
+    default: return -1;
   }
 }
 
@@ -817,6 +857,14 @@ void Bitmap::regenerateBytes()
   }
 }
 
+int32_t Font::calculateStringWidth(const std::string& str) const
+{
+  int32_t sum {0};
+  for(char c : str)
+    sum += getGlyph(c)._advance + _meta._glyphsSpace;
+  return sum;
+}
+
 bool Bitmap::isEmpty()
 {
   for(const auto& row : _bits)
@@ -957,6 +1005,23 @@ void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f
   glBitmap(bitmap.getWidth(), bitmap.getHeight(), 0, 0, 0, 0, bitmap.getBytes().data());
 }
 
+void Renderer::drawBorderRect(const iRect& rect, const Color3f& background, const Color3f& borderColor, int32_t borderWidth)
+{
+  int32_t x1, y1, x2, y2;
+  x1 = rect._x - borderThickness;
+  y1 = rect._y - borderThickness;
+  x2 = rect._x + rect._w + borderThickness;
+  y2 = rect._y + rect._h + borderThickness;
+  glColor3f(borderColor.getRed(), borderColor.getGreen(), borderColor.getBlue());  
+  glRect(x1, y1, x2, y2);
+  x1 += borderThickness;
+  y1 += borderThickness;
+  x2 -= borderThickness
+  y2 -= borderThickness
+  glColor3f(background.getRed(), background.getGreen(), background.getBlue());  
+  glRect(x1, y1, x2, y2);
+}
+
 void Renderer::clearWindow(const Color3f& color)
 {
   glClearColor(color.getRed(), color.getGreen(), color.getBlue(), 1.f);
@@ -1088,7 +1153,7 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
 }
 
 //===============================================================================================//
-// ##>HUD                                                                                        //
+// ##>UI                                                                                         //
 //===============================================================================================//
 
 HUD::TextLabel::TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay, bool phase, bool flash) :
@@ -1419,6 +1484,49 @@ void HUD::activateLabels()
     if(!label._isActive && label._activeTime < _masterClock)
       label._isActive = true;
 }
+
+TextInput::TextInput(Font* font, std::string label, Color3f cursorColor)
+{
+
+}
+
+const char* TextInput::processInput()
+{
+  bool isDone {false};
+  auto& keyHistory = input->getHistory();
+  for(auto key : keyHistory){
+    if(key == Input::KEY_RIGHT){
+      ++_cursorPos;
+      if(_cursorPos >= _bufferSize)
+        _cursorPos = _bufferSize - 1;
+    }
+    else if(key == Input::KEY_LEFT){
+      --_cursorPos;
+      if(_cursorPos < 0)
+        _cursorPos = 0;
+    }
+    else if(key == Input::KEY_ENTER){
+      isDone = true;
+      break;
+    }
+    else if(key == Input::KEY_BACKSPACE){
+
+      //
+      // TODO TODO
+      //
+
+    }
+    else if(Input::KEY_a <= key && key <= Input::KEY_z){
+      _buffer[_cursorPos] = input->keyToAsciiCode(key);
+      ++_cursorPos;
+      if(_cursorPos >= _bufferSize)
+        _cursorPos = _bufferSize - 1;
+    }
+  }
+  return (isDone) ? _buffer.data() : nullptr;
+}
+
+
 
 //===============================================================================================//
 // ##>APPLICATION                                                                                //

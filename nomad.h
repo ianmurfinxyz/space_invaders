@@ -273,7 +273,7 @@ public:
   enum KeyCode { 
     KEY_a, KEY_b, KEY_c, KEY_d, KEY_e, KEY_f, KEY_g, KEY_h, KEY_i, KEY_j, KEY_k, KEY_l, KEY_m, 
     KEY_n, KEY_o, KEY_p, KEY_q, KEY_r, KEY_s, KEY_t, KEY_u, KEY_v, KEY_w, KEY_x, KEY_y, KEY_z,
-    KEY_SPACE, KEY_ENTER, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_COUNT 
+    KEY_SPACE, KEY_BACKSPACE, KEY_ENTER, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_COUNT 
   };
 
   struct KeyLog
@@ -294,11 +294,16 @@ public:
   bool isKeyPressed(KeyCode key) {return _keys[key]._isPressed;}
   bool isKeyReleased(KeyCode key) {return _keys[key]._isReleased;}
 
+  int32_t keyToAsciiCode(KeyCode key) const;
+
+  const std::vector<KeyCode>& getHistory() const {return _history;}
+
 private:
   KeyCode convertSdlKeyCode(int sdlCode);
 
 private:
   std::array<KeyLog, KEY_COUNT> _keys;
+  std::vector<KeyCode> _history;        // All keys pressed between calls to 'onUpdate'.
 };
 
 extern std::unique_ptr<Input> input;
@@ -570,9 +575,12 @@ public:
   int32_t getGlyphSpace() const {return _meta._glyphSpace;}
   int32_t getSize() const {return _meta._size;}
 
+  int32_t calculateStringWidth(const std::string& str) const;
+
 private:
   Font() = default;
   void initialize(Meta meta, std::vector<Glyph> glyphs);
+
 
 private:
   std::vector<Glyph> _glyphs;
@@ -656,6 +664,7 @@ public:
   void setViewport(iRect viewport);
   void blitText(Vector2f position, const std::string& text, const Font& font, const Color3f& color);
   void blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color);
+  void drawBorderRect(const iRect& rect, const Color3f& background, const Color& borderColor, int32_t borderWidth = 1);
   void clearWindow(const Color3f& color);
   void clearViewport(const Color3f& color);
   void show();
@@ -754,7 +763,7 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
                                Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
 
 //===============================================================================================//
-// ##>HUD                                                                                        //
+// ##>UI                                                                                         //
 //===============================================================================================//
 
 //
@@ -897,6 +906,31 @@ private:
   float _phasePeriod;     // Unit: seconds. Period between each subsequent letter appearing.
   float _flashClock;
   float _phaseClock;
+};
+
+// 
+// A UI text input box.
+//
+class TextInput
+{
+public:
+  TextInput(Font* font, std::string label, Color3f cursorColor);
+
+  const char* processInput();
+  void draw(float dt);
+
+private:
+  Font* _font;
+  std::vector<char> _buffer;
+  int32_t _bufferSize;
+  Color3f cursorColor;
+  int32_t _cursorPos;
+  float _cursorFlashPeriod;
+  float _cursorFlashClock;
+  std::string label;
+  Vector2i _boxPosition;
+  int32_t _boxW;
+  int32_t _boxH;
 };
 
 //===============================================================================================//
