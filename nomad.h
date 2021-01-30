@@ -664,7 +664,7 @@ public:
   void setViewport(iRect viewport);
   void blitText(Vector2f position, const std::string& text, const Font& font, const Color3f& color);
   void blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f& color);
-  void drawBorderRect(const iRect& rect, const Color3f& background, const Color& borderColor, int32_t borderWidth = 1);
+  void drawBorderRect(const iRect& rect, const Color3f& background, const Color3f& borderColor, int32_t borderWidth = 1);
   void clearWindow(const Color3f& color);
   void clearViewport(const Color3f& color);
   void show();

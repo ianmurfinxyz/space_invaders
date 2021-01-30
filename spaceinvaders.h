@@ -49,22 +49,22 @@ public:
     int32_t _value;
   };
 
-  class ScoreData final : public nomad::Dataset
-  {
-  public:
-    static constexpr const char* filename = "hiscores";
+  //class ScoreData final : public nomad::Dataset
+  //{
+  //public:
+  //  static constexpr const char* filename = "hiscores";
 
-    enum Key
-    {
-      NAME0, SCORE0, NAME1, SCORE1, NAME2, SCORE2, NAME3, SCORE3, NAME4, SCORE4, 
-      NAME5, SCORE5, NAME6, SCORE6, NAME7, SCORE7, NAME8, SCORE8, NAME9, SCORE9
-    };
+  //  enum Key
+  //  {
+  //    NAME0, SCORE0, NAME1, SCORE1, NAME2, SCORE2, NAME3, SCORE3, NAME4, SCORE4, 
+  //    NAME5, SCORE5, NAME6, SCORE6, NAME7, SCORE7, NAME8, SCORE8, NAME9, SCORE9
+  //  };
 
-    ScoreData() : Dataset({
-      // key
-      {name0, "name0", },
-    }){}
-  };
+  //  ScoreData() : Dataset({
+  //    // key
+  //    {name0, "name0", },
+  //  }){}
+  //};
 
 public:
   SpaceInvaders() = default;

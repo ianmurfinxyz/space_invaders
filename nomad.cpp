@@ -113,7 +113,7 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
   }
 }
 
-int32_t Input::keyToAsciiCode(KeyCode key)
+int32_t Input::keyToAsciiCode(KeyCode key) const
 {
   switch(key){
     case KEY_a: return 'a';
@@ -861,7 +861,7 @@ int32_t Font::calculateStringWidth(const std::string& str) const
 {
   int32_t sum {0};
   for(char c : str)
-    sum += getGlyph(c)._advance + _meta._glyphsSpace;
+    sum += getGlyph(c)._advance + _meta._glyphSpace;
   return sum;
 }
 
@@ -1008,18 +1008,18 @@ void Renderer::blitBitmap(Vector2f position, const Bitmap& bitmap, const Color3f
 void Renderer::drawBorderRect(const iRect& rect, const Color3f& background, const Color3f& borderColor, int32_t borderWidth)
 {
   int32_t x1, y1, x2, y2;
-  x1 = rect._x - borderThickness;
-  y1 = rect._y - borderThickness;
-  x2 = rect._x + rect._w + borderThickness;
-  y2 = rect._y + rect._h + borderThickness;
+  x1 = rect._x - borderWidth;
+  y1 = rect._y - borderWidth;
+  x2 = rect._x + rect._w + borderWidth;
+  y2 = rect._y + rect._h + borderWidth;
   glColor3f(borderColor.getRed(), borderColor.getGreen(), borderColor.getBlue());  
-  glRect(x1, y1, x2, y2);
-  x1 += borderThickness;
-  y1 += borderThickness;
-  x2 -= borderThickness
-  y2 -= borderThickness
+  glRecti(x1, y1, x2, y2);
+  x1 += borderWidth;
+  y1 += borderWidth;
+  x2 -= borderWidth;
+  y2 -= borderWidth;
   glColor3f(background.getRed(), background.getGreen(), background.getBlue());  
-  glRect(x1, y1, x2, y2);
+  glRecti(x1, y1, x2, y2);
 }
 
 void Renderer::clearWindow(const Color3f& color)
