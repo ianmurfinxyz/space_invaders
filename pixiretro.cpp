@@ -1,8 +1,6 @@
+#include "pixiretro.h"
 
-
-#include "nomad.h"
-
-namespace nomad
+namespace pxr
 {
 
 //===============================================================================================//
@@ -941,11 +939,11 @@ Renderer::Renderer(const Config& config)
   }
 
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
-    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    pxr::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
-    nomad::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    pxr::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -1419,16 +1417,16 @@ void HUD::onDraw()
 {
   for(auto& label : _textLabels)
     if(label._isActive && label._isVisible && !label._isHidden)
-      nomad::renderer->blitText(label._position, label._value, *_font, label._color);
+      pxr::renderer->blitText(label._position, label._value, *_font, label._color);
 
   for(auto& label : _intLabels){
     if(label._isActive && label._isVisible && !label._isHidden)
-      nomad::renderer->blitText(label._position, label._text, *_font, label._color);
+      pxr::renderer->blitText(label._position, label._text, *_font, label._color);
   }
 
   for(auto& label : _bitmapLabels)
     if(label._isActive && label._isVisible && !label._isHidden)
-      nomad::renderer->blitBitmap(label._position, *(label._bitmap), label._color);
+      pxr::renderer->blitBitmap(label._position, *(label._bitmap), label._color);
 }
 
 void HUD::flashLabels()
@@ -1570,7 +1568,7 @@ void Application::onDraw(double now, float dt)
 {
   assert(_activeState != nullptr);
 
-  nomad::renderer->setViewport(_viewport);
+  pxr::renderer->setViewport(_viewport);
 
   if(_isWindowTooSmall)
     drawWindowTooSmall();
@@ -1592,7 +1590,7 @@ void Application::switchState(const std::string& name)
 
 void Application::drawWindowTooSmall()
 {
-  nomad::renderer->clearViewport(colors::red);
+  pxr::renderer->clearViewport(colors::red);
 }
 
 //===============================================================================================//
@@ -1691,7 +1689,7 @@ void Engine::initialize(std::unique_ptr<Application> app)
   Assets::Manifest_t manifest {{engineFontKey, engineFontName, engineFontScale}};
   assets->loadFonts(manifest);
 
-  Vector2i windowSize = nomad::renderer->getWindowSize();
+  Vector2i windowSize = pxr::renderer->getWindowSize();
 
   _app->initialize(this, windowSize._x, windowSize._y);
 
@@ -1748,7 +1746,7 @@ void Engine::mainloop()
         }
         // FALLTHROUGH
       case SDL_KEYUP:
-        nomad::input->onKeyEvent(event);
+        pxr::input->onKeyEvent(event);
         break;
     }
   }
@@ -1864,14 +1862,14 @@ void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t real
 {
   double now = durationToSeconds(gameNow);
   _app->onUpdate(now, tickDt);
-  nomad::input->onUpdate();
+  pxr::input->onUpdate();
 }
 
 void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
 {
   // TODO - temp - clear the game viewport only in the game and menu states - only clear window
   // when toggle perf stats
-  nomad::renderer->clearWindow(colors::gainsboro);
+  pxr::renderer->clearWindow(colors::gainsboro);
 
   double now = durationToSeconds(gameNow);
 
@@ -1883,7 +1881,7 @@ void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt
   if(_isDrawingPerformanceStats)
     drawPerformanceStats(realDt, gameDt);
 
-  nomad::renderer->show();
+  pxr::renderer->show();
 }
 
 double Engine::durationToMilliseconds(Duration_t d)
@@ -1901,5 +1899,5 @@ double Engine::durationToMinutes(Duration_t d)
   return static_cast<double>(d.count()) / static_cast<double>(oneMinute.count());
 }
 
-} // namespace nomad
+} // namespace pxr
 

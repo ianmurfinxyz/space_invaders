@@ -1,9 +1,9 @@
 #ifndef _SPACEINVADERS_H_
 #define _SPACEINVADERS_H_
 
-#include "nomad.h"
+#include "pixiretro.h"
 
-using namespace nomad;
+using namespace pxr;
 
 //===============================================================================================//
 // ##>SPACE INVADERS                                                                             //
@@ -49,7 +49,7 @@ public:
     int32_t _value;
   };
 
-  //class ScoreData final : public nomad::Dataset
+  //class ScoreData final : public pxr::Dataset
   //{
   //public:
   //  static constexpr const char* filename = "hiscores";
@@ -235,7 +235,7 @@ private:
           position._x = _position._x + (col * _blockGap);
           position._y = _position._y - (row * _blockGap);
           const Color3f& color = (row < (H / 2)) ? _topColor : _bottomColor;
-          nomad::renderer->blitBitmap(position, *_blockBitmap, color);
+          pxr::renderer->blitBitmap(position, *_blockBitmap, color);
         }
       }
     }

@@ -1,5 +1,5 @@
-#ifndef _NOMAD_H_
-#define _NOMAD_H_
+#ifndef _PIXIRETRO_H_
+#define _PIXIRETRO_H_
 
 #include <chrono>
 #include <thread>
@@ -22,7 +22,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
-namespace nomad
+namespace pxr
 {
 //===============================================================================================//
 // ##>UTILITY                                                                                    //
@@ -1155,6 +1155,6 @@ private:
   bool _isDone;
 };
 
-} // namespace nomad
+} // namespace pxr
 
 #endif
