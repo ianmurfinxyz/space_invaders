@@ -29,8 +29,7 @@ to compile however are SDL2 and an Opengl implementation. On arch linux these ca
 installed with,
 
 ```shell
-$ pacman -S sdl2
-$ pacman -S mesa
+$ pacman -S sdl2 mesa
 ```
 
 then you can compile by running make,
