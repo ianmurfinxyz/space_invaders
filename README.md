@@ -37,12 +37,3 @@ then you can compile by running make,
 ```shell
 $ make
 ```
-
-## TODO
-
-This work is not yet fully complete, I still need to:
-
-* Add a sound module to pixiretro and add music and sound effects.
-* Implement a couple missing gameplay systems such as the mystery ship which drops reinforcements.
-* Add an end screen where you can insert your name upon achieving a high score.
-* Fix that dodgy 'b' on the splash screen! :smirk:
