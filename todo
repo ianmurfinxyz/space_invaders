@@ -1,0 +1,31 @@
+
+ ##### ##### ####  #####
+   #   #   # #   # #   #
+   #   #   # #   # #   #
+   #   ##### ####  #####
+
+[25-03-2021]
+- improve logging - remove the std::cout logs at start of spaceinvaders.cpp
+- add a morphing sound - currently using a copy of the invaderkill sound
+- add more formations and levels
+- add a game over state, a sos state, and a state to enter name into score table
+- add mothership collisions 
+- handle collisions between alien and player missiles
+- when the last alien gets to the bottom of the screen the game switches to another state
+  where an alien spawns at the top of the screen, dropping decoys, moving quickly from left to
+  right, do I want to implement this?
+- implement the schrodinger reinforcements
+- investigate and fix why the game isnt scaling when I resize the window.
+- fix the 'b' on the splash screen
+- make it possible to skip the splash screen
+- add a cheat mode which can be activated via a cli arg or via a .cfg file
+- implement the music beats
+- draw one of the cabinet arts for the background? see here,
+    http://www.classicgaming.cc/classics/space-invaders/graphics
+  artwork 2 looks most appropriate
+- a sign that pops up detailing the round number when aliens are spawning?
+- draw the cannons on the hud to show num lives - was drawing with old hud system that I
+  stripped but not the new one. (is it even possible with the current setup of the new one?)
+- add the option to play the space invaders song instead of the beats? (or both?)
+- the high score system
+
