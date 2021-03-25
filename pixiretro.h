@@ -18,6 +18,7 @@
 #include <variant>
 #include <tuple>
 #include <random>
+#include <limits>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -161,30 +162,72 @@ struct Rect
 using iRect = Rect<int32_t>;
 using fRect = Rect<float>;
 
-template<typename T, typename Dist>
-class RandBasic
+//===============================================================================================//
+// ##>RANDOM NUMBER GENERATION                                                                   //
+//===============================================================================================//
+
+class xorwow
 {
 public:
-  RandBasic(T lo, T hi) : d{lo, hi}
-  {
-    std::random_device r;
-    e.seed(r());
-  }
+  using result_type = uint32_t;
 
-  RandBasic(const RandBasic&) = delete;
-  RandBasic(RandBasic&&) = delete;
-  RandBasic& operator=(const RandBasic&) = delete;
-  RandBasic& operator=(RandBasic&&) = delete;
+  static constexpr int state_size = 6;
+  using state_type = std::array<result_type, state_size>;
 
-  T operator()() {return d(e);}
+  constexpr static state_type default_seed {
+    123456789, 975312468, 815652528, 175906542, 0, 0 
+  };
+
+  xorwow() : _state {default_seed}{};
+
+  explicit xorwow(result_type value);
+  explicit xorwow(const state_type& seed);
+  explicit xorwow(std::seed_seq& seq);
+
+  void seed();
+  void seed(result_type seed);
+  void seed(state_type seeds);
+
+  void seed(std::seed_seq& seq);
+
+  result_type operator()();
+
+  void discard(unsigned long long z);
+
+  static constexpr result_type min();
+  static constexpr result_type max();
+
+  const state_type& getState() const {return _state;}
+  void setState(const state_type& state) {_state = state;}
+
+  int32_t required_seed_size() const {return state_size - 2;}
 
 private:
-    std::default_random_engine e;
-    Dist d;
+  state_type _state;
 };
 
-using RandInt = RandBasic<int32_t, std::uniform_int_distribution<int32_t>>;
-using RandReal = RandBasic<double, std::uniform_real_distribution<double>>;
+extern xorwow randGenerator;
+
+//
+// Two engines are equal if their internal states are equivilent.
+//
+bool operator==(const xorwow& lhs, const xorwow& rhs);
+bool operator!=(const xorwow& lhs, const xorwow& rhs);
+
+//
+// returns a random signed integer uniformly distributed on the closed interval [li, hi].
+//
+int randUniformSignedInt(int lo, int hi);
+
+//
+// returns a random unsigned integer uniformly distributed on the closed interval [li, hi].
+//
+unsigned int randUniformUnsignedInt(unsigned int lo, unsigned int hi);
+
+//
+// returns a random real value uniformly distributed on the interval [li, hi).
+//
+double randUniformReal(double lo, double hi);
 
 //===============================================================================================//
 // ##>LOG                                                                                        //

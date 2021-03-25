@@ -293,10 +293,7 @@ void SplashState::onDraw(double now, float dt)
 //===============================================================================================//
 
 GameState::GameState(Application* app) : 
-  ApplicationState{app},
-  _rand0To100{0,100},
-  _randColumn{1, gridWidth},
-  _randBombClass{CROSS, ZAGZIG}
+  ApplicationState{app}
 {}
 
 void GameState::initialize(Vector2i worldSize, int32_t worldScale)
@@ -527,7 +524,7 @@ void GameState::startNextLevel()
 
   _ufoSpawnNo = 0;
   _ufoLastSpawnPop = _alienPopulation;
-  _schrodingerSpawnNo = _rand0To100() % (_alienPopulation / _levels[_levelIndex]._ufoSpawnRate);
+  _schrodingerSpawnNo = pxr::randUniformSignedInt(0, 100) % (_alienPopulation / _levels[_levelIndex]._ufoSpawnRate);
   _isUfoBooming = false;
   _isUfoScoring = false;
   _ufo._isAlive = false;
@@ -655,7 +652,7 @@ void GameState::spawnUfo(UfoClassId classId)
   _ufo._classId = classId;
   _ufo._age = _ufoLifetime;  // Benjamin Button.
   _ufo._isAlive = true;
-  int32_t direction = _rand0To100() % 2;
+  int32_t direction = randUniformSignedInt(0, 1);
   _ufoDirection = (direction == 0) ? 1 : -1;
   int32_t w = _ufoClasses[classId]._width;
   _ufo._position._x = -(w + 10.f) + (direction * (_worldSize._x + 20.f + w));
@@ -998,7 +995,7 @@ void GameState::doAlienBombing(int32_t beats)
   // This condition should of already been detected as a level win.
   assert(populatedCount != 0);
 
-  int32_t colShift = _randColumn() % populatedCount;
+  int32_t colShift = randUniformSignedInt(1, gridWidth) % populatedCount;
   int32_t col {-1};
   do {
     ++col;
@@ -1020,7 +1017,7 @@ void GameState::doAlienBombing(int32_t beats)
   
   const AlienClass& alienClass = _alienClasses[alien->_classId];
 
-  BombClassId classId = static_cast<BombClassId>(_randBombClass());
+  BombClassId classId = static_cast<BombClassId>(randUniformSignedInt(CROSS, ZAGZIG));
   const BombClass& bombClass = _bombClasses[classId]; 
 
   Vector2f position {};
