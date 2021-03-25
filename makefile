@@ -1,9 +1,11 @@
 
-LDLIBS = -lSDL2 -lm -lGLX_mesa
+LDLIBS = -lSDL2 -lSDL2_mixer -lm -lGLX_mesa
 CXXFLAGS = -g -Wall -std=c++17 -fno-exceptions
+SRC = spaceinvaders.cpp pixiretro.cpp main.cpp
+INC = spaceinvaders.h pixiretro.h
 
-si : main.cpp spaceinvaders.cpp pixiretro.cpp spaceinvaders.h pixiretro.h
-	$(CXX) $(CXXFLAGS) -o $@ main.cpp pixiretro.cpp spaceinvaders.cpp $(LDLIBS)
+si : $(SRC) $(INC)
+	$(CXX) $(CXXFLAGS) -o $@ $(SRC) $(LDLIBS)
 
 .PHONY: clean
 clean:

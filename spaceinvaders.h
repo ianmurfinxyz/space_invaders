@@ -43,6 +43,17 @@ public:
   static constexpr Assets::Key_t fontKey {1};
   static constexpr Assets::Name_t fontName {"space"};
 
+  enum SoundKey : Mixer::Key_t
+  {
+    SK_EXPLOSION, SK_SHOOT, SK_INVADER_KILLED, SK_INVADER_MORPHED, SK_UFO_HIGH_PITCH, 
+    SK_UFO_LOW_PITCH, SK_FAST1, SK_FAST2, SK_FAST3, SK_FAST4, SK_COUNT
+  };
+
+  static constexpr std::array<Mixer::Name_t, SK_COUNT> _soundNames {
+    "explosion", "shoot", "invaderkilled", "invadermorphed", "ufo_highpitch", "ufo_lowpitch", "fastinvader1", 
+    "fastinvader2", "fastinvader3", "fastinvader4"
+  };
+
   struct Score
   {
     std::string _name;
@@ -79,11 +90,11 @@ public:
   void onDraw(double now, float dt);
 
   HUD& getHud() {return _hud;}
-  void hideHud(){_isHudVisible = false;}
-  void unhideHud(){_isHudVisible = true;}
-  void hideHudTop();
-  void unhideHudTop();
+  void hideHud(){_isHudVisible = false;}   // faster way to hide entire hud.
+  void showHud(){_isHudVisible = true;}
   bool isHudVisible() const {return _isHudVisible;}
+  void hideHudTop();                     // slower but hides part of hud.
+  void showHudTop();
 
   void setScore(int32_t score){_score = score;}
   void addScore(int32_t score){_score += score;}
@@ -96,6 +107,12 @@ public:
   void setCredit(int32_t credit){_credit = credit;}
   void addCredit(int32_t credit){_credit += credit;}
   int32_t getCredit() const {return _credit;}
+
+  void setLives(int32_t lives){_lives = lives;}
+  void addLives(int32_t lives){_lives += lives;}
+  int32_t getLives() const {return _lives;}
+
+  void resetGameStats();
 
   Vector2i getWorldSize() const {return _worldSize;}
   int32_t getWorldScale() const {return _worldScale;}
@@ -120,6 +137,7 @@ private:
   int32_t _hiscore;
   int32_t _round;
   int32_t _credit;
+  int32_t _lives;
   bool _isHudVisible;
 };
 
@@ -460,26 +478,26 @@ private:
   // TEMP - TODO - replace this with UI elements or something once the UI is done. Preferable
   // one in which the text can draw over time for the game over label.
   
-  struct TextLabel
-  {
-    Vector2f _position;
-    std::string _message;
-    int32_t _colorIndex;
-  };
+  // struct TextLabel
+  // {
+  //   Vector2f _position;
+  //   std::string _message;
+  //   int32_t _colorIndex;
+  // };
 
-  struct IntLabel
-  {
-    Vector2f _position;
-    int32_t* _value;
-    int32_t _colorIndex;
-  };
+  // struct IntLabel
+  // {
+  //   Vector2f _position;
+  //   int32_t* _value;
+  //   int32_t _colorIndex;
+  // };
 
-  struct BitmapLabel
-  {
-    Vector2f _position;
-    Assets::Key_t _bitmapKey;
-    int32_t _colorIndex;
-  };
+  // struct BitmapLabel
+  // {
+  //   Vector2f _position;
+  //   Assets::Key_t _bitmapKey;
+  //   int32_t _colorIndex;
+  // };
 
 private:
   void startNextLevel();
@@ -528,7 +546,7 @@ private:
   void drawLaser();
   void drawHitbar();
   void drawBunkers();
-  void drawHud();
+  //void drawHud();
 
   // Predicates.
   static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
@@ -648,27 +666,27 @@ private:
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;
   int32_t _levelIndex;                        // Active level (index into _levels data).
-  int32_t _round;
-  int32_t _score;
-  int32_t _lives;
-  int32_t _credit;
+  // int32_t _round;
+  // int32_t _score;
+  // int32_t _lives;
+  // int32_t _credit;
   bool _isGameOver;
   float _gameOverDuration;                    // Unit: seconds. Time to display game over message.
   float _gameOverClock;                       // Unit: seconds.
 
-  TextLabel _gameOverLabel;
-  TextLabel _scoreLabel;
-  TextLabel _recordLabel;
-  TextLabel _roundLabel;
-  TextLabel _creditLabel;
-  IntLabel _scoreValueLabel;
-  IntLabel _recordValueLabel;
-  IntLabel _roundValueLabel;
-  IntLabel _creditValueLabel;
-  IntLabel _lifeValueLabel;
-  BitmapLabel _lifeCannonLabel;
-  int32_t _lifeCannonSpacingX;
-  bool _showHud;
+  //TextLabel _gameOverLabel;
+  //TextLabel _scoreLabel;
+  //TextLabel _recordLabel;
+  //TextLabel _roundLabel;
+  //TextLabel _creditLabel;
+  //IntLabel _scoreValueLabel;
+  //IntLabel _recordValueLabel;
+  //IntLabel _roundValueLabel;
+  //IntLabel _creditValueLabel;
+  //IntLabel _lifeValueLabel;
+  //BitmapLabel _lifeCannonLabel;
+  //int32_t _lifeCannonSpacingX;
+  //bool _showHud;
 };
 
 //===============================================================================================//

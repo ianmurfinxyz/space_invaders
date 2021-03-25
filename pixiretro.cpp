@@ -939,11 +939,11 @@ Renderer::Renderer(const Config& config)
   }
 
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, _config._openglVersionMajor) < 0){
-    pxr::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
   if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, _config._openglVersionMinor) < 0){
-    pxr::log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
+    log->log(Log::FATAL, logstr::fail_set_opengl_attribute, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
 
@@ -1149,6 +1149,135 @@ const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap,
 
   return c;
 }
+
+//===============================================================================================//
+// ##>MIXER                                                                                      //
+//===============================================================================================//
+
+Mixer::Mixer()
+{
+  if(Mix_OpenAudio(sampleFreq, sampleFormat, numOutChannels, chunkSize) != 0){
+    log->log(Log::FATAL, logstr::fail_open_audio, std::string{Mix_GetError()});
+    exit(EXIT_FAILURE);
+  }
+
+  Mix_AllocateChannels(numMixChannels);
+}
+
+Mixer::~Mixer()
+{
+  stopChannel(allChannels);
+
+  for(auto pair : _sounds)
+    Mix_FreeChunk(pair.second);
+
+  Mix_CloseAudio();
+}
+
+void Mixer::loadSoundsWAV(const Manifest_t& manifest)
+{
+  std::string path {};
+  Mix_Chunk* chunk {nullptr};
+  for(auto pair : manifest){
+    path.clear();
+    path += sounds_path;
+    path += pair.second;
+    path += sounds_extension;
+    chunk = Mix_LoadWAV(path.c_str());
+    if(!chunk){
+      log->log(Log::WARN, logstr::warn_cannot_load_sound, std::string{Mix_GetError()});
+      continue;
+    }
+    log->log(Log::INFO, logstr::info_loaded_sound, path + ", key:" + std::to_string(pair.first));
+    _sounds.emplace(std::make_pair(pair.first, chunk));
+    chunk = nullptr;
+  }
+}
+
+Mixer::Channel_t Mixer::playSound(Key_t sndkey, int loops)
+{
+  Mix_Chunk* chunk = findChunk(sndkey);
+  if(chunk == nullptr) return -1;
+  Channel_t channel = Mix_PlayChannel(-1, chunk, loops);
+  if(channel == -1){
+    log->log(Log::WARN, logstr::warn_cannot_play_sound, std::string{sndkey});
+    return nullChannel;
+  }
+  return channel;
+}
+
+Mixer::Channel_t Mixer::playSoundTimed(Key_t sndkey, int loops, int timeLimit_ms)
+{
+  Mix_Chunk* chunk = findChunk(sndkey);
+  if(chunk == nullptr) return -1;
+  Channel_t channel = Mix_PlayChannelTimed(-1, chunk, loops, timeLimit_ms);
+  if(channel == -1){
+    log->log(Log::WARN, logstr::warn_cannot_play_sound, std::string{sndkey});
+    return nullChannel;
+  }
+  return channel;
+}
+
+Mixer::Channel_t Mixer::playSoundFadeIn(Key_t sndkey, int loops, int fadeInTime_ms)
+{
+  Mix_Chunk* chunk = findChunk(sndkey);
+  if(chunk == nullptr) return -1;
+  int channel = Mix_FadeInChannel(-1, chunk, loops, fadeInTime_ms);
+  if(channel == -1){
+    log->log(Log::WARN, logstr::warn_cannot_play_sound, std::string{sndkey});
+    return nullChannel;
+  }
+  return channel;
+}
+
+Mixer::Channel_t Mixer::playSoundFadeInTimed(Key_t sndkey, int loops, int fadeInTime_ms, int timeLimit_ms)
+{
+  Mix_Chunk* chunk = findChunk(sndkey);
+  if(chunk == nullptr) return -1;
+  int channel = Mix_FadeInChannelTimed(-1, chunk, loops, fadeInTime_ms, timeLimit_ms);
+  if(channel == -1){
+    log->log(Log::WARN, logstr::warn_cannot_play_sound, std::string{sndkey});
+    return nullChannel;
+  }
+  return channel;
+}
+
+void Mixer::stopChannel(Channel_t channel)
+{
+  if(channel == nullChannel) return;
+  Mix_HaltChannel(channel);
+}
+
+void Mixer::pauseChannel(Channel_t channel)
+{
+  if(channel == nullChannel) return;
+  Mix_Pause(channel);
+}
+
+void Mixer::resumeChannel(Channel_t channel)
+{
+  if(channel == nullChannel) return;
+  Mix_Resume(channel);
+}
+
+void Mixer::setVolume(float volume)
+{
+  int ivolume = std::clamp(volume, 0.f, 1.f) * MIX_MAX_VOLUME;
+  ivolume = Mix_Volume(allChannels, ivolume); // returns average volume of all mixing channels.
+  _volume = static_cast<float>(ivolume) / MIX_MAX_VOLUME;
+}
+
+Mix_Chunk* Mixer::findChunk(Key_t sndkey)
+{
+  auto search = _sounds.find(sndkey);
+  if(search == _sounds.end()){
+    log->log(Log::WARN, logstr::warn_missing_sound, std::to_string(sndkey));
+    return nullptr;
+  }
+  return search->second;
+}
+
+std::unique_ptr<Mixer> mixer;
 
 //===============================================================================================//
 // ##>UI                                                                                         //
@@ -1644,7 +1773,7 @@ void Engine::initialize(std::unique_ptr<Application> app)
   if(!_config.load(Config::filename))
     _config.write(Config::filename); // generate a default file if one doesn't exist.
 
-  if(SDL_Init(SDL_INIT_VIDEO) < 0){
+  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0){
     log->log(Log::FATAL, logstr::fail_sdl_init, std::string{SDL_GetError()});
     exit(EXIT_FAILURE);
   }
@@ -1682,6 +1811,8 @@ void Engine::initialize(std::unique_ptr<Application> app)
   };
 
   renderer = std::make_unique<Renderer>(rconfig);
+
+  mixer = std::make_unique<Mixer>();
 
   input = std::make_unique<Input>();
   assets = std::make_unique<Assets>();

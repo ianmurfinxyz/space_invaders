@@ -30,15 +30,20 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   Application::onWindowResize(windowWidth, windowHeight);
 
   Assets::Manifest_t manifest{};
-  for(int32_t i = BMK_CANNON0; i < BMK_COUNT; ++i){
+  for(int32_t i = BMK_CANNON0; i < BMK_COUNT; ++i)
     manifest.push_back({i, _bitmapNames[i], _worldScale}); 
-  }
 
   pxr::assets->loadBitmaps(manifest);
 
   manifest.clear();
   manifest.push_back({fontKey, fontName, _worldScale});
   pxr::assets->loadFonts(manifest);
+
+  Mixer::Manifest_t mixmanifest{};
+  for(int32_t i = SK_EXPLOSION; i < SK_COUNT; ++i)
+    mixmanifest.push_back({i, _soundNames[i]});
+
+  pxr::mixer->loadSoundsWAV(mixmanifest);
 
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
@@ -54,10 +59,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   switchState(SplashState::name);
 
-  _score = 0;
   _hiscore = 0;
-  _round = 0;
-  _credit = 0;
   _isHudVisible = false;
 
   _hud.initialize(&(pxr::assets->getFont(fontKey, _worldScale)), flashPeriod, phasePeriod);
@@ -98,7 +100,7 @@ void SpaceInvaders::hideHudTop()
   _hud.hideIntLabel(_uidRoundValue);
 }
 
-void SpaceInvaders::unhideHudTop()
+void SpaceInvaders::showHudTop()
 {
   _hud.unhideTextLabel(_uidScoreText);
   _hud.unhideIntLabel(_uidScoreValue);
@@ -106,6 +108,13 @@ void SpaceInvaders::unhideHudTop()
   _hud.unhideIntLabel(_uidHiScoreValue);
   _hud.unhideTextLabel(_uidRoundText);
   _hud.unhideIntLabel(_uidRoundValue);
+}
+
+void SpaceInvaders::resetGameStats()
+{
+  _lives = 4;
+  _round = 0;
+  _credit = 0;
 }
 
 //===============================================================================================//
@@ -223,9 +232,9 @@ void SplashState::doEvents()
       {
       SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
       HUD& hud = si->getHud();
-      std::string text {"*Cloned by Ian Murfin*"};
+      std::string text {"*Cloned by Pixrex*"};
       _uidAuthor = hud.addTextLabel({Vector2i{32, 24} * _worldScale, pxr::colors::cyan, text});
-      si->unhideHud();
+      si->showHud();
       break;
       }
     case EVENT_END:
@@ -448,38 +457,40 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _levelIndex = -1;
-  _round = -1;
+  //_round = -1;
 
-  _score = 0;
-  _lives = 5; // requires 1 life for initial spawn, thus actually start with 4.
-  _credit = 0;
+  //_lives = 5; // requires 1 life for initial spawn, thus actually start with 4.
   _isGameOver = false;
   _gameOverDuration = 5.f;
 
   // Set HUD elements.
   
-  _gameOverLabel = {{72.f * _worldScale, 188.f * _worldScale}, "GAME OVER", 3};
-  _scoreLabel = {{10.f * _worldScale, 240.f * _worldScale}, "SCORE", 4};
-  _recordLabel = {{90.f * _worldScale, 240.f * _worldScale}, "RECORD", 0};
-  _roundLabel = {{170.f * _worldScale, 240.f * _worldScale}, "ROUND", 5};
-  _creditLabel = {{130.f * _worldScale, 6.f * _worldScale}, "CREDIT", 3};
-  _scoreValueLabel = {{16.f * _worldScale, 230.f * _worldScale}, &_score, 6};
-  _recordValueLabel = {{96.f * _worldScale, 230.f * _worldScale}, &_score, 1};
-  _roundValueLabel = {{190.f * _worldScale, 230.f * _worldScale}, &_round, 3};
-  _creditValueLabel = {{190.f * _worldScale, 6.f * _worldScale}, &_credit, 4};
-  _lifeValueLabel = {{10.f * _worldScale, 6.f * _worldScale}, &_lives, 5};
-  _lifeCannonLabel = {{20.f * _worldScale, 6.f * _worldScale}, SpaceInvaders::BMK_CANNON0, 4};
-  _lifeCannonSpacingX = 16 * _worldScale;
+  // _gameOverLabel = {{72.f * _worldScale, 188.f * _worldScale}, "GAME OVER", 3};
+  // _scoreLabel = {{10.f * _worldScale, 240.f * _worldScale}, "SCORE", 4};
+  // _recordLabel = {{90.f * _worldScale, 240.f * _worldScale}, "RECORD", 0};
+  // _roundLabel = {{170.f * _worldScale, 240.f * _worldScale}, "ROUND", 5};
+  // _creditLabel = {{130.f * _worldScale, 6.f * _worldScale}, "CREDIT", 3};
+  // _scoreValueLabel = {{16.f * _worldScale, 230.f * _worldScale}, &_score, 6};
+  // _recordValueLabel = {{96.f * _worldScale, 230.f * _worldScale}, &_score, 1};
+  // _roundValueLabel = {{190.f * _worldScale, 230.f * _worldScale}, &_round, 3};
+  // _creditValueLabel = {{190.f * _worldScale, 6.f * _worldScale}, &_credit, 4};
+  // _lifeValueLabel = {{10.f * _worldScale, 6.f * _worldScale}, &_lives, 5};
+  // _lifeCannonLabel = {{20.f * _worldScale, 6.f * _worldScale}, SpaceInvaders::BMK_CANNON0, 4};
+  // _lifeCannonSpacingX = 16 * _worldScale;
 
-  startNextLevel();
 }
 
 void GameState::startNextLevel()
 {
-  ++_round;
-  ++_levelIndex;
-  if(_levelIndex == levelCount)
-    --_levelIndex;
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+
+  int round = si->getRound();
+
+  // TODO if round > levelCount, pick a random level from the top 5 levels or something
+
+  _levelIndex = round;
+  if(_levelIndex >= levelCount)
+    _levelIndex = levelCount - 1;
 
   _activeCycle = 5;
   _activeBeat = cycleStart;
@@ -557,7 +568,9 @@ void GameState::startNextLevel()
     position._x += _bunkerSpawnGapX;
   }
 
-  _showHud = false;
+  _isGameOver = false;
+
+  si->hideHud();
 }
 
 void GameState::updateActiveCycle()
@@ -572,14 +585,16 @@ void GameState::endSpawning()
   _isAliensSpawning = false;
   _isAliensDropping = false;
   spawnCannon();
-  _showHud = true;
   _activeCycle = 0;
+
+  static_cast<SpaceInvaders*>(_app)->showHud();
 }
 
 void GameState::spawnCannon()
 {
-  --_lives;
-  if(_lives == 0){
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  si->addLives(-1);
+  if(si->getLives() < 0){
     _isGameOver = true;
     _gameOverClock = _gameOverDuration;
     return;
@@ -652,7 +667,7 @@ void GameState::spawnUfo(UfoClassId classId)
 void GameState::morphAlien(Alien& alien)
   // predicate: alien->_col != gridWidth - 1
 {
-  _score += _alienClasses[alien._classId]._scoreValue;
+  static_cast<SpaceInvaders*>(_app)->addScore(_alienClasses[alien._classId]._scoreValue);
 
   alien._classId = CUTTLETWIN;
   _alienMorpher = &alien;
@@ -668,6 +683,8 @@ void GameState::morphAlien(Alien& alien)
     --(_rowPops[neighbour._row]);
     --_alienPopulation;
   }
+
+  mixer->playSound(SpaceInvaders::SK_INVADER_MORPHED);
 }
 
 void GameState::boomCannon()
@@ -680,6 +697,8 @@ void GameState::boomCannon()
   _cannon._isAlive = false;
 
   _isAliensFrozen = true;
+
+  mixer->playSound(SpaceInvaders::SK_EXPLOSION);
 }
 
 void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombHit hit)
@@ -694,7 +713,7 @@ void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombH
 
 void GameState::boomAlien(Alien& alien)
 {
-  _score += _alienClasses[alien._classId]._scoreValue;
+  static_cast<SpaceInvaders*>(_app)->addScore(_alienClasses[alien._classId]._scoreValue);
 
   alien._isAlive = false;
   _alienBoomer = &alien;
@@ -707,6 +726,8 @@ void GameState::boomAlien(Alien& alien)
   --_alienPopulation;
   updateActiveCycle();
   doUfoSpawning();
+
+  mixer->playSound(SpaceInvaders::SK_INVADER_KILLED);
 }
 
 void GameState::boomLaser(bool makeBoom, BombHit hit)
@@ -854,6 +875,7 @@ void GameState::doCannonFiring()
     position._y += _cannon._height;
     _laser._position = position;
     _laser._isAlive = true;
+    mixer->playSound(SpaceInvaders::SK_SHOOT);
   }
 }
 
@@ -1470,8 +1492,11 @@ void GameState::onUpdate(double now, float dt)
       _app->switchState(MenuState::name);
   }
   
-  if(_alienPopulation == 0)
-    startNextLevel();
+  if(_alienPopulation == 0){ // TODO implement and ufo is not spawned
+    static_cast<SpaceInvaders*>(_app)->addRound(1);
+    _app->switchState(GameState::name);
+    //startNextLevel();
+  }
 
   ++_activeBeat;
   if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
@@ -1592,33 +1617,33 @@ void GameState::drawBunkers()
     renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPallete[_bunkerColorIndex]);
 }
 
-void GameState::drawHud()
-{
-  if(!_showHud)
-    return;
-
-  renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPallete[_scoreLabel._colorIndex]);
-  renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPallete[_recordLabel._colorIndex]);
-  renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPallete[_roundLabel._colorIndex]);
-  renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPallete[_creditLabel._colorIndex]);
-
-  renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPallete[_scoreValueLabel._colorIndex]);
-  renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPallete[_recordValueLabel._colorIndex]);
-  renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPallete[_roundValueLabel._colorIndex]);
-  renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPallete[_creditValueLabel._colorIndex]);
-  renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPallete[_lifeValueLabel._colorIndex]);
-
-  const Bitmap& cannonBitmap = pxr::assets->getBitmap(_lifeCannonLabel._bitmapKey, _worldScale);
-  Vector2f position {};
-  for(int i = 0; i < _lives - 1; ++i){
-    position._x = _lifeCannonLabel._position._x + (_lifeCannonSpacingX * i);
-    position._y = _lifeCannonLabel._position._y;
-    renderer->blitBitmap(position, cannonBitmap, _colorPallete[_lifeCannonLabel._colorIndex]);
-  }
-
-  if(_isGameOver)
-    renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPallete[_gameOverLabel._colorIndex]);
-}
+// void GameState::drawHud()
+// {
+//   if(!_showHud)
+//     return;
+// 
+//   renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPallete[_scoreLabel._colorIndex]);
+//   renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPallete[_recordLabel._colorIndex]);
+//   renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPallete[_roundLabel._colorIndex]);
+//   renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPallete[_creditLabel._colorIndex]);
+// 
+//   renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPallete[_scoreValueLabel._colorIndex]);
+//   renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPallete[_recordValueLabel._colorIndex]);
+//   renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPallete[_roundValueLabel._colorIndex]);
+//   renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPallete[_creditValueLabel._colorIndex]);
+//   renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPallete[_lifeValueLabel._colorIndex]);
+// 
+//   const Bitmap& cannonBitmap = pxr::assets->getBitmap(_lifeCannonLabel._bitmapKey, _worldScale);
+//   Vector2f position {};
+//   for(int i = 0; i < _lives - 1; ++i){
+//     position._x = _lifeCannonLabel._position._x + (_lifeCannonSpacingX * i);
+//     position._y = _lifeCannonLabel._position._y;
+//     renderer->blitBitmap(position, cannonBitmap, _colorPallete[_lifeCannonLabel._colorIndex]);
+//   }
+// 
+//   if(_isGameOver)
+//     renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPallete[_gameOverLabel._colorIndex]);
+// }
 
 void GameState::onDraw(double now, float dt)
 {
@@ -1631,11 +1656,12 @@ void GameState::onDraw(double now, float dt)
   drawLaser();
   drawBunkers();
   drawHitbar();
-  drawHud();
+  //drawHud();
 }
 
 void GameState::onReset()
 {
+  startNextLevel();
 }
 
 //===============================================================================================//
@@ -1651,6 +1677,7 @@ void MenuState::onUpdate(double now, float dt)
 {
   if(pxr::input->isKeyPressed(Input::KEY_ENTER)){
     depopulateHud();
+    static_cast<SpaceInvaders*>(_app)->resetGameStats();
     _app->switchState(GameState::name);
   }
   if(pxr::input->isKeyPressed(Input::KEY_s)){

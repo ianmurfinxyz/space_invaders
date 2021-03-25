@@ -21,6 +21,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_mixer.h>
 
 namespace pxr
 {
@@ -196,6 +197,7 @@ namespace logstr
   constexpr const char* fail_create_opengl_context = "failed to create opengl context";
   constexpr const char* fail_set_opengl_attribute = "failed to set opengl attribute";
   constexpr const char* fail_create_window = "failed to create window";
+  constexpr const char* fail_open_audio = "failed to open sdl mixer audio";
 
   constexpr const char* warn_cannot_open_dataset = "failed to open data file";
   constexpr const char* warn_cannot_create_dataset = "failed to create data file";
@@ -207,6 +209,9 @@ namespace logstr
   constexpr const char* warn_font_already_loaded = "font already loaded";
   constexpr const char* warn_cannot_open_asset = "failed to open asset file";
   constexpr const char* warn_asset_parse_errors = "asset file parsing errors";
+  constexpr const char* warn_cannot_play_sound = "failed to play a sound";
+  constexpr const char* warn_cannot_load_sound = "failed to load a sound";
+  constexpr const char* warn_missing_sound = "missing sound with key";
 
   constexpr const char* info_stderr_log = "logging to standard error";
   constexpr const char* info_using_default_config = "using default engine configuration";
@@ -231,6 +236,7 @@ namespace logstr
   constexpr const char* info_loading_asset = "loading asset";
   constexpr const char* info_skipping_asset_loading = "skipping asset loading";
   constexpr const char* info_ascii_code = "ascii code";
+  constexpr const char* info_loaded_sound = "successfully loaded sound";
 }; 
 
 class Log
@@ -761,6 +767,57 @@ struct Collision
 
 const Collision& testCollision(Vector2i aPosition, const Bitmap& aBitmap, 
                                Vector2i bPosition, const Bitmap& bBitmap, bool pixelLists = true);
+
+//===============================================================================================//
+// ##>MIXER                                                                                      //
+//===============================================================================================//
+
+class Mixer
+{
+public:
+  using Key_t = int32_t;
+  using Name_t = const char*;
+  using Channel_t = int;
+  using Manifest_t = std::vector<std::pair<Key_t, Name_t>>;
+
+  static constexpr int sampleFreq = MIX_DEFAULT_FREQUENCY;
+  static constexpr int sampleFormat = MIX_DEFAULT_FORMAT;
+  static constexpr int numOutChannels = 2;   // 1=mono, 2=stereo, other=error
+  static constexpr int chunkSize = 1024;
+  static constexpr int numMixChannels = 16;
+
+  static constexpr const char* sounds_path = "assets/sounds/";
+  static constexpr const char* sounds_extension = ".wav";
+
+  static constexpr Channel_t allChannels = -1;
+  static constexpr Channel_t nullChannel = -2;
+
+  Mixer();  
+  ~Mixer();
+
+  void loadSoundsWAV(const Manifest_t& manifest);
+
+  Channel_t playSound(Key_t sndkey, int loops = 0);
+  Channel_t playSoundTimed(Key_t sndkey, int loops, int timeLimit_ms);
+  Channel_t playSoundFadeIn(Key_t sndkey, int loops, int fadeInTime_ms);
+  Channel_t playSoundFadeInTimed(Key_t sndkey, int loops, int fadeInTime_ms, int timeLimit_ms);
+
+  void stopChannel(Channel_t channel);
+  void pauseChannel(Channel_t channel);
+  void resumeChannel(Channel_t channel);
+
+  void setVolume(float volume); // value from 0 to 1.
+  int getVolume() const {return _volume;}
+
+private:
+  Mix_Chunk* findChunk(Key_t sndkey);
+
+private:
+  std::unordered_map<Key_t, Mix_Chunk*> _sounds;
+  float _volume;
+};
+
+extern std::unique_ptr<Mixer> mixer;
 
 //===============================================================================================//
 // ##>UI                                                                                         //
