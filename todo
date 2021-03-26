@@ -29,3 +29,6 @@
 - add the option to play the space invaders song instead of the beats? (or both?)
 - the high score system
 
+[26-03-2021]
+- added the beatbox but it needs to paused when the cannon booms, and during alien spawning etc,
+  also need to decide how to vary beat with game state.

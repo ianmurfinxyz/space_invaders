@@ -115,6 +115,7 @@ void SpaceInvaders::resetGameStats()
   _lives = 4;
   _round = 0;
   _credit = 0;
+  _score = 0;
 }
 
 //===============================================================================================//
@@ -292,6 +293,26 @@ void SplashState::onDraw(double now, float dt)
 // ##>GAME STATE                                                                                 //
 //===============================================================================================//
 
+GameState::BeatBox::BeatBox(std::array<Mixer::Key_t, beatCount> beats, float beatFreq_hz) : 
+  _beats{beats},
+  _nextBeat{0},
+  _beatFreq_hz{beatFreq_hz},
+  _beatPeriod_s{1.f / beatFreq_hz},
+  _beatClock_s{0.f},
+  _isPaused{false}
+{}
+
+void GameState::BeatBox::doBeats(float dt)
+{
+  if(_isPaused) return;
+  _beatClock_s += dt;
+  if(_beatClock_s > _beatPeriod_s){
+    mixer->playSound(_beats[_nextBeat]);
+    _nextBeat = pxr::wrap(_nextBeat + 1, 0, beatCount - 1);
+    _beatClock_s = 0.f;
+  }
+}
+
 GameState::GameState(Application* app) : 
   ApplicationState{app}
 {}
@@ -299,6 +320,15 @@ GameState::GameState(Application* app) :
 void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 {
   // This function 'hard-codes' all game data in one place so it is easy to find.
+
+  _beatBox = BeatBox{{
+      SpaceInvaders::SK_FAST1, 
+      SpaceInvaders::SK_FAST2, 
+      SpaceInvaders::SK_FAST3, 
+      SpaceInvaders::SK_FAST4
+    }, 
+    2.f
+  };
 
   _worldSize = worldSize;
   _worldScale = worldScale;
@@ -581,20 +611,22 @@ void GameState::endSpawning()
 {
   _isAliensSpawning = false;
   _isAliensDropping = false;
-  spawnCannon();
+  spawnCannon(false);
   _activeCycle = 0;
 
   static_cast<SpaceInvaders*>(_app)->showHud();
 }
 
-void GameState::spawnCannon()
+void GameState::spawnCannon(bool takeLife)
 {
-  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
-  si->addLives(-1);
-  if(si->getLives() < 0){
-    _isGameOver = true;
-    _gameOverClock = _gameOverDuration;
-    return;
+  if(takeLife){
+    SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+    si->addLives(-1);
+    if(si->getLives() < 0){
+      _isGameOver = true;
+      _gameOverClock = _gameOverDuration;
+      return;
+    }
   }
 
   _cannon._position = _cannon._spawnPosition;
@@ -844,7 +876,7 @@ void GameState::doCannonBooming(float dt)
   _cannon._boomClock -= dt;
   if(_cannon._boomClock <= 0){
     _cannon._isBooming = false;
-    spawnCannon();
+    spawnCannon(true);
     return;
   }
 
@@ -1498,6 +1530,8 @@ void GameState::onUpdate(double now, float dt)
   ++_activeBeat;
   if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
     _activeBeat = cycleStart;
+
+  _beatBox.doBeats(dt);
 }
 
 void GameState::drawGrid()

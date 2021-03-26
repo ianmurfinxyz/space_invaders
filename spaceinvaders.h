@@ -329,6 +329,29 @@ public:
   std::string getName(){return name;}
 
 private:
+
+  class BeatBox
+  {
+  public:
+    static constexpr int beatCount = 4;
+    BeatBox() = default;
+    BeatBox(std::array<Mixer::Key_t, beatCount> beats, float beatFreq_hz);
+    void doBeats(float dt);
+    void setBeatFreq(float freq_hz){_beatFreq_hz = freq_hz;}
+    void addBeatFreq(float freq_hz){_beatFreq_hz += freq_hz;}
+    float getBeatFreq() const {return _beatFreq_hz;}
+    void pause(){_isPaused = true;}
+    void togglePause(){_isPaused = !_isPaused;}
+    bool isPaused() const {return _isPaused;}
+  private:
+    std::array<Mixer::Key_t, beatCount> _beats;
+    int _nextBeat;
+    float _beatFreq_hz;
+    float _beatPeriod_s;
+    float _beatClock_s;
+    bool _isPaused;
+  };
+
   struct GridIndex
   {
     int32_t _row;
@@ -503,7 +526,7 @@ private:
   void startNextLevel();
   void updateActiveCycle();
   void endSpawning();
-  void spawnCannon();
+  void spawnCannon(bool takeLife);
   void spawnBomb(Vector2f position, BombClassId classId);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
@@ -554,6 +577,8 @@ private:
 
 private:
   const Font* _font;
+
+  BeatBox _beatBox;
 
   Vector2i _worldSize;
   int32_t _worldScale;
