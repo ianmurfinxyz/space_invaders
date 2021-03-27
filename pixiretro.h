@@ -394,7 +394,7 @@ public:
 
 public:
   int32_t load(const std::string& filename);
-  int32_t write(const std::string&, bool genComments = true);
+  int32_t write(const std::string& filename, bool genComments = true);
 
   int32_t getIntValue(int32_t key) const;
   float getFloatValue(int32_t key) const;

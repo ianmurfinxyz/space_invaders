@@ -15,11 +15,16 @@
   where an alien spawns at the top of the screen, dropping decoys, moving quickly from left to
   right, do I want to implement this?
 - implement the schrodinger reinforcements
-- investigate and fix why the game isnt scaling when I resize the window.
+- investigate and fix why the game isnt scaling when I resize the window. - If I remember correctly
+  I think it is because I can scale down the bunkers because I mask off arbitrary chunks of pixels
+  thus a damaged bunker cannot be scaled down without loosing information, meaning I could not
+  scale it back up again afterwards unless I created information. Yes I could store the larger
+  copy and create a seperate smaller one, but what if my original bunker is actually the smaller
+  one. Then I have no choice but to create information from nowhere.
 - fix the 'b' on the splash screen
 - make it possible to skip the splash screen
 - add a cheat mode which can be activated via a cli arg or via a .cfg file
-- implement the music beats
+- [DONE] implement the music beats
 - draw one of the cabinet arts for the background? see here,
     http://www.classicgaming.cc/classics/space-invaders/graphics
   artwork 2 looks most appropriate
@@ -30,5 +35,39 @@
 - the high score system
 
 [26-03-2021]
-- added the beatbox but it needs to paused when the cannon booms, and during alien spawning etc,
+- added the beatbox but it needs to pause when the cannon booms, and during alien spawning etc,
   also need to decide how to vary beat with game state.
+- currently freeze the player and aliens when an alien dies to mimic the origin game, however
+  do not freeze bombs thus can die when frozen...bad game design, either freeze the bombs or rm
+  the freezes. I should freeze the aliens but not the player, easy solution.
+- there are a few gameplay aspects I was unaware of that I would like to add, see here,
+    https://www.arcade-museum.com/game_detail.php?game_id=9669
+
+"
+CHEATS, TRICKS, BUGS, AND EASTER EGGS
+On any wave, if the last alien you kill is from the bottom two rows, you will be rewarded with 
+a special 'fireworks' display and a 500 point bonus. If the bottom leftmost invader is the last 
+killed, the bonus is 1,000 points.
+
+The number of points you get for shooting the solid flying saucer (50 - 300) depends upon how 
+many shots you have fired in the wave. The 23rd shot and every 15th thereafter is worth 300 
+points if it hits the saucer. When there are eight or fewer invaders left, the flying saucers 
+no longer appear.
+"
+
+- the game has some way of gaining lives, which I saw in this video,
+  https://www.youtube.com/watch?v=tY_8zv7iXEg
+  should find out what triggers the extra life and add the feature.
+- according to this video the last alien alive actually moves 2px per tick when moving left and
+  3px per tick when moving right. This is to make it harder to calibrate your aiming since the
+  speed keeps changing. I like that idea and should add it. 
+       this vid --> https://www.youtube.com/watch?v=ZpI2i1XIBdI
+- also when you die all aliens flash red. not sure my implementation is setup to make such a 
+  thing easy though so may not add that - look into it.
+- should consider if I want a text box to enter the high scorer name or a letter grid, a grid
+  would be more authentic to the original but kinda pointless since I am making a PC game and
+  you could just use the keyboard. I think the text grid would be more fun to implement though
+  so lets do that.
+- according to this site,
+https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
+  the crab invaders only start splitting into cuttles after lvl 3.

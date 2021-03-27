@@ -54,28 +54,85 @@ public:
     "fastinvader2", "fastinvader3", "fastinvader4"
   };
 
+  //
+  // setting hiscoreNameLen > sizeof(int32_t) will cause a segfault when loading scores as names
+  // strings are packed into 4 byte integers and the loading function expects this to be the case.
+  //
+  static constexpr int hiscoreNameLen = sizeof(int32_t);  
+  static constexpr int hiscoreCount = 10;
+                                            
   struct Score
   {
-    std::string _name;
+    //
+    // names are stored in the hiscores file packed into an int32, thus names can have up to
+    // 4 characters. The mapping between the bytes of the int32, the elements of _name and the
+    // order of the characters in the name is as follows,
+    //
+    //         MSB                             LSB
+    //    | 00000000 | 00000000 | 00000000 | 00000000 |  i32
+    //      _name[3]                         _name[0]
+    //       RM char                          LM char
+    //
+    // where for a name like Adam,
+    //              LM char--^  ^--RM char
+    //                      
+    std::array<char, hiscoreNameLen> _name;
     int32_t _value;
   };
 
-  //class ScoreData final : public pxr::Dataset
-  //{
-  //public:
-  //  static constexpr const char* filename = "hiscores";
+  static constexpr int32_t nameToInt(const std::array<char, hiscoreNameLen>& name)
+  {
+    static_assert(hiscoreNameLen == sizeof(int32_t));
+    int32_t iname {0};
+    for(size_t i{hiscoreNameLen - 1}; i >= 0; --i)
+      iname |= static_cast<int32_t>(name[i]) << (i * 8);
+    return iname;
+  }
 
-  //  enum Key
-  //  {
-  //    NAME0, SCORE0, NAME1, SCORE1, NAME2, SCORE2, NAME3, SCORE3, NAME4, SCORE4, 
-  //    NAME5, SCORE5, NAME6, SCORE6, NAME7, SCORE7, NAME8, SCORE8, NAME9, SCORE9
-  //  };
+  static constexpr std::array<char, hiscoreNameLen> intToName(int32_t iname)
+  {
+    static_assert(hiscoreNameLen == sizeof(int32_t));
+    std::array<char, hiscoreNameLen> name {};
+    for(size_t i{hiscoreNameLen - 1}; i >= 0; --i)
+      name[i] = static_cast<char>((iname & (0xff << (8 * i))) >> (8 * i));
+    return name;
+  };
 
-  //  ScoreData() : Dataset({
-  //    // key
-  //    {name0, "name0", },
-  //  }){}
-  //};
+  class ScoreData final : public pxr::Dataset
+  {
+  public:
+    static constexpr const char* filename = "hiscores";
+
+    enum Key
+    {
+      NAME0, SCORE0, NAME1, SCORE1, NAME2, SCORE2, NAME3, SCORE3, NAME4, SCORE4, 
+      NAME5, SCORE5, NAME6, SCORE6, NAME7, SCORE7, NAME8, SCORE8, NAME9, SCORE9
+    };
+
+    ScoreData() : Dataset({
+      // key
+      {NAME0 , "name0" , nameToInt({'A','D','A','M'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE0, "score0", 1230                        , 0, std::numeric_limits<int32_t>::max()},
+      {NAME1 , "name1" , nameToInt({'I','A','N','_'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE1, "score1", 3410                        , 0, std::numeric_limits<int32_t>::max()},
+      {NAME2 , "name2" , nameToInt({'N','O','O','B'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE2, "score2", 300                         , 0, std::numeric_limits<int32_t>::max()},
+      {NAME3 , "name3" , nameToInt({'T','I','M','_'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE3, "score3", 460                         , 0, std::numeric_limits<int32_t>::max()},
+      {NAME4 , "name4" , nameToInt({'I','A','N','_'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE4, "score4", 880                         , 0, std::numeric_limits<int32_t>::max()},
+      {NAME5 , "name5" , nameToInt({'M','O','O','N'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE5, "score5", 480                         , 0, std::numeric_limits<int32_t>::max()},
+      {NAME6 , "name6" , nameToInt({'B','E','E','F'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE6, "score6", 1180                        , 0, std::numeric_limits<int32_t>::max()},
+      {NAME7 , "name7" , nameToInt({'P','E','E','K'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE7, "score7", 1440                        , 0, std::numeric_limits<int32_t>::max()},
+      {NAME8 , "name8" , nameToInt({'_','I','T','_'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE8, "score8", 1610                        , 0, std::numeric_limits<int32_t>::max()},
+      {NAME9 , "name9" , nameToInt({'_','W','I','N'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE9, "score9", 240                         , 0, std::numeric_limits<int32_t>::max()},
+    }){}
+  };
 
 public:
   SpaceInvaders() = default;
@@ -117,9 +174,19 @@ public:
   Vector2i getWorldSize() const {return _worldSize;}
   int32_t getWorldScale() const {return _worldScale;}
 
+  void loadHiscores();
+  void writeHiscores();
+  bool isHiscore(int32_t scoreValue);
+  bool registerHiscore(const Score& score);
+  std::pair<int, int> findScoreBoardPosition(int32_t scoreValue);
+  const std::array<Score, hiscoreCount>& getHiscores() const {return _hiscores;}
+
+
 private:
   static constexpr float flashPeriod {0.1f};  // Inverse frequency of HUD label flashing.
   static constexpr float phasePeriod {0.1f};  // Inverse frequency of HUD label letter phase in.
+
+  std::array<Score, hiscoreCount> _hiscores;
 
   Vector2i _worldSize;
   int32_t _worldScale;

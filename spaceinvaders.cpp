@@ -118,6 +118,71 @@ void SpaceInvaders::resetGameStats()
   _score = 0;
 }
 
+void SpaceInvaders::loadHiscores()
+{
+  ScoreData data {}; 
+  if(!data.load(ScoreData::filename))
+    data.write(ScoreData::filename);
+
+  for(int i{0}; i < hiscoreCount; ++i){
+    int nameKey = ScoreData::NAME0 + (i * 2);
+    int scoreKey = ScoreData::SCORE0 + (i * 2);
+    int iname = data.getIntValue(nameKey);
+    int score = data.getIntValue(scoreKey);
+    _hiscores[i]._name = intToName(iname);
+    _hiscores[i]._value = score;
+  }
+
+  auto scoreCompare = [](const Score& s0, const Score& s1) -> bool {
+    return s0._value < s1._value;
+  };
+
+  std::sort(_hiscores.begin(), _hiscores.end(), scoreCompare);
+}
+
+void SpaceInvaders::writeHiscores()
+{
+  ScoreData data {}; 
+
+  for(int i{0}; i < hiscoreCount; ++i){
+    int nameKey = ScoreData::NAME0 + (i * 2);
+    int scoreKey = ScoreData::SCORE0 + (i * 2);
+    int iname = nameToInt(_hiscores[i]._name);
+    data.setIntValue(nameKey, iname);
+    data.setIntValue(scoreKey, _hiscores[i]._value);
+  }
+
+  data.write(ScoreData::filename, false);
+}
+
+bool SpaceInvaders::isHiscore(int32_t scoreValue)
+{
+  return scoreValue > _hiscores[0]._value;  
+}
+
+bool SpaceInvaders::registerHiscore(const Score& score)
+{
+  auto position = findScoreBoardPosition(score._value);
+  if(position.first == -1) return false;
+  std::shift_left(_hiscores.begin(), _hiscores.begin() + position.second, 1); 
+  _hiscores[position.second] = score;
+  return true;
+}
+
+std::pair<int, int> SpaceInvaders::findScoreBoardPosition(int32_t scoreValue)
+{
+  int i{0};
+  while(i++){
+    assert(i <= hiscoreCount);
+    if(i == (hiscoreCount - 1) && _hiscores[i]._value < scoreValue)
+      return {hiscoreCount - 1, hiscoreCount};
+    if(i == 0 && _hiscores[i]._value > scoreValue)
+      return {-1, -1}; // not on leaderboard
+    if(_hiscores[i]._value < scoreValue && scoreValue < _hiscores[i + 1]._value)
+      return {i, i + 1};
+  }
+}
+
 //===============================================================================================//
 // ##>SPLASH STATE                                                                               //
 //===============================================================================================//
