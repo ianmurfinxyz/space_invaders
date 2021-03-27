@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <string>
+#include <cstring>
 #include <sstream>
 #include <cmath>
 #include <vector>

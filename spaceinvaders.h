@@ -203,7 +203,6 @@ private:
   bool _isHudVisible;
 };
 
-#endif
 
 //===============================================================================================//
 // ##>SPLASH STATE                                                                               //
@@ -817,3 +816,69 @@ private:
   HUD::uid_t _uid10PointsText;
 };
 
+//===============================================================================================//
+// ##>HIGH SCORE STATE                                                                           //
+//===============================================================================================//
+
+class HiScoreState final : public ApplicationState
+{
+public:
+  static constexpr const char* name = "hiscore";
+
+public:
+  HiScoreState(Application* app) : ApplicationState{app}{}
+  ~HiScoreState() = default;
+
+  void initialize(Vector2i worldSize, int32_t worldScale);
+  void onUpdate(double now, float dt);
+  void onDraw(double now, float dt);
+  void onReset();
+
+  std::string getName(){return name;}
+
+private:
+
+  class Keypad
+  {
+  public:
+    Keypad(const Font& font, Vector2i worldSize, int32_t worldScale);
+
+    void moveCursor(int32_t colShift, int32_t rowShift);
+    void reset();
+    void draw();
+
+    const char* getActiveKeyText() const
+    { return _keyText[_cursorPadPosition._y][_cursorPadPosition._x]; }
+
+  private:
+    void updateCursorScreenPosition();
+
+  private:
+    static constexpr int32_t keyRowCount {4};
+    static constexpr int32_t keyColCount {11};
+    static constexpr int32_t keySpace_px {4};
+    static constexpr int32_t cursorDrop_px {keySpace_px / 2};
+    static constexpr const char* cursorChar {"_"};
+    static constexpr Vector2i initialCursorPadPosition {0, keyRowCount - 1};
+
+  private:
+    std::array<std::array<const char*, keyColCount>, keyRowCount> _keyText;
+    std::array<std::array<Vector2i, keyColCount>, keyRowCount> _keyScreenPosition;
+    Color3f _keyColor;
+    Color3f _specialKeyColor;
+    Color3f _cursorColor;
+    Vector2i _cursorPadPosition; // x=col, y=row
+    Vector2i _cursorScreenPosition;
+    Vector2i _padPosition;
+    const Font& _font;
+  };
+
+private:
+  void doInput();
+
+private:
+
+  std::unique_ptr<Keypad> _keypad;
+};
+
+#endif

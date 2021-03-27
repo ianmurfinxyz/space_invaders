@@ -48,16 +48,20 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
   std::unique_ptr<ApplicationState> splash = std::make_unique<SplashState>(this);
+  std::unique_ptr<ApplicationState> hiscores = std::make_unique<HiScoreState>(this);
 
   game->initialize(_worldSize, _worldScale);
   menu->initialize(_worldSize, _worldScale);
   splash->initialize(_worldSize, _worldScale);
+  hiscores->initialize(_worldSize, _worldScale);
 
   addState(std::move(game));
   addState(std::move(menu));
   addState(std::move(splash));
+  addState(std::move(hiscores));
 
-  switchState(SplashState::name);
+  //switchState(SplashState::name);
+  switchState(HiScoreState::name);
 
   _hiscore = 0;
   _isHudVisible = false;
@@ -1839,3 +1843,120 @@ void MenuState::depopulateHud()
   hud.removeBitmapLabel(_uidOctopusBitmap);
 }
 
+//===============================================================================================//
+// ##>HIGH SCORE STATE                                                                           //
+//===============================================================================================//
+
+HiScoreState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t worldScale) :
+  _keyText{},
+  _keyScreenPosition{},
+  _keyColor{colors::cyan},
+  _specialKeyColor{colors::magenta},
+  _cursorColor{colors::green},
+  _cursorPadPosition{0, 3},
+  _cursorScreenPosition{0, 0},
+  _padPosition{0, 0},
+  _font{font}
+{
+  _keyText = {{
+    {"\\", "/", "(", ")", "+", "^", "", "RUB", "END", "", ""},  // row[0] == bottom row
+    {"W", "X", "Y", "Z", ".", "_", "-", "[", "]", "<", ">"},
+    {"L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V"},
+    {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"}     // row[3] == top row
+  }};
+
+  int32_t fontSize = font.getSize();
+
+  for(size_t row{0}; row < keyRowCount; ++row){
+    for(size_t col{0}; col < keyColCount; ++col){
+      _keyScreenPosition[row][col] = {
+        _padPosition._x + (col * (fontSize + keySpace_px)),
+        _padPosition._y + (row * (fontSize + keySpace_px)),
+      };
+    }
+  }
+
+  int32_t padWidth = keyColCount * (fontSize + keySpace_px);
+  int32_t padHeight = keyRowCount * (fontSize + keySpace_px);
+  _padPosition._x = (worldSize._x - padWidth) / 2;
+  _padPosition._y = (worldSize._y - padHeight) / 2;
+
+  updateCursorScreenPosition();
+}
+
+void HiScoreState::Keypad::moveCursor(int32_t colShift, int32_t rowShift)
+{
+  do{
+    if(colShift) _cursorPadPosition._x = pxr::wrap(_cursorPadPosition._x + colShift, 0, keyColCount - 1);
+    if(rowShift) _cursorPadPosition._y = pxr::wrap(_cursorPadPosition._x + rowShift, 0, keyRowCount - 1);
+  }
+  while(_keyText[_cursorPadPosition._y][_cursorPadPosition._x][0] == '\0');
+  updateCursorScreenPosition();
+}
+
+void HiScoreState::Keypad::updateCursorScreenPosition()
+{
+  _cursorScreenPosition = _keyScreenPosition[_cursorPadPosition._y][_cursorPadPosition._x];
+  _cursorScreenPosition._y -= cursorDrop_px;
+  const char* keyText = _keyText[_cursorPadPosition._y][_cursorPadPosition._x];
+  if(std::strncmp(keyText, "RUB", 3) == 0 || std::strncmp(keyText, "END", 3) == 0)
+    _cursorScreenPosition._x += _font.getGlyph(keyText[0])._advance + _font.getGlyphSpace();
+}
+
+void HiScoreState::Keypad::reset()
+{
+  _cursorPadPosition = initialCursorPadPosition;
+}
+
+void HiScoreState::Keypad::draw()
+{
+  for(int row{0}; row < keyRowCount; ++row){
+    for(int col{0}; col < keyColCount; ++col){
+      const char* text = _keyText[row][col];
+      if(text[0] == '\0') continue;
+      Color3f color = _keyColor;
+      if(strncmp(text, "RUB", 3) == 0 || strncmp(text, "END", 3) == 0)
+        color = _specialKeyColor;
+      renderer->blitText(_keyScreenPosition[row][col], text, _font, color);
+    }
+  }
+
+  renderer->blitText(_cursorScreenPosition, cursorChar, _font, _cursorColor);
+}
+
+void HiScoreState::initialize(Vector2i worldSize, int32_t worldScale)
+{
+  _keypad = std::make_unique<Keypad>(assets->getFont(SpaceInvaders::fontKey, worldScale), worldSize, worldScale);
+}
+
+void HiScoreState::onUpdate(double now, float dt)
+{
+  doInput();
+}
+
+void HiScoreState::onDraw(double now, float dt)
+{
+  renderer->clearViewport(colors::black);
+  _keypad->draw();
+}
+
+void HiScoreState::onReset()
+{
+  if(_keypad != nullptr) _keypad->reset();
+}
+
+void HiScoreState::doInput()
+{
+  bool lKey = pxr::input->isKeyPressed(Input::KEY_LEFT);
+  bool rKey = pxr::input->isKeyPressed(Input::KEY_RIGHT);
+  bool uKey = pxr::input->isKeyPressed(Input::KEY_UP);
+  bool dKey = pxr::input->isKeyPressed(Input::KEY_DOWN);
+
+  int colShift {0}, rowShift;
+  if(lKey) colShift += -1;
+  if(rKey) colShift += 1;
+  if(uKey) rowShift += 1;
+  if(dKey) rowShift += -1;
+
+  _keypad->moveCursor(colShift, rowShift);  
+}
