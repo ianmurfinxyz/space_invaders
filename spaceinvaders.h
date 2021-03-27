@@ -869,7 +869,7 @@ private:
     Color3f _cursorColor;
     Vector2i _cursorPadPosition; // x=col, y=row
     Vector2i _cursorScreenPosition;
-    Vector2i _padPosition;
+    Vector2i _padScreenPosition;
     const Font& _font;
   };
 

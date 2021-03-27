@@ -1853,13 +1853,13 @@ HiScoreState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t world
   _keyColor{colors::cyan},
   _specialKeyColor{colors::magenta},
   _cursorColor{colors::green},
-  _cursorPadPosition{0, 3},
+  _cursorPadPosition{initialCursorPadPosition},
   _cursorScreenPosition{0, 0},
-  _padPosition{0, 0},
+  _padScreenPosition{0, 0},
   _font{font}
 {
   _keyText = {{
-    {"\\", "/", "(", ")", "+", "^", "", "RUB", "END", "", ""},  // row[0] == bottom row
+    {"\\", "/", "(", ")", "+", "^", "RUB", "", "", "END", ""},  // row[0] == bottom row
     {"W", "X", "Y", "Z", ".", "_", "-", "[", "]", "<", ">"},
     {"L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V"},
     {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"}     // row[3] == top row
@@ -1867,19 +1867,19 @@ HiScoreState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t world
 
   int32_t fontSize = font.getSize();
 
+  int32_t padWidth = keyColCount * (fontSize + (keySpace_px * worldScale));
+  int32_t padHeight = keyRowCount * (fontSize + (keySpace_px * worldScale));
+  _padScreenPosition._x = (worldSize._x - padWidth) / 2;
+  _padScreenPosition._y = (worldSize._y - padHeight) / 2;
+
   for(size_t row{0}; row < keyRowCount; ++row){
     for(size_t col{0}; col < keyColCount; ++col){
       _keyScreenPosition[row][col] = {
-        _padPosition._x + (col * (fontSize + keySpace_px)),
-        _padPosition._y + (row * (fontSize + keySpace_px)),
+        _padScreenPosition._x + (col * (fontSize + (keySpace_px * worldScale))),
+        _padScreenPosition._y + (row * (fontSize + (keySpace_px * worldScale))),
       };
     }
   }
-
-  int32_t padWidth = keyColCount * (fontSize + keySpace_px);
-  int32_t padHeight = keyRowCount * (fontSize + keySpace_px);
-  _padPosition._x = (worldSize._x - padWidth) / 2;
-  _padPosition._y = (worldSize._y - padHeight) / 2;
 
   updateCursorScreenPosition();
 }
@@ -1888,7 +1888,7 @@ void HiScoreState::Keypad::moveCursor(int32_t colShift, int32_t rowShift)
 {
   do{
     if(colShift) _cursorPadPosition._x = pxr::wrap(_cursorPadPosition._x + colShift, 0, keyColCount - 1);
-    if(rowShift) _cursorPadPosition._y = pxr::wrap(_cursorPadPosition._x + rowShift, 0, keyRowCount - 1);
+    if(rowShift) _cursorPadPosition._y = pxr::wrap(_cursorPadPosition._y + rowShift, 0, keyRowCount - 1);
   }
   while(_keyText[_cursorPadPosition._y][_cursorPadPosition._x][0] == '\0');
   updateCursorScreenPosition();
@@ -1952,11 +1952,13 @@ void HiScoreState::doInput()
   bool uKey = pxr::input->isKeyPressed(Input::KEY_UP);
   bool dKey = pxr::input->isKeyPressed(Input::KEY_DOWN);
 
-  int colShift {0}, rowShift;
+  int colShift {0}, rowShift {0};
   if(lKey) colShift += -1;
   if(rKey) colShift += 1;
-  if(uKey) rowShift += 1;
-  if(dKey) rowShift += -1;
+  if(uKey) 
+    rowShift += 1;
+  if(dKey) 
+    rowShift += -1;
 
   _keypad->moveCursor(colShift, rowShift);  
 }
