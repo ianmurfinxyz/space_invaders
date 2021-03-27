@@ -54,13 +54,27 @@ public:
     "fastinvader2", "fastinvader3", "fastinvader4"
   };
 
-  //
-  // setting hiscoreNameLen > sizeof(int32_t) will cause a segfault when loading scores as names
-  // strings are packed into 4 byte integers and the loading function expects this to be the case.
-  //
-  static constexpr int hiscoreNameLen = sizeof(int32_t);  
-  static constexpr int hiscoreCount = 10;
+  static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
+  static constexpr size_t hiscoreCount = 10;
                                             
+  static constexpr int32_t nameToInt(const std::array<char, hiscoreNameLen>& name)
+  {
+    static_assert(hiscoreNameLen == sizeof(int32_t));
+    int32_t iname {0};
+    for(size_t i{hiscoreNameLen}; i >= 1; --i)
+      iname |= static_cast<int32_t>(name[i - 1]) << ((i - 1) * 8);
+    return iname;
+  }
+
+  static constexpr std::array<char, hiscoreNameLen> intToName(int32_t iname)
+  {
+    static_assert(hiscoreNameLen == sizeof(int32_t));
+    std::array<char, hiscoreNameLen> name {};
+    for(size_t i{hiscoreNameLen}; i >= 1; --i)
+      name[i - 1] = static_cast<char>((iname & (0xff << (8 * (i - 1)))) >> (8 * (i - 1)));
+    return name;
+  };
+
   struct Score
   {
     //
@@ -78,24 +92,6 @@ public:
     //                      
     std::array<char, hiscoreNameLen> _name;
     int32_t _value;
-  };
-
-  static constexpr int32_t nameToInt(const std::array<char, hiscoreNameLen>& name)
-  {
-    static_assert(hiscoreNameLen == sizeof(int32_t));
-    int32_t iname {0};
-    for(size_t i{hiscoreNameLen - 1}; i >= 0; --i)
-      iname |= static_cast<int32_t>(name[i]) << (i * 8);
-    return iname;
-  }
-
-  static constexpr std::array<char, hiscoreNameLen> intToName(int32_t iname)
-  {
-    static_assert(hiscoreNameLen == sizeof(int32_t));
-    std::array<char, hiscoreNameLen> name {};
-    for(size_t i{hiscoreNameLen - 1}; i >= 0; --i)
-      name[i] = static_cast<char>((iname & (0xff << (8 * i))) >> (8 * i));
-    return name;
   };
 
   class ScoreData final : public pxr::Dataset
@@ -180,7 +176,6 @@ public:
   bool registerHiscore(const Score& score);
   std::pair<int, int> findScoreBoardPosition(int32_t scoreValue);
   const std::array<Score, hiscoreCount>& getHiscores() const {return _hiscores;}
-
 
 private:
   static constexpr float flashPeriod {0.1f};  // Inverse frequency of HUD label flashing.

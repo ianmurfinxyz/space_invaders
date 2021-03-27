@@ -1903,7 +1903,7 @@ void Engine::initialize(std::unique_ptr<Application> app)
 
   _app = std::move(app);
 
-  if(!_config.load(Config::filename))
+  if(_config.load(Config::filename) != 0)
     _config.write(Config::filename); // generate a default file if one doesn't exist.
 
   if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0){

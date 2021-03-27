@@ -73,6 +73,8 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, pxr::colors::magenta, "CREDIT"});
   _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, pxr::colors::cyan, &_credit, 1});
 
+  loadHiscores();
+
   return true;
 }
 
@@ -121,8 +123,8 @@ void SpaceInvaders::resetGameStats()
 void SpaceInvaders::loadHiscores()
 {
   ScoreData data {}; 
-  if(!data.load(ScoreData::filename))
-    data.write(ScoreData::filename);
+  if(data.load(ScoreData::filename) != 0)
+    data.write(ScoreData::filename, false);
 
   for(int i{0}; i < hiscoreCount; ++i){
     int nameKey = ScoreData::NAME0 + (i * 2);
@@ -182,6 +184,7 @@ std::pair<int, int> SpaceInvaders::findScoreBoardPosition(int32_t scoreValue)
       return {i, i + 1};
   }
 }
+
 
 //===============================================================================================//
 // ##>SPLASH STATE                                                                               //
