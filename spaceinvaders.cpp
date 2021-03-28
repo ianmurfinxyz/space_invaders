@@ -48,7 +48,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
   std::unique_ptr<ApplicationState> splash = std::make_unique<SplashState>(this);
-  std::unique_ptr<ApplicationState> hiscores = std::make_unique<HiScoreState>(this);
+  std::unique_ptr<ApplicationState> hiscores = std::make_unique<HiScoreRegState>(this);
 
   game->initialize(_worldSize, _worldScale);
   menu->initialize(_worldSize, _worldScale);
@@ -61,7 +61,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   addState(std::move(hiscores));
 
   //switchState(SplashState::name);
-  switchState(HiScoreState::name);
+  switchState(HiScoreRegState::name);
 
   _hiscore = 0;
   _isHudVisible = false;
@@ -1847,7 +1847,7 @@ void MenuState::depopulateHud()
 // ##>HIGH SCORE STATE                                                                           //
 //===============================================================================================//
 
-HiScoreState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t worldScale) :
+HiScoreRegState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t worldScale) :
   _keyText{},
   _keyScreenPosition{},
   _keyColor{colors::cyan},
@@ -1884,7 +1884,7 @@ HiScoreState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t world
   updateCursorScreenPosition();
 }
 
-void HiScoreState::Keypad::moveCursor(int32_t colShift, int32_t rowShift)
+void HiScoreRegState::Keypad::moveCursor(int32_t colShift, int32_t rowShift)
 {
   do{
     if(colShift) _cursorPadPosition._x = pxr::wrap(_cursorPadPosition._x + colShift, 0, keyColCount - 1);
@@ -1894,7 +1894,7 @@ void HiScoreState::Keypad::moveCursor(int32_t colShift, int32_t rowShift)
   updateCursorScreenPosition();
 }
 
-void HiScoreState::Keypad::updateCursorScreenPosition()
+void HiScoreRegState::Keypad::updateCursorScreenPosition()
 {
   _cursorScreenPosition = _keyScreenPosition[_cursorPadPosition._y][_cursorPadPosition._x];
   _cursorScreenPosition._y -= cursorDrop_px;
@@ -1903,12 +1903,12 @@ void HiScoreState::Keypad::updateCursorScreenPosition()
     _cursorScreenPosition._x += _font.getGlyph(keyText[0])._advance + _font.getGlyphSpace();
 }
 
-void HiScoreState::Keypad::reset()
+void HiScoreRegState::Keypad::reset()
 {
   _cursorPadPosition = initialCursorPadPosition;
 }
 
-void HiScoreState::Keypad::draw()
+void HiScoreRegState::Keypad::draw()
 {
   for(int row{0}; row < keyRowCount; ++row){
     for(int col{0}; col < keyColCount; ++col){
@@ -1924,11 +1924,10 @@ void HiScoreState::Keypad::draw()
   renderer->blitText(_cursorScreenPosition, cursorChar, _font, _cursorColor);
 }
 
-HiScoreState::NameBox::NameBox(const Font& font, Vector2i worldSize, int32_t worldScale) :
+HiScoreRegState::NameBox::NameBox(const Font& font, Vector2i worldSize, int32_t worldScale) :
   _buffer{},
   _font{font},
-  _final{},
-  _textColor{colors::red}
+  _final{}
 {
   for(auto& c : _buffer)
     c = nullChar;
@@ -1936,22 +1935,18 @@ HiScoreState::NameBox::NameBox(const Font& font, Vector2i worldSize, int32_t wor
   composeFinal();
 
   int32_t finalWidth_px = font.calculateStringWidth(_final);
-  std::cout << "finalWidth_px=" << finalWidth_px << std::endl;
-  if(finalWidth_px < 100 || finalWidth_px > 400){
-    std::cout << "thing" << std::endl;
-  }
   _boxScreenPosition = {
     (worldSize._x - finalWidth_px) / 2,
     worldSize._y / 4
   };
 }
 
-void HiScoreState::NameBox::draw()
+void HiScoreRegState::NameBox::draw()
 {
-  renderer->blitText(_boxScreenPosition, _final, _font, _textColor);
+  renderer->blitText(_boxScreenPosition, _final, _font, colors::red);
 }
 
-bool HiScoreState::NameBox::pushBack(char c)
+bool HiScoreRegState::NameBox::pushBack(char c)
 {
   if(isFull()) 
     return false;
@@ -1967,7 +1962,7 @@ bool HiScoreState::NameBox::pushBack(char c)
   return true;
 }
 
-bool HiScoreState::NameBox::popBack()
+bool HiScoreRegState::NameBox::popBack()
 {
   if(isEmpty()) 
     return false;
@@ -1988,7 +1983,7 @@ bool HiScoreState::NameBox::popBack()
   return true;
 }
 
-std::string HiScoreState::NameBox::getBufferText() const
+std::string HiScoreRegState::NameBox::getBufferText() const
 {
   std::string text {};
   for(auto c : _buffer)
@@ -1996,7 +1991,7 @@ std::string HiScoreState::NameBox::getBufferText() const
   return text;
 }
 
-void HiScoreState::NameBox::composeFinal()
+void HiScoreRegState::NameBox::composeFinal()
 {
   _final.clear();
   _final += label;
@@ -2007,30 +2002,30 @@ void HiScoreState::NameBox::composeFinal()
   _final += quoteChar;
 }
 
-void HiScoreState::initialize(Vector2i worldSize, int32_t worldScale)
+void HiScoreRegState::initialize(Vector2i worldSize, int32_t worldScale)
 {
   _keypad = std::make_unique<Keypad>(assets->getFont(SpaceInvaders::fontKey, worldScale), worldSize, worldScale);
   _nameBox = std::make_unique<NameBox>(assets->getFont(SpaceInvaders::fontKey, worldScale), worldSize, worldScale);
 }
 
-void HiScoreState::onUpdate(double now, float dt)
+void HiScoreRegState::onUpdate(double now, float dt)
 {
   doInput();
 }
 
-void HiScoreState::onDraw(double now, float dt)
+void HiScoreRegState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::black);
   _keypad->draw();
   _nameBox->draw();
 }
 
-void HiScoreState::onReset()
+void HiScoreRegState::onReset()
 {
   if(_keypad != nullptr) _keypad->reset();
 }
 
-void HiScoreState::doInput()
+void HiScoreRegState::doInput()
 {
   bool lKey = pxr::input->isKeyPressed(Input::KEY_LEFT);
   bool rKey = pxr::input->isKeyPressed(Input::KEY_RIGHT);
@@ -2055,10 +2050,13 @@ void HiScoreState::doInput()
         mixer->playSound(SpaceInvaders::SK_FAST1); 
     }
     else if(strncmp(c, "END", 3) == 0){
-      if(!_nameBox->isFull())
+      if(!_nameBox->isFull()){
         mixer->playSound(SpaceInvaders::SK_FAST1); 
-      else
+      }
+      else{
+        static_cast<SpaceInvaders*>(_app)->setPlayerName(_nameBox->getBufferText());
         _app->switchState(MenuState::name);
+      }
     }
     else{
       if(!_nameBox->pushBack(c[0]))

@@ -177,6 +177,10 @@ public:
   std::pair<int, int> findScoreBoardPosition(int32_t scoreValue);
   const std::array<Score, hiscoreCount>& getHiscores() const {return _hiscores;}
 
+  void clearPlayerName() {_playerName.clear();}
+  void setPlayerName(std::string name) {_playerName = std::move(name);}
+  const std::string& getPlayerName() {return _playerName;}
+
 private:
   static constexpr float flashPeriod {0.1f};  // Inverse frequency of HUD label flashing.
   static constexpr float phasePeriod {0.1f};  // Inverse frequency of HUD label letter phase in.
@@ -200,6 +204,7 @@ private:
   int32_t _round;
   int32_t _credit;
   int32_t _lives;
+  std::string _playerName;
   bool _isHudVisible;
 };
 
@@ -817,17 +822,17 @@ private:
 };
 
 //===============================================================================================//
-// ##>HIGH SCORE STATE                                                                           //
+// ##>HISCORE REGISTRATION STATE                                                                 //
 //===============================================================================================//
 
-class HiScoreState final : public ApplicationState
+class HiScoreRegState final : public ApplicationState
 {
 public:
   static constexpr const char* name = "hiscore";
 
 public:
-  HiScoreState(Application* app) : ApplicationState{app}{}
-  ~HiScoreState() = default;
+  HiScoreRegState(Application* app) : ApplicationState{app}{}
+  ~HiScoreRegState() = default;
 
   void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
@@ -898,7 +903,6 @@ private:
     Vector2i _boxScreenPosition;
     const Font& _font;
     std::string _final;
-    Color3f _textColor;
   };
 
 private:
@@ -908,6 +912,18 @@ private:
 
   std::unique_ptr<Keypad> _keypad;
   std::unique_ptr<NameBox> _nameBox;
+};
+
+//===============================================================================================//
+// ##>HISCORE BOARD STATE                                                                        //
+//===============================================================================================//
+
+class HiScoreBoardState
+{
+public:
+
+private:
+
 };
 
 #endif
