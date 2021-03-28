@@ -4,7 +4,7 @@
 
 # Space Invaders Part II ... Tribute :space_invader: :guitar:
 
-This is a tribute to the best classic arcade :floppy_disk: :joystick: game in the world. One I wanted to make since I first started 
+Just a tribute to the best classic arcade :floppy_disk: :joystick: game in the world. One I wanted to make since I first started 
 programming. So here it is...enjoy! :partying_face: 
 
 <p align="center">
