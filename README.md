@@ -4,7 +4,7 @@
 
 # Space Invaders Part II ... Tribute :space_invader: :guitar:
 
-This is a tribute to the best classic arcade :floppy_disk: :joystick: in the world. One I wanted to make since I first started 
+This is a tribute to the best classic arcade :floppy_disk: :joystick: game in the world. One I wanted to make since I first started 
 programming. So here it is...enjoy! :partying_face: 
 
 This is clone of the 1979 game space invaders part II implemented in C++ with a single file custom 
