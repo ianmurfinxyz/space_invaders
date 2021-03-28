@@ -57,7 +57,7 @@ public:
   static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
   static constexpr size_t hiscoreCount = 10;
 
-  using ScoreName = std::array<char, hiscoreNameLen>;
+  using ScoreName = std::array<char, hiscoreNameLen>; // warning: not null terinated!
                                             
   static constexpr int32_t nameToInt(const ScoreName& name)
   {
@@ -943,13 +943,23 @@ private:
   static constexpr int32_t rowSeperation {4};
   static constexpr int32_t colSeperation {10};
   static constexpr int32_t scoreDigitCountEstimate {5};
+  static constexpr Color3f oldScoreColor {colors::red};
+  static constexpr Color3f newScoreColor {colors::green};
+  static constexpr float enterDelaySeconds {1.f};
+  static constexpr float exitDelaySeconds {1.f};
+  static constexpr float swapScoreDelaySeconds {1.f};
+
+private:
+  void doScoreSwap();
 
 private:
   int32_t _eventNum;
+  float _eventClock;
   SpaceInvaders::Score _newScore;
   std::array<SpaceInvaders::Score*, SpaceInvaders::hiscoreCount + 1> _scoreBoard;
   const Font* _font;
-  Vector2i _boardScreenPosition;
+  Vector2i _nameScreenPosition;
+  Vector2i _scoreScreenPosition;
 };
 
 #endif

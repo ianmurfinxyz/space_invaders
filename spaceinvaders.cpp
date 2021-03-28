@@ -2069,16 +2069,18 @@ void HiScoreBoardState::initialize(Vector2i worldSize, int32_t worldScale)
 
   // world scale of glyphs is taken into account by the fontSize returned from font.
   int32_t glyphSize_px = _font->getSize() + _font->getGlyphSpace();
-  int32_t boardWidth_px = (SpaceInvaders::hiscoreNameLen * glyphSize_px) + 
-                          (colSeperation * worldScale) +
-                          (scoreDigitCountEstimate * glyphSize_px);
+  int32_t nameWidth_px = glyphSize_px * SpaceInvaders::hiscoreNameLen;
+  int32_t scaledColSeperation = colSeperation * worldScale;
+  int32_t boardWidth_px = nameWidth + scaledColSeperation + (scoreDigitCountEstimate * glyphSize_px);
+  int32_t boardHeight_px = (SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + rowSeperation);
 
-  int32_t boardHeight_px = ((SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + rowSeperation);
-
-  _boardScreenPosition = {
+  _nameScreenPosition = {
     (worldSize._x - boardWidth_px) / 2,
     (worldSize._y - boardHeight_px) / 2
   };
+
+  _scoreScreenPosition = _nameScreenPosition;
+  _scoreScreenPosition._x += nameWidth_px + scaledColSeperation;
 }
 
 void HiScoreBoardState::onEnter()
@@ -2092,5 +2094,38 @@ void HiScoreBoardState::onEnter()
     _scoreBoard[i + 1] = hiscores[i];
 
   _eventNum = 0;
+}
 
+void HiScoreBoard::onUpdate(double now, float dt)
+{
+  _eventClock += dt;
+  if(_eventNum == 0 && _eventClock > enterDelaySeconds){
+    _eventClock = 0.f;
+    ++_eventNum;
+  }
+  else if(_eventNum > _scoreBoard.size()){ // TODO
+
+  }
+}
+
+void HiScoreBoard::onDraw(double now, float dt)
+{
+  Vector2i namePosition {_nameScreenPosition};
+  Vector2i scorePosition {_scoreScreenPosition};
+  std::string nameStr {};
+  const Color3f* color;
+  for(auto& score : _scoreBoard){
+    color = (score == &_newScore) ? &newScoreColor : &oldScoreColor;
+
+    // we do this because the name in SpaceInvaders::Score is not a null terminated.
+    nameStr.clear();
+    for(int i{0}; i < SpaceInvaders::scoreNameLen; ++i)
+      nameStr += score->_name[i];
+  
+    renderer->blitText(namePosition, nameStr, *_font, color);
+    renderer->blitText(scorePosition, std::to_string(score->_value), *_font, color);
+
+    namePosition._y += rowSeperation;
+    scorePosition._y += rowSeperation;
+  }
 }
