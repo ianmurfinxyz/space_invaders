@@ -2,7 +2,7 @@
   <img src="img/invaders.png" alt="crab octopus squid cuttle"/>
 </p>
 
-# Space Invaders Part II ... Tribute :space_invader:
+# Space Invaders Part II ... Tribute :space_invader: :guitar:
 
 This is clone of the 1979 game space invaders part II implemented in C++ with a single file custom 
 engine using SDL2 and Opengl 2.1 (because my computer is kinda old :persevere:). SDL2 is used 
