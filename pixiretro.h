@@ -1048,7 +1048,7 @@ public:
   virtual void initialize(Vector2i worldSize, int32_t worldScale) = 0;
   virtual void onUpdate(double now, float dt) = 0;
   virtual void onDraw(double now, float dt) = 0;
-  virtual void onReset() = 0;
+  virtual void onEnter() = 0;
   virtual std::string getName() = 0;
 
 protected:

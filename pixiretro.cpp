@@ -1848,7 +1848,7 @@ void Application::switchState(const std::string& name)
 {
   assert(_states.find(name) != _states.end());
   _activeState = &_states[name];
-  (*_activeState)->onReset();
+  (*_activeState)->onEnter();
 }
 
 void Application::drawWindowTooSmall()

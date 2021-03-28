@@ -56,8 +56,10 @@ public:
 
   static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
   static constexpr size_t hiscoreCount = 10;
+
+  using ScoreName = std::array<char, hiscoreNameLen>;
                                             
-  static constexpr int32_t nameToInt(const std::array<char, hiscoreNameLen>& name)
+  static constexpr int32_t nameToInt(const ScoreName& name)
   {
     static_assert(hiscoreNameLen == sizeof(int32_t));
     int32_t iname {0};
@@ -66,10 +68,10 @@ public:
     return iname;
   }
 
-  static constexpr std::array<char, hiscoreNameLen> intToName(int32_t iname)
+  static constexpr ScoreName intToName(int32_t iname)
   {
     static_assert(hiscoreNameLen == sizeof(int32_t));
-    std::array<char, hiscoreNameLen> name {};
+    ScoreName name {};
     for(size_t i{hiscoreNameLen}; i >= 1; --i)
       name[i - 1] = static_cast<char>((iname & (0xff << (8 * (i - 1)))) >> (8 * (i - 1)));
     return name;
@@ -90,7 +92,7 @@ public:
     // where for a name like Adam,
     //              LM char--^  ^--RM char
     //                      
-    std::array<char, hiscoreNameLen> _name;
+    ScoreName _name;
     int32_t _value;
   };
 
@@ -175,11 +177,15 @@ public:
   bool isHiscore(int32_t scoreValue);
   bool registerHiscore(const Score& score);
   std::pair<int, int> findScoreBoardPosition(int32_t scoreValue);
+
+  //
+  // scores are guaranteed to be sorted with increasing scores in order of ascending index.
+  //
   const std::array<Score, hiscoreCount>& getHiscores() const {return _hiscores;}
 
   void clearPlayerName() {_playerName.clear();}
-  void setPlayerName(std::string name) {_playerName = std::move(name);}
-  const std::string& getPlayerName() {return _playerName;}
+  void setPlayerName(ScoreName name) {_playerName = name;}
+  ScoreName getPlayerName() {return _playerName;}
 
 private:
   static constexpr float flashPeriod {0.1f};  // Inverse frequency of HUD label flashing.
@@ -204,7 +210,7 @@ private:
   int32_t _round;
   int32_t _credit;
   int32_t _lives;
-  std::string _playerName;
+  ScoreName _playerName;
   bool _isHudVisible;
 };
 
@@ -224,7 +230,7 @@ public:
   void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
-  void onReset();
+  void onEnter();
   std::string getName() {return name;}
 
 private:
@@ -391,7 +397,7 @@ public:
   void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
-  void onReset();
+  void onEnter();
   std::string getName(){return name;}
 
 private:
@@ -792,7 +798,7 @@ public:
   void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
-  void onReset();
+  void onEnter();
 
   std::string getName(){return name;}
 
@@ -828,7 +834,7 @@ private:
 class HiScoreRegState final : public ApplicationState
 {
 public:
-  static constexpr const char* name = "hiscore";
+  static constexpr const char* name = "scoreReg";
 
 public:
   HiScoreRegState(Application* app) : ApplicationState{app}{}
@@ -837,7 +843,7 @@ public:
   void initialize(Vector2i worldSize, int32_t worldScale);
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
-  void onReset();
+  void onEnter();
 
   std::string getName(){return name;}
 
@@ -885,7 +891,7 @@ private:
     void draw();
     bool pushBack(char c);
     bool popBack();
-    std::string getBufferText() const;
+    SpaceInvaders::ScoreName getBufferText() const {return _nameBuffer;}
     bool isFull() const {return _buffer[bufferSize - 1] != nullChar;}
     bool isEmpty() const {return _buffer[0] == nullChar;}
 
@@ -893,13 +899,12 @@ private:
     void composeFinal();
 
   private:
-    static constexpr size_t bufferSize {4};
     static constexpr char nullChar {'-'};
     static constexpr char quoteChar {'\''};
     static constexpr const char* label = "NAME";
 
   private:
-    std::array<char, bufferSize> _buffer; 
+    SpaceInvaders::ScoreName _nameBuffer; 
     Vector2i _boxScreenPosition;
     const Font& _font;
     std::string _final;
@@ -921,9 +926,30 @@ private:
 class HiScoreBoardState
 {
 public:
+  static constexpr const char* name = "scoreBoard";
+
+public:
+  HiScoreBoardState(Application* app) : ApplicationState{app}{}
+  ~HiScoreBoardState() = default;
+
+  void initialize(Vector2i worldSize, int32_t worldScale);
+  void onUpdate(double now, float dt);
+  void onDraw(double now, float dt);
+  void onEnter();
+
+  std::string getName(){return name;}
 
 private:
+  static constexpr int32_t rowSeperation {4};
+  static constexpr int32_t colSeperation {10};
+  static constexpr int32_t scoreDigitCountEstimate {5};
 
+private:
+  int32_t _eventNum;
+  SpaceInvaders::Score _newScore;
+  std::array<SpaceInvaders::Score*, SpaceInvaders::hiscoreCount + 1> _scoreBoard;
+  const Font* _font;
+  Vector2i _boardScreenPosition;
 };
 
 #endif

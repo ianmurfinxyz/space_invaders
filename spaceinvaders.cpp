@@ -48,12 +48,14 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
   std::unique_ptr<ApplicationState> splash = std::make_unique<SplashState>(this);
-  std::unique_ptr<ApplicationState> hiscores = std::make_unique<HiScoreRegState>(this);
+  std::unique_ptr<ApplicationState> scoreReg = std::make_unique<HiScoreRegState>(this);
+  std::unique_ptr<ApplicationState> scoreBoard = std::make_unique<HiScoreBoardState>(this);
 
   game->initialize(_worldSize, _worldScale);
   menu->initialize(_worldSize, _worldScale);
   splash->initialize(_worldSize, _worldScale);
-  hiscores->initialize(_worldSize, _worldScale);
+  scoreReg->initialize(_worldSize, _worldScale);
+  scoreBoard->initialize(_worldSize, _worldScale);
 
   addState(std::move(game));
   addState(std::move(menu));
@@ -324,7 +326,7 @@ void SplashState::doEvents()
   ++_nextNode;
 }
 
-void SplashState::onReset()
+void SplashState::onEnter()
 {
   _masterClock = 0.f;
   _nextNode = 0;
@@ -1762,7 +1764,7 @@ void GameState::onDraw(double now, float dt)
   //drawHud();
 }
 
-void GameState::onReset()
+void GameState::onEnter()
 {
   startNextLevel();
 }
@@ -1794,7 +1796,7 @@ void MenuState::onDraw(double now, float dt)
   renderer->clearViewport(colors::black);
 }
 
-void MenuState::onReset()
+void MenuState::onEnter()
 {
   populateHud();
 }
@@ -1844,7 +1846,7 @@ void MenuState::depopulateHud()
 }
 
 //===============================================================================================//
-// ##>HIGH SCORE STATE                                                                           //
+// ##>HIGH SCORE REGISTRATION STATE                                                              //
 //===============================================================================================//
 
 HiScoreRegState::Keypad::Keypad(const Font& font, Vector2i worldSize, int32_t worldScale) :
@@ -1950,7 +1952,7 @@ bool HiScoreRegState::NameBox::pushBack(char c)
 {
   if(isFull()) 
     return false;
-  for(int i = bufferSize - 1; i >= 0; --i){
+  for(int i = _nameBuffer.size() - 1; i >= 0; --i){
     if(i == 0) 
       _buffer[i] = c;
     else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){ 
@@ -1967,11 +1969,11 @@ bool HiScoreRegState::NameBox::popBack()
   if(isEmpty()) 
     return false;
   if(isFull()){
-    _buffer[bufferSize - 1] = nullChar;
+    _buffer[_nameBuffer.size() - 1] = nullChar;
     composeFinal();
     return true;
   }
-  for(int i = bufferSize - 1; i >= 0; --i){
+  for(int i = _nameBuffer.size() - 1; i >= 0; --i){
     if(i == 0) 
       _buffer[i] = nullChar;
     else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){
@@ -1981,14 +1983,6 @@ bool HiScoreRegState::NameBox::popBack()
   }
   composeFinal();
   return true;
-}
-
-std::string HiScoreRegState::NameBox::getBufferText() const
-{
-  std::string text {};
-  for(auto c : _buffer)
-    text += c;
-  return text;
 }
 
 void HiScoreRegState::NameBox::composeFinal()
@@ -2020,7 +2014,7 @@ void HiScoreRegState::onDraw(double now, float dt)
   _nameBox->draw();
 }
 
-void HiScoreRegState::onReset()
+void HiScoreRegState::onEnter()
 {
   if(_keypad != nullptr) _keypad->reset();
 }
@@ -2063,4 +2057,40 @@ void HiScoreRegState::doInput()
         mixer->playSound(SpaceInvaders::SK_FAST1); 
     }
   }
+}
+
+//===============================================================================================//
+// ##>HIGH SCORE BOARD STATE                                                                     //
+//===============================================================================================//
+
+void HiScoreBoardState::initialize(Vector2i worldSize, int32_t worldScale)
+{
+  _font = &(assets->getFont(SpaceInvaders::fontKey, worldScale));
+
+  // world scale of glyphs is taken into account by the fontSize returned from font.
+  int32_t glyphSize_px = _font->getSize() + _font->getGlyphSpace();
+  int32_t boardWidth_px = (SpaceInvaders::hiscoreNameLen * glyphSize_px) + 
+                          (colSeperation * worldScale) +
+                          (scoreDigitCountEstimate * glyphSize_px);
+
+  int32_t boardHeight_px = ((SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + rowSeperation);
+
+  _boardScreenPosition = {
+    (worldSize._x - boardWidth_px) / 2,
+    (worldSize._y - boardHeight_px) / 2
+  };
+}
+
+void HiScoreBoardState::onEnter()
+{
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  const auto& hiscores = si->getHiscores();
+  _newScore._value = si->getScore();
+  _newScore._name = si->getPlayerName();
+  _scoreBoard[0] == &_newScore;
+  for(int i{0}; i < SpaceInvaders::hiscoreCount; ++i)
+    _scoreBoard[i + 1] = hiscores[i];
+
+  _eventNum = 0;
+
 }
