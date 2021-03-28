@@ -873,12 +873,41 @@ private:
     const Font& _font;
   };
 
+  class NameBox
+  {
+  public:
+    NameBox(const Font& font, Vector2i worldSize, int32_t worldScale);
+    void draw();
+    bool pushBack(char c);
+    bool popBack();
+    std::string getBufferText() const;
+    bool isFull() const {return _buffer[bufferSize - 1] != nullChar;}
+    bool isEmpty() const {return _buffer[0] == nullChar;}
+
+  private:
+    void composeFinal();
+
+  private:
+    static constexpr size_t bufferSize {4};
+    static constexpr char nullChar {'-'};
+    static constexpr char quoteChar {'\''};
+    static constexpr const char* label = "NAME";
+
+  private:
+    std::array<char, bufferSize> _buffer; 
+    Vector2i _boxScreenPosition;
+    const Font& _font;
+    std::string _final;
+    Color3f _textColor;
+  };
+
 private:
   void doInput();
 
 private:
 
   std::unique_ptr<Keypad> _keypad;
+  std::unique_ptr<NameBox> _nameBox;
 };
 
 #endif

@@ -1924,9 +1924,93 @@ void HiScoreState::Keypad::draw()
   renderer->blitText(_cursorScreenPosition, cursorChar, _font, _cursorColor);
 }
 
+HiScoreState::NameBox::NameBox(const Font& font, Vector2i worldSize, int32_t worldScale) :
+  _buffer{},
+  _font{font},
+  _final{},
+  _textColor{colors::red}
+{
+  for(auto& c : _buffer)
+    c = nullChar;
+
+  composeFinal();
+
+  int32_t finalWidth_px = font.calculateStringWidth(_final);
+  std::cout << "finalWidth_px=" << finalWidth_px << std::endl;
+  if(finalWidth_px < 100 || finalWidth_px > 400){
+    std::cout << "thing" << std::endl;
+  }
+  _boxScreenPosition = {
+    (worldSize._x - finalWidth_px) / 2,
+    worldSize._y / 4
+  };
+}
+
+void HiScoreState::NameBox::draw()
+{
+  renderer->blitText(_boxScreenPosition, _final, _font, _textColor);
+}
+
+bool HiScoreState::NameBox::pushBack(char c)
+{
+  if(isFull()) 
+    return false;
+  for(int i = bufferSize - 1; i >= 0; --i){
+    if(i == 0) 
+      _buffer[i] = c;
+    else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){ 
+      _buffer[i] = c; 
+      break;
+    }
+  }
+  composeFinal();
+  return true;
+}
+
+bool HiScoreState::NameBox::popBack()
+{
+  if(isEmpty()) 
+    return false;
+  if(isFull()){
+    _buffer[bufferSize - 1] = nullChar;
+    composeFinal();
+    return true;
+  }
+  for(int i = bufferSize - 1; i >= 0; --i){
+    if(i == 0) 
+      _buffer[i] = nullChar;
+    else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){
+      _buffer[i-1] = nullChar; 
+      break;
+    }
+  }
+  composeFinal();
+  return true;
+}
+
+std::string HiScoreState::NameBox::getBufferText() const
+{
+  std::string text {};
+  for(auto c : _buffer)
+    text += c;
+  return text;
+}
+
+void HiScoreState::NameBox::composeFinal()
+{
+  _final.clear();
+  _final += label;
+  _final += ' ';
+  _final += quoteChar;
+  for(auto& c : _buffer)
+    _final += c;
+  _final += quoteChar;
+}
+
 void HiScoreState::initialize(Vector2i worldSize, int32_t worldScale)
 {
   _keypad = std::make_unique<Keypad>(assets->getFont(SpaceInvaders::fontKey, worldScale), worldSize, worldScale);
+  _nameBox = std::make_unique<NameBox>(assets->getFont(SpaceInvaders::fontKey, worldScale), worldSize, worldScale);
 }
 
 void HiScoreState::onUpdate(double now, float dt)
@@ -1938,6 +2022,7 @@ void HiScoreState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::black);
   _keypad->draw();
+  _nameBox->draw();
 }
 
 void HiScoreState::onReset()
@@ -1961,4 +2046,23 @@ void HiScoreState::doInput()
     rowShift += -1;
 
   _keypad->moveCursor(colShift, rowShift);  
+
+  bool eKey = pxr::input->isKeyPressed(Input::KEY_SPACE);
+  if(eKey){
+    const char* c = _keypad->getActiveKeyText();
+    if(strncmp(c, "RUB", 3) == 0){
+      if(!_nameBox->popBack())
+        mixer->playSound(SpaceInvaders::SK_FAST1); 
+    }
+    else if(strncmp(c, "END", 3) == 0){
+      if(!_nameBox->isFull())
+        mixer->playSound(SpaceInvaders::SK_FAST1); 
+      else
+        _app->switchState(MenuState::name);
+    }
+    else{
+      if(!_nameBox->pushBack(c[0]))
+        mixer->playSound(SpaceInvaders::SK_FAST1); 
+    }
+  }
 }

@@ -988,8 +988,12 @@ void Bitmap::regenerateBytes()
 int32_t Font::calculateStringWidth(const std::string& str) const
 {
   int32_t sum {0};
-  for(char c : str)
-    sum += getGlyph(c)._advance + _meta._glyphSpace;
+  for(char c : str){
+    if(c == ' ') 
+      sum += getWordSpace();
+    else 
+      sum += getGlyph(c)._advance + _meta._glyphSpace;
+  }
   return sum;
 }
 
