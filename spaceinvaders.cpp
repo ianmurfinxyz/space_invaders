@@ -43,7 +43,12 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   for(int32_t i = SK_EXPLOSION; i < SK_COUNT; ++i)
     mixmanifest.push_back({i, _soundNames[i]});
 
+  loadHiscores();
+
   pxr::mixer->loadSoundsWAV(mixmanifest);
+
+  resetGameStats();
+  _score = 5680;
 
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
@@ -60,7 +65,8 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   addState(std::move(game));
   addState(std::move(menu));
   addState(std::move(splash));
-  addState(std::move(hiscores));
+  addState(std::move(scoreReg));
+  addState(std::move(scoreBoard));
 
   //switchState(SplashState::name);
   switchState(HiScoreRegState::name);
@@ -78,8 +84,6 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, pxr::colors::magenta, &_round, 5});
   _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, pxr::colors::magenta, "CREDIT"});
   _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, pxr::colors::cyan, &_credit, 1});
-
-  loadHiscores();
 
   return true;
 }
@@ -124,6 +128,7 @@ void SpaceInvaders::resetGameStats()
   _round = 0;
   _credit = 0;
   _score = 0;
+  clearPlayerName();
 }
 
 void SpaceInvaders::loadHiscores()
@@ -1927,11 +1932,11 @@ void HiScoreRegState::Keypad::draw()
 }
 
 HiScoreRegState::NameBox::NameBox(const Font& font, Vector2i worldSize, int32_t worldScale) :
-  _buffer{},
+  _nameBuffer{},
   _font{font},
   _final{}
 {
-  for(auto& c : _buffer)
+  for(auto& c : _nameBuffer)
     c = nullChar;
 
   composeFinal();
@@ -1954,9 +1959,9 @@ bool HiScoreRegState::NameBox::pushBack(char c)
     return false;
   for(int i = _nameBuffer.size() - 1; i >= 0; --i){
     if(i == 0) 
-      _buffer[i] = c;
-    else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){ 
-      _buffer[i] = c; 
+      _nameBuffer[i] = c;
+    else if(_nameBuffer[i] == nullChar && _nameBuffer[i - 1] != nullChar){ 
+      _nameBuffer[i] = c; 
       break;
     }
   }
@@ -1969,20 +1974,30 @@ bool HiScoreRegState::NameBox::popBack()
   if(isEmpty()) 
     return false;
   if(isFull()){
-    _buffer[_nameBuffer.size() - 1] = nullChar;
+    _nameBuffer[_nameBuffer.size() - 1] = nullChar;
     composeFinal();
     return true;
   }
   for(int i = _nameBuffer.size() - 1; i >= 0; --i){
     if(i == 0) 
-      _buffer[i] = nullChar;
-    else if(_buffer[i] == nullChar && _buffer[i - 1] != nullChar){
-      _buffer[i-1] = nullChar; 
+      _nameBuffer[i] = nullChar;
+    else if(_nameBuffer[i] == nullChar && _nameBuffer[i - 1] != nullChar){
+      _nameBuffer[i-1] = nullChar; 
       break;
     }
   }
   composeFinal();
   return true;
+}
+
+bool HiScoreRegState::NameBox::isFull() const
+{
+  return _nameBuffer[SpaceInvaders::hiscoreNameLen - 1] != nullChar;
+}
+
+bool HiScoreRegState::NameBox::isEmpty() const
+{
+  return _nameBuffer[0] == nullChar;
 }
 
 void HiScoreRegState::NameBox::composeFinal()
@@ -1991,7 +2006,7 @@ void HiScoreRegState::NameBox::composeFinal()
   _final += label;
   _final += ' ';
   _final += quoteChar;
-  for(auto& c : _buffer)
+  for(auto& c : _nameBuffer)
     _final += c;
   _final += quoteChar;
 }
@@ -2049,7 +2064,7 @@ void HiScoreRegState::doInput()
       }
       else{
         static_cast<SpaceInvaders*>(_app)->setPlayerName(_nameBox->getBufferText());
-        _app->switchState(MenuState::name);
+        _app->switchState(HiScoreBoardState::name);
       }
     }
     else{
@@ -2071,7 +2086,7 @@ void HiScoreBoardState::initialize(Vector2i worldSize, int32_t worldScale)
   int32_t glyphSize_px = _font->getSize() + _font->getGlyphSpace();
   int32_t nameWidth_px = glyphSize_px * SpaceInvaders::hiscoreNameLen;
   int32_t scaledColSeperation = colSeperation * worldScale;
-  int32_t boardWidth_px = nameWidth + scaledColSeperation + (scoreDigitCountEstimate * glyphSize_px);
+  int32_t boardWidth_px = nameWidth_px + scaledColSeperation + (scoreDigitCountEstimate * glyphSize_px);
   int32_t boardHeight_px = (SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + rowSeperation);
 
   _nameScreenPosition = {
@@ -2089,27 +2104,34 @@ void HiScoreBoardState::onEnter()
   const auto& hiscores = si->getHiscores();
   _newScore._value = si->getScore();
   _newScore._name = si->getPlayerName();
-  _scoreBoard[0] == &_newScore;
+  if(_newScore._name[0] == '\0')
+    _newScore._name = placeHolderName;
+  _scoreBoard[0] = &_newScore;
   for(int i{0}; i < SpaceInvaders::hiscoreCount; ++i)
-    _scoreBoard[i + 1] = hiscores[i];
-
+    _scoreBoard[i + 1] = &hiscores[i];
   _eventNum = 0;
+  _eventClock = 0.f;
 }
 
-void HiScoreBoard::onUpdate(double now, float dt)
+void HiScoreBoardState::onUpdate(double now, float dt)
 {
   _eventClock += dt;
   if(_eventNum == 0 && _eventClock > enterDelaySeconds){
     _eventClock = 0.f;
     ++_eventNum;
   }
-  else if(_eventNum > _scoreBoard.size()){ // TODO
-
+  else if(_eventNum > _scoreBoard.size() && _eventClock > exitDelaySeconds){
+    _app->switchState(MenuState::name);
+  }
+  else if(_eventClock > swapScoreDelaySeconds){
+    _eventClock = 0.f;
+    _eventNum += doScoreSwap() ? _scoreBoard.size() : 1;  // if done all swaps skip to end.
   }
 }
 
-void HiScoreBoard::onDraw(double now, float dt)
+void HiScoreBoardState::onDraw(double now, float dt)
 {
+  renderer->clearViewport(colors::black);
   Vector2i namePosition {_nameScreenPosition};
   Vector2i scorePosition {_scoreScreenPosition};
   std::string nameStr {};
@@ -2117,15 +2139,26 @@ void HiScoreBoard::onDraw(double now, float dt)
   for(auto& score : _scoreBoard){
     color = (score == &_newScore) ? &newScoreColor : &oldScoreColor;
 
-    // we do this because the name in SpaceInvaders::Score is not a null terminated.
+    // we do this because the name in SpaceInvaders::Score is not null terminated.
     nameStr.clear();
-    for(int i{0}; i < SpaceInvaders::scoreNameLen; ++i)
+    for(int i{0}; i < SpaceInvaders::hiscoreNameLen; ++i)
       nameStr += score->_name[i];
   
-    renderer->blitText(namePosition, nameStr, *_font, color);
-    renderer->blitText(scorePosition, std::to_string(score->_value), *_font, color);
+    renderer->blitText(namePosition, nameStr, *_font, *color);
+    renderer->blitText(scorePosition, std::to_string(score->_value), *_font, *color);
 
-    namePosition._y += rowSeperation;
-    scorePosition._y += rowSeperation;
+    namePosition._y += rowSeperation + _font->getLineSpace();
+    scorePosition._y += rowSeperation + _font->getLineSpace();
+  }
+}
+
+bool HiScoreBoardState::doScoreSwap()
+{
+  for(int i{0}; i < _scoreBoard.size(); ++i){
+    if(_scoreBoard[i] != &_newScore) continue;
+    if(i == (_scoreBoard.size() - 1)) return true;
+    if(_scoreBoard[i]->_value <= _scoreBoard[i + 1]->_value) return true;
+    std::swap(_scoreBoard[i], _scoreBoard[i + 1]);
+    return false;
   }
 }
