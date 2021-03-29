@@ -46,12 +46,13 @@ public:
   enum SoundKey : Mixer::Key_t
   {
     SK_EXPLOSION, SK_SHOOT, SK_INVADER_KILLED, SK_INVADER_MORPHED, SK_UFO_HIGH_PITCH, 
-    SK_UFO_LOW_PITCH, SK_FAST1, SK_FAST2, SK_FAST3, SK_FAST4, SK_COUNT
+    SK_UFO_LOW_PITCH, SK_FAST1, SK_FAST2, SK_FAST3, SK_FAST4, SK_SCORE_BEEP, SK_TOPSCORE, 
+    SK_COUNT
   };
 
   static constexpr std::array<Mixer::Name_t, SK_COUNT> _soundNames {
     "explosion", "shoot", "invaderkilled", "invadermorphed", "ufo_highpitch", "ufo_lowpitch", "fastinvader1", 
-    "fastinvader2", "fastinvader3", "fastinvader4"
+    "fastinvader2", "fastinvader3", "fastinvader4", "scorebeep", "topscore"
   };
 
   static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
@@ -110,9 +111,9 @@ public:
     ScoreData() : Dataset({
       // key
       {NAME0 , "name0" , nameToInt({'A','D','A','M'}), 0, std::numeric_limits<int32_t>::max()},
-      {SCORE0, "score0", 1230                        , 0, std::numeric_limits<int32_t>::max()},
-      {NAME1 , "name1" , nameToInt({'I','A','N','_'}), 0, std::numeric_limits<int32_t>::max()},
-      {SCORE1, "score1", 3410                        , 0, std::numeric_limits<int32_t>::max()},
+      {SCORE0, "score0", 120                         , 0, std::numeric_limits<int32_t>::max()},
+      {NAME1 , "name1" , nameToInt({'_','A','N','_'}), 0, std::numeric_limits<int32_t>::max()},
+      {SCORE1, "score1", 340                         , 0, std::numeric_limits<int32_t>::max()},
       {NAME2 , "name2" , nameToInt({'N','O','O','B'}), 0, std::numeric_limits<int32_t>::max()},
       {SCORE2, "score2", 300                         , 0, std::numeric_limits<int32_t>::max()},
       {NAME3 , "name3" , nameToInt({'T','I','M','_'}), 0, std::numeric_limits<int32_t>::max()},
@@ -126,7 +127,7 @@ public:
       {NAME7 , "name7" , nameToInt({'P','E','E','K'}), 0, std::numeric_limits<int32_t>::max()},
       {SCORE7, "score7", 1440                        , 0, std::numeric_limits<int32_t>::max()},
       {NAME8 , "name8" , nameToInt({'_','I','T','_'}), 0, std::numeric_limits<int32_t>::max()},
-      {SCORE8, "score8", 1610                        , 0, std::numeric_limits<int32_t>::max()},
+      {SCORE8, "score8", 60                          , 0, std::numeric_limits<int32_t>::max()},
       {NAME9 , "name9" , nameToInt({'_','W','I','N'}), 0, std::numeric_limits<int32_t>::max()},
       {SCORE9, "score9", 240                         , 0, std::numeric_limits<int32_t>::max()},
     }){}
@@ -172,16 +173,18 @@ public:
   Vector2i getWorldSize() const {return _worldSize;}
   int32_t getWorldScale() const {return _worldScale;}
 
-  void loadHiscores();
-  void writeHiscores();
-  bool isHiscore(int32_t scoreValue);
-  bool registerHiscore(const Score& score);
-  std::pair<int, int> findScoreBoardPosition(int32_t scoreValue);
+  void loadHiScores();
+  void writeHiScores();
+  bool isHiScore(int32_t scoreValue);
+  bool isDuplicateHiScore(const Score& score);
+  bool registerHiScore(const Score& score);
+  size_t findScoreBoardPosition(int32_t scoreValue);
+  void updateHudHiScore();
 
   //
   // scores are guaranteed to be sorted with increasing scores in order of ascending index.
   //
-  const std::array<Score, hiscoreCount>& getHiscores() const {return _hiscores;}
+  const std::array<Score, hiscoreCount>& getHiScores() const {return _hiscores;}
 
   void clearPlayerName() {_playerName[0] = '\0';}
   void setPlayerName(ScoreName name) {_playerName = name;}
@@ -536,7 +539,6 @@ private:
     float _boomFrameClock;           // Unit: seconds.
     bool _isBooming;
     bool _isAlive;
-    bool _isFrozen;
     Assets::Key_t _cannonKey;
     std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
   };
@@ -940,18 +942,25 @@ public:
   std::string getName(){return name;}
 
 private:
-  static constexpr int32_t rowSeperation {4};
-  static constexpr int32_t colSeperation {10};
+  static constexpr int32_t rowSeperation {2};
+  static constexpr int32_t colSeperation {8};
+  static constexpr int32_t boardTitleSeperation {20};
   static constexpr int32_t scoreDigitCountEstimate {4};
-  static constexpr Color3f oldScoreColor {colors::red};
+  static constexpr Color3f oldScoreColor {colors::magenta};
   static constexpr Color3f newScoreColor {colors::green};
+  static constexpr Color3f titleColor {colors::cyan};
   static constexpr float enterDelaySeconds {1.f};
-  static constexpr float exitDelaySeconds {1.f};
-  static constexpr float swapScoreDelaySeconds {1.f};
-  static constexpr SpaceInvaders::ScoreName placeHolderName {'N', 'A', 'M', 'E'};
+  static constexpr float topScoreExitDelaySeconds {7.f};
+  static constexpr float normalExitDelaySeconds {1.f};
+  static constexpr float swapScoreDelaySeconds {0.5f};
+  static constexpr SpaceInvaders::ScoreName placeHolderName {'Y', 'O', 'U', '_'};
+  static constexpr const char* titleString {"*HI-SCORER LEADERBOARD*"};
 
 private:
   bool doScoreSwap();
+  void populateHud();
+  void depopulateHud();
+  bool newScoreIsTop();
 
 private:
   int32_t _eventNum;
@@ -961,6 +970,9 @@ private:
   const Font* _font;
   Vector2i _nameScreenPosition;
   Vector2i _scoreScreenPosition;
+  HUD::uid_t _uidTitleText;
+  Vector2i _scoreBoardSize;
+  float _exitDelaySeconds;
 };
 
 #endif

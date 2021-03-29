@@ -71,3 +71,6 @@ no longer appear.
 - according to this site,
 https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
   the crab invaders only start splitting into cuttles after lvl 3.
+
+[29-03-2021]
+- need to implement the test for aliens reaching screen bottom.

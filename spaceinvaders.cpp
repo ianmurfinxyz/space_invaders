@@ -43,12 +43,23 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   for(int32_t i = SK_EXPLOSION; i < SK_COUNT; ++i)
     mixmanifest.push_back({i, _soundNames[i]});
 
-  loadHiscores();
+  loadHiScores();
+  updateHudHiScore();
 
   pxr::mixer->loadSoundsWAV(mixmanifest);
 
   resetGameStats();
-  _score = 5680;
+
+  _isHudVisible = false;
+  _hud.initialize(&(pxr::assets->getFont(fontKey, _worldScale)), flashPeriod, phasePeriod);
+  _uidScoreText = _hud.addTextLabel({Vector2i{10, 240} * _worldScale, pxr::colors::magenta, "SCORE"});
+  _uidScoreValue = _hud.addIntLabel({Vector2i{10, 230} * _worldScale, pxr::colors::white, &_score, 5});
+  _uidHiScoreText = _hud.addTextLabel({Vector2i{85, 240} * _worldScale, pxr::colors::red, "HI-SCORE"});
+  _uidHiScoreValue = _hud.addIntLabel({Vector2i{95, 230} * _worldScale, pxr::colors::green, &_hiscore, 5});
+  _uidRoundText = _hud.addTextLabel({Vector2i{170, 240} * _worldScale, pxr::colors::yellow, "ROUND"});
+  _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, pxr::colors::magenta, &_round, 5});
+  _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, pxr::colors::magenta, "CREDIT"});
+  _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, pxr::colors::cyan, &_credit, 1});
 
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
@@ -68,22 +79,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   addState(std::move(scoreReg));
   addState(std::move(scoreBoard));
 
-  //switchState(SplashState::name);
-  switchState(HiScoreRegState::name);
-
-  _hiscore = 0;
-  _isHudVisible = false;
-
-  _hud.initialize(&(pxr::assets->getFont(fontKey, _worldScale)), flashPeriod, phasePeriod);
-
-  _uidScoreText = _hud.addTextLabel({Vector2i{10, 240} * _worldScale, pxr::colors::magenta, "SCORE"});
-  _uidScoreValue = _hud.addIntLabel({Vector2i{10, 230} * _worldScale, pxr::colors::white, &_score, 5});
-  _uidHiScoreText = _hud.addTextLabel({Vector2i{85, 240} * _worldScale, pxr::colors::red, "HI-SCORE"});
-  _uidHiScoreValue = _hud.addIntLabel({Vector2i{95, 230} * _worldScale, pxr::colors::green, &_hiscore, 5});
-  _uidRoundText = _hud.addTextLabel({Vector2i{170, 240} * _worldScale, pxr::colors::yellow, "ROUND"});
-  _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, pxr::colors::magenta, &_round, 5});
-  _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, pxr::colors::magenta, "CREDIT"});
-  _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, pxr::colors::cyan, &_credit, 1});
+  switchState(SplashState::name);
 
   return true;
 }
@@ -131,7 +127,7 @@ void SpaceInvaders::resetGameStats()
   clearPlayerName();
 }
 
-void SpaceInvaders::loadHiscores()
+void SpaceInvaders::loadHiScores()
 {
   ScoreData data {}; 
   if(data.load(ScoreData::filename) != 0)
@@ -153,7 +149,7 @@ void SpaceInvaders::loadHiscores()
   std::sort(_hiscores.begin(), _hiscores.end(), scoreCompare);
 }
 
-void SpaceInvaders::writeHiscores()
+void SpaceInvaders::writeHiScores()
 {
   ScoreData data {}; 
 
@@ -168,34 +164,46 @@ void SpaceInvaders::writeHiscores()
   data.write(ScoreData::filename, false);
 }
 
-bool SpaceInvaders::isHiscore(int32_t scoreValue)
+bool SpaceInvaders::isHiScore(int32_t scoreValue)
 {
   return scoreValue > _hiscores[0]._value;  
 }
 
-bool SpaceInvaders::registerHiscore(const Score& score)
+bool SpaceInvaders::isDuplicateHiScore(const Score& score)
 {
-  auto position = findScoreBoardPosition(score._value);
-  if(position.first == -1) return false;
-  std::shift_left(_hiscores.begin(), _hiscores.begin() + position.second, 1); 
-  _hiscores[position.second] = score;
+  for(auto& s : _hiscores)
+    if((s._name == score._name) && (s._value == score._value))
+      return true;
+  return false;
+}
+
+bool SpaceInvaders::registerHiScore(const Score& score)
+{
+  size_t position = findScoreBoardPosition(score._value);
+  if(position == -1) return false;
+  std::shift_left(_hiscores.begin(), _hiscores.begin() + position + 1, 1); 
+  _hiscores[position] = score;
+  updateHudHiScore();
   return true;
 }
 
-std::pair<int, int> SpaceInvaders::findScoreBoardPosition(int32_t scoreValue)
+size_t SpaceInvaders::findScoreBoardPosition(int32_t scoreValue)
 {
-  int i{0};
-  while(i++){
-    assert(i <= hiscoreCount);
-    if(i == (hiscoreCount - 1) && _hiscores[i]._value < scoreValue)
-      return {hiscoreCount - 1, hiscoreCount};
-    if(i == 0 && _hiscores[i]._value > scoreValue)
-      return {-1, -1}; // not on leaderboard
-    if(_hiscores[i]._value < scoreValue && scoreValue < _hiscores[i + 1]._value)
-      return {i, i + 1};
-  }
+  if(scoreValue < _hiscores.front()._value) 
+    return -1;
+
+  if(scoreValue > _hiscores.back()._value)
+    return hiscoreCount - 1;
+
+  for(int i{0}; i < hiscoreCount - 1; ++i)
+    if(_hiscores[i]._value < scoreValue && scoreValue <= _hiscores[i + 1]._value)
+      return i;
 }
 
+void SpaceInvaders::updateHudHiScore()
+{
+  _hiscore = _hiscores.back()._value;
+}
 
 //===============================================================================================//
 // ##>SPLASH STATE                                                                               //
@@ -653,7 +661,6 @@ void GameState::startNextLevel()
   // Reset player cannon.
   _cannon._isBooming = false;
   _cannon._isAlive = false;
-  _cannon._isFrozen = false;
 
   _bombClock = _bombIntervals[_activeCycle];
 
@@ -782,7 +789,6 @@ void GameState::morphAlien(Alien& alien)
   _alienMorphClock = _alienMorphDuration;
   _isAliensFrozen = true;
   _isAliensMorphing = true;
-  _cannon._isFrozen = true;
 
   Alien& neighbour = _grid[alien._row][alien._col + 1];
   if(neighbour._isAlive){
@@ -828,7 +834,6 @@ void GameState::boomAlien(Alien& alien)
   _alienBoomClock = _alienBoomDuration;
   _isAliensFrozen = true;
   _isAliensBooming = true;
-  _cannon._isFrozen = true;
   --(_columnPops[alien._col]);
   --(_rowPops[alien._row]);
   --_alienPopulation;
@@ -915,16 +920,12 @@ void GameState::doAlienMorphing(float dt)
 
   _isAliensMorphing = false;
   _isAliensFrozen = false;
-  _cannon._isFrozen = false;
   _alienMorpher = nullptr;
 }
 
 void GameState::doCannonMoving(float dt)
 {
   if(!_cannon._isAlive)
-    return;
-
-  if(_cannon._isFrozen)
     return;
 
   bool lKey = pxr::input->isKeyDown(Input::KEY_LEFT);
@@ -969,9 +970,6 @@ void GameState::doCannonBooming(float dt)
 void GameState::doCannonFiring()
 {
   if(!_cannon._isAlive)
-    return;
-
-  if(_cannon._isFrozen)
     return;
 
   if(_laser._isAlive)
@@ -1153,7 +1151,6 @@ void GameState::doAlienBooming(float dt)
     _alienBoomer = nullptr;
     _isAliensFrozen = false;
     _isAliensBooming = false;
-    _cannon._isFrozen = false;
   }
 }
 
@@ -1596,8 +1593,13 @@ void GameState::onUpdate(double now, float dt)
   
   if(_isGameOver){
     _gameOverClock -= dt;
-    if(_gameOverClock <= 0)
-      _app->switchState(MenuState::name);
+    if(_gameOverClock <= 0){
+      SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+      if(si->isHiScore(si->getScore()))
+        _app->switchState(HiScoreRegState::name);
+      else 
+        _app->switchState(HiScoreBoardState::name);
+    }
   }
   
   if(_alienPopulation == 0){ // TODO implement and ufo is not spawned
@@ -1785,14 +1787,16 @@ void MenuState::initialize(Vector2i worldSize, int32_t worldScale)
 
 void MenuState::onUpdate(double now, float dt)
 {
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
   if(pxr::input->isKeyPressed(Input::KEY_ENTER)){
     depopulateHud();
-    static_cast<SpaceInvaders*>(_app)->resetGameStats();
+    si->hideHud();
     _app->switchState(GameState::name);
   }
   if(pxr::input->isKeyPressed(Input::KEY_s)){
     depopulateHud();
-    _app->switchState(SplashState::name);
+    si->hideHud();
+    _app->switchState(HiScoreBoardState::name);
   }
 }
 
@@ -1803,7 +1807,10 @@ void MenuState::onDraw(double now, float dt)
 
 void MenuState::onEnter()
 {
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
   populateHud();
+  si->showHud();
+  si->resetGameStats();
 }
 
 void MenuState::populateHud()
@@ -2032,6 +2039,7 @@ void HiScoreRegState::onDraw(double now, float dt)
 void HiScoreRegState::onEnter()
 {
   if(_keypad != nullptr) _keypad->reset();
+  static_cast<SpaceInvaders*>(_app)->showHud();
 }
 
 void HiScoreRegState::doInput()
@@ -2063,7 +2071,9 @@ void HiScoreRegState::doInput()
         mixer->playSound(SpaceInvaders::SK_FAST1); 
       }
       else{
-        static_cast<SpaceInvaders*>(_app)->setPlayerName(_nameBox->getBufferText());
+        SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+        si->setPlayerName(_nameBox->getBufferText());
+        si->hideHud();
         _app->switchState(HiScoreBoardState::name);
       }
     }
@@ -2086,12 +2096,12 @@ void HiScoreBoardState::initialize(Vector2i worldSize, int32_t worldScale)
   int32_t glyphSize_px = _font->getSize() + _font->getGlyphSpace();
   int32_t nameWidth_px = glyphSize_px * SpaceInvaders::hiscoreNameLen;
   int32_t scaledColSeperation = colSeperation * worldScale;
-  int32_t boardWidth_px = nameWidth_px + scaledColSeperation + (scoreDigitCountEstimate * glyphSize_px);
-  int32_t boardHeight_px = (SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + rowSeperation);
+  _scoreBoardSize._x = nameWidth_px + scaledColSeperation + (scoreDigitCountEstimate * glyphSize_px);
+  _scoreBoardSize._y = (SpaceInvaders::hiscoreCount + 1) * (glyphSize_px + (rowSeperation * worldScale));
 
   _nameScreenPosition = {
-    (worldSize._x - boardWidth_px) / 2,
-    (worldSize._y - boardHeight_px) / 2
+    (worldSize._x - _scoreBoardSize._x) / 2,
+    (worldSize._y - _scoreBoardSize._y) / 3
   };
 
   _scoreScreenPosition = _nameScreenPosition;
@@ -2101,31 +2111,60 @@ void HiScoreBoardState::initialize(Vector2i worldSize, int32_t worldScale)
 void HiScoreBoardState::onEnter()
 {
   SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
-  const auto& hiscores = si->getHiscores();
+  const auto& hiscores = si->getHiScores();
+
   _newScore._value = si->getScore();
   _newScore._name = si->getPlayerName();
+
   if(_newScore._name[0] == '\0')
     _newScore._name = placeHolderName;
+
   _scoreBoard[0] = &_newScore;
+
   for(int i{0}; i < SpaceInvaders::hiscoreCount; ++i)
     _scoreBoard[i + 1] = &hiscores[i];
+
   _eventNum = 0;
   _eventClock = 0.f;
+
+  populateHud();
+  si->showHud();
 }
 
 void HiScoreBoardState::onUpdate(double now, float dt)
 {
   _eventClock += dt;
-  if(_eventNum == 0 && _eventClock > enterDelaySeconds){
-    _eventClock = 0.f;
-    ++_eventNum;
+  if(_eventNum == 0){
+    if(_eventClock > enterDelaySeconds){
+      _eventClock = 0.f;
+      ++_eventNum;
+    }
   }
-  else if(_eventNum > _scoreBoard.size() && _eventClock > exitDelaySeconds){
-    _app->switchState(MenuState::name);
+  else if(_eventNum > _scoreBoard.size()){ 
+    if(_eventClock > _exitDelaySeconds){
+      depopulateHud();
+      SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+      si->hideHud();
+      if(si->isHiScore(_newScore._value) && !si->isDuplicateHiScore(_newScore)){
+        si->registerHiScore(_newScore);
+        si->writeHiScores();
+      }
+      _app->switchState(MenuState::name);
+    }
   }
-  else if(_eventClock > swapScoreDelaySeconds){
-    _eventClock = 0.f;
-    _eventNum += doScoreSwap() ? _scoreBoard.size() : 1;  // if done all swaps skip to end.
+  else {
+    if(_eventClock > swapScoreDelaySeconds){
+      _eventClock = 0.f;
+      _eventNum += doScoreSwap() ? _scoreBoard.size() : 1;  // if done all swaps skip to end.
+      if(_eventNum > _scoreBoard.size()){ 
+        if(newScoreIsTop()){
+          mixer->playSound(SpaceInvaders::SK_TOPSCORE); 
+          _exitDelaySeconds = topScoreExitDelaySeconds;
+        }
+        else
+          _exitDelaySeconds = normalExitDelaySeconds;
+      }
+    }
   }
 }
 
@@ -2159,6 +2198,33 @@ bool HiScoreBoardState::doScoreSwap()
     if(i == (_scoreBoard.size() - 1)) return true;
     if(_scoreBoard[i]->_value <= _scoreBoard[i + 1]->_value) return true;
     std::swap(_scoreBoard[i], _scoreBoard[i + 1]);
+    mixer->playSound(SpaceInvaders::SK_SCORE_BEEP); 
     return false;
   }
+}
+
+void HiScoreBoardState::populateHud()
+{
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  Vector2i worldSize = si->getWorldSize();
+  int32_t worldScale = si->getWorldScale();
+  int32_t titleWidth = _font->calculateStringWidth(titleString);
+  Vector2i titlePosition {
+    (worldSize._x - titleWidth) / 2,
+    _nameScreenPosition._y + _scoreBoardSize._y + (boardTitleSeperation * worldScale)
+  };
+  HUD& hud = si->getHud();
+  _uidTitleText = hud.addTextLabel({titlePosition, titleColor, titleString});
+}
+
+void HiScoreBoardState::depopulateHud()
+{
+  SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+  HUD& hud = si->getHud();
+  hud.removeTextLabel(_uidTitleText);
+}
+
+bool HiScoreBoardState::newScoreIsTop()
+{
+  return _scoreBoard[_scoreBoard.size() - 1] == &_newScore;
 }
