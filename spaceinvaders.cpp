@@ -66,12 +66,15 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   std::unique_ptr<ApplicationState> splash = std::make_unique<SplashState>(this);
   std::unique_ptr<ApplicationState> scoreReg = std::make_unique<HiScoreRegState>(this);
   std::unique_ptr<ApplicationState> scoreBoard = std::make_unique<HiScoreBoardState>(this);
+  std::unique_ptr<ApplicationState> sos = std::make_unique<SosState>(this);
 
   game->initialize(_worldSize, _worldScale);
   menu->initialize(_worldSize, _worldScale);
   splash->initialize(_worldSize, _worldScale);
   scoreReg->initialize(_worldSize, _worldScale);
   scoreBoard->initialize(_worldSize, _worldScale);
+  sos->initialize(_worldSize, _worldScale);
+  sos->_gameState = &game; // a bodge! dont look! its ugly! :)
 
   addState(std::move(game));
   addState(std::move(menu));
@@ -837,6 +840,8 @@ void GameState::boomAlien(Alien& alien)
   --(_columnPops[alien._col]);
   --(_rowPops[alien._row]);
   --_alienPopulation;
+  if(_alienPopulation <= 0)
+    _lastClassAlive = alien._classId;
   updateActiveCycle();
   doUfoSpawning();
 
@@ -1774,6 +1779,113 @@ void GameState::onDraw(double now, float dt)
 void GameState::onEnter()
 {
   startNextLevel();
+}
+
+//===============================================================================================//
+// ##>SOS STATE                                                                                  //
+//===============================================================================================//
+
+void SosState::initialize(Vector2i worldSize, int32_t worldScale)
+{
+  _worldSize = worldSize;
+  _worldScale = worldScale;
+  _exitHeight_px = worldSize._y - (60 * worldScale);
+  _worldLeftMargin_px = 60 * worldScale;
+  _worldRightMargin_px = worldSize._x - _worldLeftMargin_px;
+  _spawnMargin_px = 100 * worldScale;
+  _spawnHeight_px = 100 * worldScale;
+  _moveSpeed = baseMoveSpeed * worldScale;
+}
+
+void SosState::update(double now, float dt)
+{
+  doMoving(dt);
+  doEngineFailing(dt);
+  doColliding();
+  doEndTest();
+}
+
+void SosState::onEnter()
+{
+  _ufo._classId = GameState::UfoClassId::SAUCER;
+  _ufo._position._y = spawnHeight_px;
+  _ufo._position._x = pxr::randUniformSignedInt(spawnMargin_px, _worldSize._x - spawnMargin_px);
+
+  _alien._classId = _gameState->_lastAlive; 
+  _alien._frame = false;
+  _alien._frameClockSeconds = 0.f;
+
+  _ufo._width = _gameState->_ufoClasses[_ufo._classId]._width;
+  int32_t ufoHeight = _gameState->_ufoClasses[_ufo._classId]._height;
+  int32_t alienWidth = _gameState->_alienClasses[_alien._classId]._width;
+
+  _alien._position._x = _ufo._position._x + ((_ufo._width - alienWidth) / 2);
+  _alien._position._y = spawnHeight_px + ufoHeight;
+
+  _moveVelocity = {
+    _moveSpeed * std::sin(moveAngleRadians), 
+    _moveSpeed * std::cos(moveAngleRandians)
+  };
+
+  _isEngineFailing = false;
+  _hasEngineFailed = false;
+
+  _engineFailClockSeconds = 0.f;
+}
+
+void SosState::doMoving(float dt)
+{
+  if(_isEngineFailing)
+    return;
+
+  if(_hasEngineFailed){
+    _alien._position._y += _moveSpeed * dt;
+  }
+  else{
+    _alien._position += _moveVelocity * dt;
+    _ufo._position += _moveVelocity * dt;
+  }
+
+  // TODO:
+  // randomly choose the do an engine fail
+  // need to add the engine fail sign to the hood upon fail
+  // and strip hud on exit
+  // need to draw sos sign upon collisions
+  // need to loop wowowo sound until either engine fail or exit
+  // need to draw
+  // need to draw particles under a rising alien up to current alien position
+}
+
+void SosState::doEngineFailing(float dt)
+{
+  if(!_isEngineFailing)
+    return;
+
+  _engineFailClockSeconds += dt;
+  if(_engineFailClockSeconds >= engineFailPeriodSeconds){
+    _engineFailAlienPosition = _alien._position;
+    _isEngineFailing = false;
+    _hasEngineFailed = true;
+  }
+}
+
+void SosState::doColliding()
+{
+  if(_isEngineFailing || _hasEngineFailed)
+    return;
+
+  if((_ufo._position._x < _worldLeftMargin_px) ||
+     (_ufo._position._x + _ufo._width) > _worldRightMargin_px)
+  {
+    _moveVelocity._x *= -1.f;
+  }
+}
+
+void SosState::doEndTest()
+{
+  if(_alien._position._y > (_worldSize._y - worldTopMargin_px)){
+    
+  }
 }
 
 //===============================================================================================//

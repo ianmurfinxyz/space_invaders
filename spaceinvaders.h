@@ -47,12 +47,12 @@ public:
   {
     SK_EXPLOSION, SK_SHOOT, SK_INVADER_KILLED, SK_INVADER_MORPHED, SK_UFO_HIGH_PITCH, 
     SK_UFO_LOW_PITCH, SK_FAST1, SK_FAST2, SK_FAST3, SK_FAST4, SK_SCORE_BEEP, SK_TOPSCORE, 
-    SK_COUNT
+    SK_SOS, SK_COUNT
   };
 
   static constexpr std::array<Mixer::Name_t, SK_COUNT> _soundNames {
     "explosion", "shoot", "invaderkilled", "invadermorphed", "ufo_highpitch", "ufo_lowpitch", "fastinvader1", 
-    "fastinvader2", "fastinvader3", "fastinvader4", "scorebeep", "topscore"
+    "fastinvader2", "fastinvader3", "fastinvader4", "scorebeep", "topscore", "sos"
   };
 
   static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
@@ -391,6 +391,8 @@ private:
 
 class GameState final : public ApplicationState
 {
+  friend SosState; // a bodge!
+
 public:
   static constexpr const char* name = "game";
 
@@ -403,7 +405,7 @@ public:
   void onEnter();
   std::string getName(){return name;}
 
-private:
+public:
 
   class BeatBox
   {
@@ -689,6 +691,8 @@ private:
   bool _isAliensDropping;
   bool _isAliensFrozen;
 
+  AlienClassId _lastClassAlive;           // part of the sos bodge, used by the sos state.
+
   static constexpr int32_t ufoClassCount {2};
   std::array<UfoClass, ufoClassCount> _ufoClasses;
   Ufo _ufo;
@@ -782,6 +786,79 @@ private:
   //BitmapLabel _lifeCannonLabel;
   //int32_t _lifeCannonSpacingX;
   //bool _showHud;
+};
+
+//===============================================================================================//
+// ##>SOS STATE                                                                                  //
+//===============================================================================================//
+
+class SosState final : public ApplicationState
+{
+public:
+  static constexpr const char* name = "sos":
+
+public:
+  SosState(Application* app) : ApplicationState{app}{}
+  ~SosState() = default;
+
+  void initialize(Vector2i worldSize, int32_t worldScale);
+  void onUpdate(double now, float dt);
+  void onDraw(double now, float dt);
+  void onEnter();
+
+  std::string getName(){return name;}
+
+private:
+  static constexpr float moveAngleRadians {0.7853981634}; // pi / 4
+  static constexpr float engineFailPeriodSeconds {2.f};
+
+  struct Alien
+  {
+    static constexpr const float framePeriodSeconds {0.2f};
+    GameState::AlienClassId _classId;
+    Vector2i _position;
+    bool _frame;
+    float _frameClockSeconds;
+  };
+
+  struct Ufo
+  {
+    GameState::UfoClassId _classId;
+    Vector2i _position;
+    int32_t _width;       // store here for faster access.
+  };
+
+private:
+  void doMoving(float dt);
+  void doEngineFailing(float dt);
+  void doWallColliding();
+  void doEndTest();
+  void doDirectionChange();
+
+private:
+  //
+  // This is a bodge to allow the sos state to get access to the alien and ufo class data in
+  // the game state. I initially designed the app states to be self contained and to not 
+  // communicate or share data, thus this is required. Not pretty but at this late stage in
+  // the project, it works.
+  //
+  friend SpaceInvaders;
+  const std::unique_ptr<ApplicationState>* _gameState;
+
+  Alien _alien;
+  Ufo _ufo;
+  Vector2i _worldSize;
+  int32_t _exitHeight_px;
+  int32_t _worldLeftMargin_px;
+  int32_t _worldRightMargin_px;
+  int32_t _spawnMargin_px;
+  int32_t _spawnHeight_px;
+  Vector2i _moveVelocity;
+  Vector2i _engineFailAlienPosition;
+  float _moveSpeed;
+  float _engineFailClockSeconds;
+  bool _hasEngineFailed;
+  bool _isEngineFailing;
 };
 
 //===============================================================================================//
