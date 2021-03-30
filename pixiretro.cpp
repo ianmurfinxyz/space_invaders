@@ -1902,8 +1902,20 @@ void Engine::initialize(std::unique_ptr<Application> app)
 {
   log = std::make_unique<Log>();
 
-  std::seed_seq seq{1, 2, 3, 4, 5};
-  randGenerator.seed(seq);
+  // 
+  // Testing the seed_seq on my system shows it just produces the same results with every run, 
+  // which is obviously useless. However I get different results with std::random_device so have 
+  // opted to use that instead. I am lead to believe however that this may differ on different 
+  // systems. TODO Will have to test it.
+  //
+  // std::seed_seq seq{1, 2, 3, 4, 5};
+  // randGenerator.seed(seq);
+  //
+  std::random_device rd{};
+  xorwow::state_type seedstate {};
+  for(auto& seed : seedstate)
+    seed = rd();
+  randGenerator.seed(seedstate);
 
   _app = std::move(app);
 

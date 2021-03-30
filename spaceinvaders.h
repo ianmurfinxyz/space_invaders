@@ -389,6 +389,8 @@ private:
 // ##>GAME STATE                                                                                 //
 //===============================================================================================//
 
+class SosState;
+
 class GameState final : public ApplicationState
 {
   friend SosState; // a bodge!
@@ -795,10 +797,10 @@ private:
 class SosState final : public ApplicationState
 {
 public:
-  static constexpr const char* name = "sos":
+  static constexpr const char* name = "sos";
 
 public:
-  SosState(Application* app) : ApplicationState{app}{}
+  SosState(Application* app) : ApplicationState(app){}
   ~SosState() = default;
 
   void initialize(Vector2i worldSize, int32_t worldScale);
@@ -809,14 +811,31 @@ public:
   std::string getName(){return name;}
 
 private:
-  static constexpr float moveAngleRadians {0.7853981634}; // pi / 4
+  static constexpr int32_t baseWorldMargin_px {60};    // base == before world scale.
+  static constexpr int32_t baseSpawnHeight_px {80};
+  static constexpr int32_t baseTopMargin_px {40};
+  static constexpr float baseMoveSpeed {80};
+  static constexpr float moveAngleRadians {0.9899310886f}; // 55 deg
   static constexpr float engineFailPeriodSeconds {2.f};
+
+  //
+  // 1 in 'engineFailChance' chance for engine to fail each update, there are 60 updates 
+  // each second, and the intermission lasts ~4 seconds, so 240 updates. I want the engine fail
+  // to happen around 1 in every 3 intermissions, so about once for every 240*3=720 updates.
+  // Thus have set the fail chance to 720. My tests show this works about right.
+  //
+  // engineFailHit is the number that the generator must return to indicate a fail has occured,
+  // I am asuming the std::distribution has equal chance to return all numbers (as it claims) so 
+  // this value will not matter.
+  //
+  static constexpr int engineFailChance {720};
+  static constexpr int engineFailHit {0};
 
   struct Alien
   {
     static constexpr const float framePeriodSeconds {0.2f};
     GameState::AlienClassId _classId;
-    Vector2i _position;
+    Vector2f _position;
     bool _frame;
     float _frameClockSeconds;
   };
@@ -824,13 +843,14 @@ private:
   struct Ufo
   {
     GameState::UfoClassId _classId;
-    Vector2i _position;
+    Vector2f _position;
     int32_t _width;       // store here for faster access.
   };
 
 private:
   void doMoving(float dt);
   void doEngineFailing(float dt);
+  void doEngineCheck();
   void doWallColliding();
   void doEndTest();
   void doDirectionChange();
@@ -843,11 +863,12 @@ private:
   // the project, it works.
   //
   friend SpaceInvaders;
-  const std::unique_ptr<ApplicationState>* _gameState;
+  GameState* _gameState;
 
   Alien _alien;
   Ufo _ufo;
   Vector2i _worldSize;
+  int32_t _worldScale;
   int32_t _exitHeight_px;
   int32_t _worldLeftMargin_px;
   int32_t _worldRightMargin_px;
@@ -855,10 +876,12 @@ private:
   int32_t _spawnHeight_px;
   Vector2i _moveVelocity;
   Vector2i _engineFailAlienPosition;
+  Mixer::Channel_t _woowooChannel;
   float _moveSpeed;
   float _engineFailClockSeconds;
   bool _hasEngineFailed;
   bool _isEngineFailing;
+  bool _isWooing;
 };
 
 //===============================================================================================//

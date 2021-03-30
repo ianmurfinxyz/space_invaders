@@ -74,15 +74,18 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   scoreReg->initialize(_worldSize, _worldScale);
   scoreBoard->initialize(_worldSize, _worldScale);
   sos->initialize(_worldSize, _worldScale);
-  sos->_gameState = &game; // a bodge! dont look! its ugly! :)
+
+  // a bodge! dont look! its really ugly! :) ... your still looking! I warned you, you'll regret it!
+  static_cast<SosState*>(sos.get())->_gameState = static_cast<GameState*>(game.get());
 
   addState(std::move(game));
   addState(std::move(menu));
   addState(std::move(splash));
   addState(std::move(scoreReg));
   addState(std::move(scoreBoard));
+  addState(std::move(sos));
 
-  switchState(SplashState::name);
+  switchState(SosState::name);
 
   return true;
 }
@@ -443,6 +446,8 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _aliensSpawnPosition._x = (_worldSize._x - (gridWidth * _alienXSeperation)) / 2;
   _aliensSpawnPosition._y = _worldSize._y - (gridHeight * _alienYSeperation) - 30;
+
+  _lastClassAlive = AlienClassId::SQUID;
 
   _worldMargin = 5 * _worldScale;
 
@@ -1789,29 +1794,50 @@ void SosState::initialize(Vector2i worldSize, int32_t worldScale)
 {
   _worldSize = worldSize;
   _worldScale = worldScale;
-  _exitHeight_px = worldSize._y - (60 * worldScale);
-  _worldLeftMargin_px = 60 * worldScale;
+  _exitHeight_px = worldSize._y - (baseTopMargin_px * worldScale);
+  _worldLeftMargin_px = baseWorldMargin_px * worldScale;
   _worldRightMargin_px = worldSize._x - _worldLeftMargin_px;
-  _spawnMargin_px = 100 * worldScale;
-  _spawnHeight_px = 100 * worldScale;
+  _spawnHeight_px = baseSpawnHeight_px * worldScale;
   _moveSpeed = baseMoveSpeed * worldScale;
 }
 
-void SosState::update(double now, float dt)
+void SosState::onUpdate(double now, float dt)
 {
+  doEngineCheck();
   doMoving(dt);
   doEngineFailing(dt);
-  doColliding();
+  doWallColliding();
   doEndTest();
+}
+
+void SosState::onDraw(double now, float dt)
+{
+  renderer->clearViewport(colors::black);
+
+  const GameState::AlienClass& ac = _gameState->_alienClasses[_alien._classId];
+  Assets::Key_t bitmapKey = ac._bitmapKeys[_alien._frame];
+  renderer->blitBitmap(
+      _alien._position, 
+      pxr::assets->getBitmap(bitmapKey, _worldScale), 
+      _gameState->_colorPallete[ac._colorIndex]
+  );
+
+  const GameState::UfoClass& uc = _gameState->_ufoClasses[_ufo._classId];
+  bitmapKey = uc._shipKey;
+  renderer->blitBitmap(
+      _ufo._position, 
+      pxr::assets->getBitmap(bitmapKey, _worldScale), 
+      _gameState->_colorPallete[uc._colorIndex]
+  );
 }
 
 void SosState::onEnter()
 {
   _ufo._classId = GameState::UfoClassId::SAUCER;
-  _ufo._position._y = spawnHeight_px;
-  _ufo._position._x = pxr::randUniformSignedInt(spawnMargin_px, _worldSize._x - spawnMargin_px);
+  _ufo._position._y = _spawnHeight_px;
+  _ufo._position._x = pxr::randUniformSignedInt(_worldLeftMargin_px, _worldRightMargin_px);
 
-  _alien._classId = _gameState->_lastAlive; 
+  _alien._classId = _gameState->_lastClassAlive; 
   _alien._frame = false;
   _alien._frameClockSeconds = 0.f;
 
@@ -1820,17 +1846,20 @@ void SosState::onEnter()
   int32_t alienWidth = _gameState->_alienClasses[_alien._classId]._width;
 
   _alien._position._x = _ufo._position._x + ((_ufo._width - alienWidth) / 2);
-  _alien._position._y = spawnHeight_px + ufoHeight;
+  _alien._position._y = _spawnHeight_px + ufoHeight;
 
   _moveVelocity = {
     _moveSpeed * std::sin(moveAngleRadians), 
-    _moveSpeed * std::cos(moveAngleRandians)
+    _moveSpeed * std::cos(moveAngleRadians)
   };
 
   _isEngineFailing = false;
   _hasEngineFailed = false;
 
   _engineFailClockSeconds = 0.f;
+
+  _woowooChannel = mixer->playSound(SpaceInvaders::SK_SOS, 100);
+  _isWooing = true;
 }
 
 void SosState::doMoving(float dt)
@@ -1847,12 +1876,9 @@ void SosState::doMoving(float dt)
   }
 
   // TODO:
-  // randomly choose the do an engine fail
   // need to add the engine fail sign to the hood upon fail
   // and strip hud on exit
   // need to draw sos sign upon collisions
-  // need to loop wowowo sound until either engine fail or exit
-  // need to draw
   // need to draw particles under a rising alien up to current alien position
 }
 
@@ -1869,13 +1895,24 @@ void SosState::doEngineFailing(float dt)
   }
 }
 
-void SosState::doColliding()
+void SosState::doEngineCheck()
+{
+  if(!_isEngineFailing){
+    if(pxr::randUniformSignedInt(0, engineFailChance) == engineFailHit){
+      _isEngineFailing = true;
+      mixer->stopChannel(_woowooChannel);
+      _isWooing = false;
+    }
+  }
+}
+
+void SosState::doWallColliding()
 {
   if(_isEngineFailing || _hasEngineFailed)
     return;
 
-  if((_ufo._position._x < _worldLeftMargin_px) ||
-     (_ufo._position._x + _ufo._width) > _worldRightMargin_px)
+  if(((_ufo._position._x < _worldLeftMargin_px) && _moveVelocity._x < 0) ||
+     (((_ufo._position._x + _ufo._width) > _worldRightMargin_px) && _moveVelocity._x > 0))
   {
     _moveVelocity._x *= -1.f;
   }
@@ -1883,8 +1920,10 @@ void SosState::doColliding()
 
 void SosState::doEndTest()
 {
-  if(_alien._position._y > (_worldSize._y - worldTopMargin_px)){
-    
+  if(_alien._position._y > _exitHeight_px){
+    if(_isWooing)
+      mixer->stopChannel(_woowooChannel);
+    _app->switchState(GameState::name);
   }
 }
 
