@@ -85,7 +85,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   addState(std::move(scoreBoard));
   addState(std::move(sos));
 
-  switchState(SosState::name);
+  switchState(GameState::name);
 
   return true;
 }
@@ -406,6 +406,12 @@ void GameState::BeatBox::doBeats(float dt)
   }
 }
 
+void GameState::BeatBox::setBeatFreq(float freq_hz)
+{
+  _beatFreq_hz = freq_hz;
+  _beatPeriod_s = 1 / _beatFreq_hz;
+}
+
 GameState::GameState(Application* app) : 
   ApplicationState{app}
 {}
@@ -427,8 +433,9 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _worldScale = worldScale;
 
   _font = &(pxr::assets->getFont(SpaceInvaders::fontKey, _worldScale));
+  _hud = &(static_cast<SpaceInvaders*>(_app)->getHud());
 
-  _colorPallete = {     // index:
+  _colorPalette = {     // index:
     colors::red,        // 0
     colors::green,      // 1
     colors::blue,       // 2
@@ -438,14 +445,33 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
     colors::white       // 6
   };
 
-  _alienShiftDisplacement = Vector2i{2, 0} * _worldScale;
-  _alienDropDisplacement = Vector2i{0, -8} * _worldScale;
+  //
+  // Alien drop math:
+  //
+  // World size is 256px tall, aliens drop from a max height of 186px to a min of 32px. The
+  // min is the invasion row which is the row the cannon sits on.
+  //
+  // Each drop is 14px, so the row heights are,
+  //   186, 172, 158, 144, 130, 116, 102, 88, 74, 60, 46, 32   | row height
+  //    0    1    2    3    4    5    6    7   8   9  10  11   | row num
+  //                                        invasion row--^
+  //
+  // note that the top row of aliens starts at 186px (row 0), thus the bottom row starts at
+  // 130 (row 4).
+  //
 
-  _alienXSeperation = 16 * _worldScale;
-  _alienYSeperation = 16 * _worldScale;
+  _alienShiftDisplacement = Vector2i{2, 0} * _worldScale;
+  _alienDropDisplacement = Vector2i{0, -baseAlienDropDisplacement} * _worldScale;
+  _alienInvasionHeight = baseAlienInvasionRowHeight * _worldScale;
+
+  _alienXSeperation = baseAlienDropDisplacement * _worldScale;
+  _alienYSeperation = baseAlienDropDisplacement * _worldScale;
 
   _aliensSpawnPosition._x = (_worldSize._x - (gridWidth * _alienXSeperation)) / 2;
-  _aliensSpawnPosition._y = _worldSize._y - (gridHeight * _alienYSeperation) - 30;
+  _aliensSpawnPosition._y = ((baseAlienTopRowHeight + (minSpawnDrops * baseAlienDropDisplacement))
+                             - ((gridHeight - 1) * baseAlienDropDisplacement)) * _worldScale; 
+
+  //_worldSize._y - (gridHeight * _alienYSeperation) - 30;
 
   _lastClassAlive = AlienClassId::SQUID;
 
@@ -463,11 +489,15 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   // where each element of the set (cycle) represents a number of beats to perform in an update
   // tick. For example a cycle = {1, 2, end} means perform 1 beat in update tick N, 2 beats in
   // update tick N+1, and repeat, so 1 beat in N+2 etc. Since the engine guarantees an update
-  // rate of 60Hz (only slower if the CPU is too slow), the cycle controls the game speed. Yes the
+  // rate of 60Hz (only slower if the CPU is too slow), the cycle controls the game speed. Yes
   // game speed is tied to update rate, but the update rate is independent of hardware.
 
   // Theses cycles will produce exponentially increasing beat rates resulting in exponentially
   // increasing alien speed and firing.
+  //
+  //                          ticks to      fleet moves    
+  //                          move fleet    each sec
+  //                          ----------    -----------
   _cycles = {{
     {1,  cycleEnd, 0, 0},  // ticks:55.00   freq:1.09
     {1,  1, 2, cycleEnd},  // ticks:42.00   freq:1.43
@@ -485,6 +515,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   // The alien population that triggers the cycle.
+  // note: the last element MUST == 0, else a segfault will happen when we select the next cycle.
   _cycleTransitions = {49, 42, 35, 28, 21, 14, 10, 7, 5, 4, 3, 2, 0};
 
   _alienClasses = {{
@@ -496,15 +527,13 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _ufoClasses = {{
-    {16 * _worldScale, 7 * _worldScale, 50,  0, SpaceInvaders::BMK_SAUCER     , SpaceInvaders::BMK_UFOBOOM, SpaceInvaders::BMK_SAUCERSCORE     },
-    {15 * _worldScale, 7 * _worldScale, 500, 3, SpaceInvaders::BMK_SCHRODINGER, SpaceInvaders::BMK_UFOBOOM, SpaceInvaders::BMK_SCHRODINGERSCORE}
+    {{50, 100, 150}, 300, 16 * _worldScale, 7 * _worldScale, 0, SpaceInvaders::BMK_SAUCER, SpaceInvaders::BMK_UFOBOOM},
+    {{300, 350, 400}, 1000, 15 * _worldScale, 7 * _worldScale, 3, SpaceInvaders::BMK_SCHRODINGER, SpaceInvaders::BMK_UFOBOOM}
   }};
 
   _ufoSpawnY = 210.f * _worldScale;
-  _ufoLifetime = 7.f;                 // should tailor lifetime and speed so ufo lives long enough
   _ufoSpeed = 40.f * _worldScale;     // to move fully across the world and off screen.
-  _ufoBoomDuration = 0.5f;
-  _ufoScoreDuration = 0.5f;
+  _ufoBoomScoreDuration = 0.5f;
   _ufoPhaseDuration = 0.8f;
 
   _formations = {{  // note formations look inverted here as array[0] is the bottom row, but they are not.
@@ -530,9 +559,9 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bombIntervals = {80, 80, 100, 120, 140, 180, 240, 300, 400, 500, 650, 800, 1100};
 
   _bombClasses = {{
-    {3 * _worldScale, 6 * _worldScale, -100.f * _worldScale, 0, 20, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
-    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 4, 20, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
-    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}}
+    {3 * _worldScale, 6 * _worldScale, -80.f * _worldScale, 0, 20, 0, {SpaceInvaders::BMK_CROSS0, SpaceInvaders::BMK_CROSS1, SpaceInvaders::BMK_CROSS2, SpaceInvaders::BMK_CROSS3}},
+    {3 * _worldScale, 7 * _worldScale, -120.f * _worldScale, 4, 20, 10, {SpaceInvaders::BMK_ZIGZAG0, SpaceInvaders::BMK_ZIGZAG1, SpaceInvaders::BMK_ZIGZAG2, SpaceInvaders::BMK_ZIGZAG3}},
+    {3 * _worldScale, 7 * _worldScale, -100.f * _worldScale, 5, 20, 4, {SpaceInvaders::BMK_ZAGZIG0, SpaceInvaders::BMK_ZAGZIG1, SpaceInvaders::BMK_ZAGZIG2, SpaceInvaders::BMK_ZAGZIG3}}
   }};
 
   _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
@@ -540,7 +569,7 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bombBoomHeight = 8 * _worldScale;
   _bombBoomDuration = 0.4f;
 
-  _cannon._spawnPosition = Vector2f{_worldLeftBorderX, 32.f * _worldScale};
+  _cannon._spawnPosition = Vector2f{_worldLeftBorderX, baseAlienInvasionRowHeight * _worldScale};
   _cannon._speed = 50.f * _worldScale;
   _cannon._width = 13 * _worldScale;
   _cannon._height = 8 * _worldScale;
@@ -566,16 +595,16 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   _bunkerDeleteThreshold = 20 * _worldScale;
 
   _levels = {{
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
-    {5, 0, 10, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
+    {minSpawnDrops, 0, true, true},
   }};
 
   _levelIndex = -1;
@@ -614,8 +643,9 @@ void GameState::startNextLevel()
   if(_levelIndex >= levelCount)
     _levelIndex = levelCount - 1;
 
-  _activeCycle = 5;
+  _activeCycle = 0;
   _activeBeat = cycleStart;
+  updateBeatFreq();
   _nextMover = {0, 0};
   _alienMoveDirection = 1;
   _dropsDone = 0;
@@ -624,6 +654,8 @@ void GameState::startNextLevel()
   _isAliensDropping = true;
   _isAliensSpawning = true;
   _isAliensFrozen = false;
+  _isAliensAboveInvasionRow = false;
+  _haveAliensInvaded = false;
 
   // Reset aliens.
   for(int32_t col = 0; col < gridWidth; ++col){
@@ -647,12 +679,12 @@ void GameState::startNextLevel()
   std::fill(_rowPops.begin(), _rowPops.end(), gridWidth);
   _alienPopulation = gridWidth * gridHeight;
 
-  _ufoSpawnNo = 0;
-  _ufoLastSpawnPop = _alienPopulation;
-  _schrodingerSpawnNo = pxr::randUniformSignedInt(0, 100) % (_alienPopulation / _levels[_levelIndex]._ufoSpawnRate);
   _isUfoBooming = false;
   _isUfoScoring = false;
   _ufo._isAlive = false;
+  _tillUfo = pxr::randUniformSignedInt(tillUfoMin, tillUfoMax);
+  _ufoCounter = 0;
+  _canUfosSpawn = true;
 
   // Reset bombs.
   for(auto& bomb : _bombs)
@@ -665,6 +697,7 @@ void GameState::startNextLevel()
     boom._isAlive = false;
 
   _laser._isAlive = false;
+  _shotCounter = 0;
 
   // Reset player cannon.
   _cannon._isBooming = false;
@@ -694,11 +727,45 @@ void GameState::startNextLevel()
   si->hideHud();
 }
 
+void GameState::updateBeatFreq()
+{
+  int32_t ticksPerCycle {0};
+  int32_t beatsPerCycle {0};
+  for(auto beats : _cycles[_activeCycle]){
+    if(beats != cycleEnd){
+      ++ticksPerCycle;
+      beatsPerCycle += beats;
+    }
+    else
+      break;
+  }
+
+  // example: If a cycle does 5 beats in 3 ticks, then 5 aliens will move in 3 ticks, so
+  // 55 aliens will move in (55/5) * 3 = 33 ticks. If it takes 33 ticks to move the fleet,
+  // and we do 60 ticks per second, then the frequency of full fleet movements will be
+  // 60 / 33 = 1.81hz.
+  //
+  // hence note that the fequency of the beating equals the frequency of full fleet movements.
+  //
+  //                    v-- the fixed frame rate set in the engine.
+  float beatFreq_hz = (60.f / ((gridSize / beatsPerCycle) * ticksPerCycle)) * beatFreqScale;
+  //                                                  base rate a little intense --^
+
+  _beatBox.setBeatFreq(beatFreq_hz);
+}
+
 void GameState::updateActiveCycle()
 {
   _activeCycle = 0;
-  while(_alienPopulation < _cycleTransitions[_activeCycle])
+  while(_alienPopulation < _cycleTransitions[_activeCycle]){
     ++_activeCycle;
+
+    // should never happen unless we have set, in _cycleTransitions, for the last cycle
+    // to trigger at a population greater than 0.
+    assert(_activeCycle < cycleCount);
+
+    updateBeatFreq();
+  }
 }
 
 void GameState::endSpawning()
@@ -776,15 +843,11 @@ void GameState::spawnBunker(Vector2f position, Assets::Key_t bitmapKey)
 void GameState::spawnUfo(UfoClassId classId)
 {
   _ufo._classId = classId;
-  _ufo._age = _ufoLifetime;  // Benjamin Button.
   _ufo._isAlive = true;
-  int32_t direction = randUniformSignedInt(0, 1);
-  _ufoDirection = (direction == 0) ? 1 : -1;
-  int32_t w = _ufoClasses[classId]._width;
-  _ufo._position._x = -(w + 10.f) + (direction * (_worldSize._x + 20.f + w));
+  _ufoDirection = (randUniformSignedInt(0, 1) == 0) ? 1 : -1;
+  _ufo._position._x = (_ufoDirection == 1) ? 0 : _worldSize._x;
   _ufo._position._y = _ufoSpawnY;
-  _ufoLastSpawnPop = _alienPopulation;
-  ++_ufoSpawnNo;
+  _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_HIGH_PITCH, 1000);
 }
 
 void GameState::morphAlien(Alien& alien)
@@ -832,6 +895,24 @@ void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombH
     spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
 }
 
+void GameState::boomUfo()
+{
+  _ufo._isAlive = false;
+  _isUfoBooming = true;
+
+  const UfoClass& uc = _ufoClasses[_ufo._classId];
+
+  if((_ufoCounter == 1 && _shotCounter == 23) ||
+     (_ufoCounter > 1  && (_shotCounter - 23) % 15 == 0))
+    _ufoLastScoreGiven = uc._specialScoreValue;
+  else
+    _ufoLastScoreGiven = uc._randScoreValues[randUniformSignedInt(0, UfoClass::randScoreValueCount - 1)];
+
+  static_cast<SpaceInvaders*>(_app)->addScore(_ufoLastScoreGiven);
+
+  mixer->stopChannel(_ufoSfxChannel);
+  _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_LOW_PITCH);
+}
 
 void GameState::boomAlien(Alien& alien)
 {
@@ -847,8 +928,9 @@ void GameState::boomAlien(Alien& alien)
   --_alienPopulation;
   if(_alienPopulation <= 0)
     _lastClassAlive = alien._classId;
+  if(_alienPopulation <= 8)
+    _canUfosSpawn = false;
   updateActiveCycle();
-  doUfoSpawning();
 
   mixer->playSound(SpaceInvaders::SK_INVADER_KILLED);
 }
@@ -893,16 +975,48 @@ void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
   bunker._bitmap.regenerateBytes();
 }
 
+void GameState::doInvasionTest()
+{
+  if(_alienPopulation == 0)
+    return;
+
+  if(_isAliensFrozen)
+    return;
+
+  if(_isAliensSpawning)
+    return;
+
+  // dont trigger invasion until all alive have dropped.
+  if(_isAliensDropping)
+    return;
+
+  int32_t minY {std::numeric_limits<int32_t>::max()};
+  for(auto& row : _grid)
+    for(auto& alien : row)
+      if(alien._isAlive)
+        minY = std::min(minY, alien._position._y);
+
+  if(minY == _alienInvasionHeight)
+    _haveAliensInvaded = true;
+  else if(minY == _alienInvasionHeight + _alienDropDisplacement._y)
+    _isAliensAboveInvasionRow == true;
+}
+
 void GameState::doUfoSpawning()
 {
   if(_ufo._isAlive)
     return;
 
-  if((_ufoLastSpawnPop - _alienPopulation) >= _levels[_levelIndex]._ufoSpawnRate){
-    if(_ufoSpawnNo == _schrodingerSpawnNo)
+  if(_isAliensSpawning || _isAliensDropping)
+    return;
+
+  --_tillUfo;
+  if(_tillUfo <= 0){
+    if(pxr::randUniformSignedInt(0, schrodingerSpawnChance) == 0)
      spawnUfo(SCHRODINGER);
     else
       spawnUfo(SAUCER);
+    _tillUfo = pxr::randUniformSignedInt(tillUfoMin, tillUfoMax);
   }
 }
 
@@ -992,6 +1106,8 @@ void GameState::doCannonFiring()
     _laser._position = position;
     _laser._isAlive = true;
     mixer->playSound(SpaceInvaders::SK_SHOOT);
+    ++_shotCounter;
+    std::cout << "shot count = " << _shotCounter << std::endl;
   }
 }
 
@@ -1039,9 +1155,16 @@ void GameState::doAlienMoving(int32_t beats)
       if(_isAliensDropping){
         ++_dropsDone;
 
+        std::cout << "//////////////////////" << std::endl;
+        std::cout << "drop done = " << _dropsDone << std::endl;
+        std::cout << "bottom row y = " << _grid[0][0]._position._y / _worldScale << std::endl;
+        std::cout << "top row y = " << _grid[gridHeight - 1][0]._position._y / _worldScale << std::endl;
+
         if(_isAliensSpawning){
-          if(_dropsDone >= _levels[_levelIndex]._spawnDrops)
+          if(_dropsDone >= _levels[_levelIndex]._spawnDrops){
             endSpawning();
+            std::cout << "done spawning" << std::endl;
+          }
         }
         else{
           _isAliensDropping = false;
@@ -1164,9 +1287,29 @@ void GameState::doAlienBooming(float dt)
   }
 }
 
-void GameState::doUfoBooming(float dt)
+void GameState::doUfoBoomScoring(float dt)
 {
+  if(!(_isUfoBooming || _isUfoScoring))
+    return;
 
+  _ufoBoomScoreClock += dt;
+  if(_ufoBoomScoreClock >= _ufoBoomScoreDuration){
+    if(_isUfoBooming){
+      const UfoClass& uc = _ufoClasses[_ufo._classId];
+      _uidUfoScoringText = _hud->addTextLabel({
+        Vector2i(_ufo._position._x, _ufo._position._y),
+        _colorPalette[uc._colorIndex],
+        std::to_string(_ufoLastScoreGiven)
+      });
+      _isUfoBooming = false;
+      _isUfoScoring = true;
+    }
+    else{
+      _hud->removeTextLabel(_uidUfoScoringText);
+      _isUfoScoring = false;
+    }
+    _ufoBoomScoreClock = 0.f;
+  }
 }
 
 void GameState::doBombBoomBooming(float dt)
@@ -1186,14 +1329,17 @@ void GameState::doUfoReinforcing(float dt)
 
 }
 
-void GameState::doUfoAging(float dt)
+void GameState::doCollisionsUfoBorders()
 {
   if(!_ufo._isAlive)
     return;
 
-  _ufo._age -= dt;
-  if(_ufo._age <= 0.f)
+  if((_ufoDirection == -1 && _ufo._position._x < 0) ||
+     (_ufoDirection == 1  && _ufo._position._x > _worldSize._x))
+  {
     _ufo._isAlive = false;
+    mixer->stopChannel(_ufoSfxChannel);
+  }
 }
 
 void GameState::doCollisionsBombsHitbar()
@@ -1233,6 +1379,9 @@ void GameState::doCollisionsBombsCannon()
   if(_bombCount == 0)
     return;
 
+  if(_isAliensAboveInvasionRow)
+    return;
+
   Vector2i aPosition {};
   Vector2i bPosition {};
 
@@ -1260,6 +1409,45 @@ void GameState::doCollisionsBombsCannon()
     if(c._isCollision){
       boomCannon();
       boomBomb(bomb);
+    }
+  }
+}
+
+void GameState::doCollisionsBombsLaser()
+{
+  if(!_laser._isAlive)
+    return;
+
+  if(_bombCount == 0)
+    return;
+
+  Vector2i aPosition {};
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  aPosition._x = _laser._position._x;
+  aPosition._y = _laser._position._y;
+
+  aBitmap = &(pxr::assets->getBitmap(_laser._bitmapKey, _worldScale));
+
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive)
+      continue;
+  
+    bPosition._x = bomb._position._x;
+    bPosition._y = bomb._position._y;
+
+    BombClass& bc = _bombClasses[bomb._classId];
+
+    bBitmap = &(pxr::assets->getBitmap(bc._bitmapKeys[bomb._frame], _worldScale));
+
+    const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+    if(c._isCollision){
+      boomLaser(true);
+      if(randUniformSignedInt(0, bc._laserSurvivalChance) != 0) boomBomb(bomb);
     }
   }
 }
@@ -1315,6 +1503,37 @@ void GameState::doCollisionsLaserAliens()
         return;
       }
     }
+  }
+}
+
+void GameState::doCollisionsLaserUfo()
+{
+  if(!_laser._isAlive)
+    return;
+
+  if(!_ufo._isAlive)
+    return;
+
+  Vector2i aPosition {}; 
+  Vector2i bPosition {};
+
+  const Bitmap* aBitmap {nullptr};
+  const Bitmap* bBitmap {nullptr};
+
+  aPosition._x = _laser._position._x;
+  aPosition._y = _laser._position._y;
+  bPosition._x = _ufo._position._x;
+  bPosition._y = _ufo._position._y;
+
+  const UfoClass& uc = _ufoClasses[_ufo._classId];
+  bBitmap = &(pxr::assets->getBitmap(uc._shipKey, _worldScale));
+  aBitmap = &(pxr::assets->getBitmap(_laser._bitmapKey, _worldScale));
+
+  const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
+
+  if(c._isCollision){
+    boomLaser(false);
+    boomUfo();
   }
 }
 
@@ -1565,20 +1784,25 @@ void GameState::onUpdate(double now, float dt)
   doAlienBombing(beats);
   doCannonMoving(dt);
   doUfoMoving(dt);
-  doUfoAging(dt);
+  doUfoSpawning();
   doCannonBooming(dt);
   doAlienBooming(dt);
   doBombBoomBooming(dt);
-  doUfoBooming(dt);
+  doUfoBoomScoring(dt);
   doCannonFiring();
 
+  doCollisionsUfoBorders();
   doCollisionsBombsHitbar();
   doCollisionsBombsCannon();
+  doCollisionsBombsLaser();
   doCollisionsLaserAliens();
   doCollisionsBunkersBombs();
   doCollisionsBunkersLaser();
   doCollisionsBunkersAliens();
+  doCollisionsLaserUfo();
   doCollisionsLaserSky();
+
+  doInvasionTest();
 
   //================================================================================
   
@@ -1601,6 +1825,12 @@ void GameState::onUpdate(double now, float dt)
 
   //================================================================================
   
+  if(_haveAliensInvaded){
+    // make sure to destroy all objects including ufos before we continue here without
+    // awarding points, and make sure to stop any ufo sounds.
+    _isGameOver = true;
+  }
+
   if(_isGameOver){
     _gameOverClock -= dt;
     if(_gameOverClock <= 0){
@@ -1614,8 +1844,7 @@ void GameState::onUpdate(double now, float dt)
   
   if(_alienPopulation == 0){ // TODO implement and ufo is not spawned
     static_cast<SpaceInvaders*>(_app)->addRound(1);
-    _app->switchState(GameState::name);
-    //startNextLevel();
+    _app->switchState(SosState::name);
   }
 
   ++_activeBeat;
@@ -1634,7 +1863,7 @@ void GameState::drawGrid()
 
         Vector2f position(alien._position._x, alien._position._y);
         Assets::Key_t bitmapKey = ac._bitmapKeys[alien._frame];
-        Color3f& color = _colorPallete[ac._colorIndex];
+        Color3f& color = _colorPalette[ac._colorIndex];
 
         renderer->blitBitmap(position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
       }
@@ -1648,7 +1877,7 @@ void GameState::drawGrid()
 
     Vector2f position(_alienBoomer->_position._x, _alienBoomer->_position._y);
     Assets::Key_t bitmapKey = SpaceInvaders::BMK_ALIENBOOM;
-    Color3f& color = _colorPallete[ac._colorIndex];
+    Color3f& color = _colorPalette[ac._colorIndex];
 
     renderer->blitBitmap(position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
   }
@@ -1656,7 +1885,7 @@ void GameState::drawGrid()
 
 void GameState::drawUfo()
 {
-  if(!_ufo._isAlive)
+  if(!(_ufo._isAlive || _isUfoBooming || _isUfoScoring))
     return;
 
   const UfoClass& uc = _ufoClasses[_ufo._classId];
@@ -1666,13 +1895,14 @@ void GameState::drawUfo()
     bitmapKey = uc._shipKey;
   else if(_isUfoBooming)
     bitmapKey = uc._boomKey;
-  else if(_isUfoScoring)
-    bitmapKey = uc._scoreKey;
+  else if(_isUfoScoring){
+    return; // drawn as a hud element instead.
+  }
 
   renderer->blitBitmap(
       _ufo._position, 
       pxr::assets->getBitmap(bitmapKey, _worldScale), 
-      _colorPallete[uc._colorIndex]
+      _colorPalette[uc._colorIndex]
   );
 }
 
@@ -1689,7 +1919,7 @@ void GameState::drawCannon()
     bitmapKey = _cannon._cannonKey;
   }
 
-  Color3f& color = _colorPallete[_cannon._colorIndex];
+  Color3f& color = _colorPalette[_cannon._colorIndex];
 
   renderer->blitBitmap(_cannon._position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
 }
@@ -1702,7 +1932,7 @@ void GameState::drawBombs()
 
     const BombClass& bc = _bombClasses[bomb._classId];
     Assets::Key_t bitmapKey = bc._bitmapKeys[bomb._frame];
-    Color3f& color = _colorPallete[bc._colorIndex];
+    Color3f& color = _colorPalette[bc._colorIndex];
     renderer->blitBitmap(bomb._position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
   }
 }
@@ -1714,7 +1944,7 @@ void GameState::drawBombBooms()
       continue;
 
     Assets::Key_t bitmapKey = _bombBoomKeys[boom._hit];
-    Color3f& color = _colorPallete[boom._colorIndex];
+    Color3f& color = _colorPalette[boom._colorIndex];
     Vector2f position = Vector2f(boom._position._x, boom._position._y);
     renderer->blitBitmap(position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
   }
@@ -1725,18 +1955,18 @@ void GameState::drawLaser()
   if(!_laser._isAlive)
     return;
 
-  renderer->blitBitmap(_laser._position, pxr::assets->getBitmap(_laser._bitmapKey, _worldScale), _colorPallete[_laser._colorIndex]);
+  renderer->blitBitmap(_laser._position, pxr::assets->getBitmap(_laser._bitmapKey, _worldScale), _colorPalette[_laser._colorIndex]);
 }
 
 void GameState::drawHitbar()
 {
-  renderer->blitBitmap({0.f, _hitbar->_positionY}, _hitbar->_bitmap, _colorPallete[_hitbar->_colorIndex]);
+  renderer->blitBitmap({0.f, _hitbar->_positionY}, _hitbar->_bitmap, _colorPalette[_hitbar->_colorIndex]);
 }
 
 void GameState::drawBunkers()
 {
   for(const auto& bunker : _bunkers)
-    renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPallete[_bunkerColorIndex]);
+    renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPalette[_bunkerColorIndex]);
 }
 
 // void GameState::drawHud()
@@ -1744,27 +1974,27 @@ void GameState::drawBunkers()
 //   if(!_showHud)
 //     return;
 // 
-//   renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPallete[_scoreLabel._colorIndex]);
-//   renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPallete[_recordLabel._colorIndex]);
-//   renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPallete[_roundLabel._colorIndex]);
-//   renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPallete[_creditLabel._colorIndex]);
+//   renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPalette[_scoreLabel._colorIndex]);
+//   renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPalette[_recordLabel._colorIndex]);
+//   renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPalette[_roundLabel._colorIndex]);
+//   renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPalette[_creditLabel._colorIndex]);
 // 
-//   renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPallete[_scoreValueLabel._colorIndex]);
-//   renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPallete[_recordValueLabel._colorIndex]);
-//   renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPallete[_roundValueLabel._colorIndex]);
-//   renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPallete[_creditValueLabel._colorIndex]);
-//   renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPallete[_lifeValueLabel._colorIndex]);
+//   renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPalette[_scoreValueLabel._colorIndex]);
+//   renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPalette[_recordValueLabel._colorIndex]);
+//   renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPalette[_roundValueLabel._colorIndex]);
+//   renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPalette[_creditValueLabel._colorIndex]);
+//   renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPalette[_lifeValueLabel._colorIndex]);
 // 
 //   const Bitmap& cannonBitmap = pxr::assets->getBitmap(_lifeCannonLabel._bitmapKey, _worldScale);
 //   Vector2f position {};
 //   for(int i = 0; i < _lives - 1; ++i){
 //     position._x = _lifeCannonLabel._position._x + (_lifeCannonSpacingX * i);
 //     position._y = _lifeCannonLabel._position._y;
-//     renderer->blitBitmap(position, cannonBitmap, _colorPallete[_lifeCannonLabel._colorIndex]);
+//     renderer->blitBitmap(position, cannonBitmap, _colorPalette[_lifeCannonLabel._colorIndex]);
 //   }
 // 
 //   if(_isGameOver)
-//     renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPallete[_gameOverLabel._colorIndex]);
+//     renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPalette[_gameOverLabel._colorIndex]);
 // }
 
 void GameState::onDraw(double now, float dt)
@@ -1830,7 +2060,7 @@ void SosState::onDraw(double now, float dt)
       renderer->blitBitmap(
           trailPosition,
           bitmap,
-          _gameState->_colorPallete[ac._colorIndex]
+          _gameState->_colorPalette[ac._colorIndex]
       );
       trailPosition._y += (sosTrailSpace_px * _worldScale);
     }
@@ -1840,7 +2070,7 @@ void SosState::onDraw(double now, float dt)
   renderer->blitBitmap(
       _alien._position, 
       assets->getBitmap(bitmapKey, _worldScale), 
-      _gameState->_colorPallete[ac._colorIndex]
+      _gameState->_colorPalette[ac._colorIndex]
   );
 
   const GameState::UfoClass& uc = _gameState->_ufoClasses[_ufo._classId];
@@ -1848,7 +2078,7 @@ void SosState::onDraw(double now, float dt)
   renderer->blitBitmap(
       _ufo._position, 
       assets->getBitmap(bitmapKey, _worldScale), 
-      _gameState->_colorPallete[uc._colorIndex]
+      _gameState->_colorPalette[uc._colorIndex]
   );
 
 }

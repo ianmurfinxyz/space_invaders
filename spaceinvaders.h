@@ -24,16 +24,15 @@ public:
   {
     BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
     BMK_CUTTLE0, BMK_CUTTLE1, BMK_CUTTLETWIN, BMK_SAUCER, BMK_SCHRODINGER, BMK_UFOBOOM, 
-    BMK_SAUCERSCORE, BMK_SCHRODINGERSCORE, BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, 
-    BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, 
-    BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, 
-    BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII,
-    BMK_CONTROLS, BMK_MENU, BMK_SOS_TRAIL, BMK_COUNT
+    BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, 
+    BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, 
+    BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, 
+    BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII, BMK_CONTROLS, BMK_MENU, BMK_SOS_TRAIL, BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
     "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", "cuttle0", "cuttle1",
-    "cuttletwin", "saucer", "schrodinger", "ufoboom", "saucerscore", "schrodingerscore",
+    "cuttletwin", "saucer", "schrodinger", "ufoboom", 
     "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
@@ -416,8 +415,7 @@ public:
     BeatBox() = default;
     BeatBox(std::array<Mixer::Key_t, beatCount> beats, float beatFreq_hz);
     void doBeats(float dt);
-    void setBeatFreq(float freq_hz){_beatFreq_hz = freq_hz;}
-    void addBeatFreq(float freq_hz){_beatFreq_hz += freq_hz;}
+    void setBeatFreq(float freq_hz);
     float getBeatFreq() const {return _beatFreq_hz;}
     void pause(){_isPaused = true;}
     void togglePause(){_isPaused = !_isPaused;}
@@ -463,26 +461,26 @@ public:
 
   struct UfoClass
   {
+    static constexpr int32_t randScoreValueCount {3};
+    std::array<int32_t, randScoreValueCount> _randScoreValues;
+    int32_t _specialScoreValue;                                 // achieved if correct num shot.
     int32_t _width;
     int32_t _height;
-    int32_t _scoreValue;
     int32_t _colorIndex;
     Assets::Key_t _shipKey;
     Assets::Key_t _boomKey;
-    Assets::Key_t _scoreKey;
   };
 
   struct Ufo
   {
     UfoClassId _classId;
     Vector2f _position;
-    float _age;
     float _phaseClock;
     bool _phase;
     bool _isAlive;
   };
 
-  enum BombClassId { CROSS, ZIGZAG, ZAGZIG };
+  enum BombClassId { CROSS, ZIGZAG, ZAGZIG }; // zigzag is the wiggle!
 
   static constexpr int32_t bombFramesCount {4};
   struct BombClass
@@ -492,6 +490,7 @@ public:
     float _speed;                                             // Unit: pixels per second.
     int32_t _colorIndex;
     int32_t _frameInterval;                                   // Beats between draw frames.
+    int32_t _laserSurvivalChance;                             // one in this chance to survive.
     std::array<Assets::Key_t, bombFramesCount> _bitmapKeys; 
   };
 
@@ -571,7 +570,6 @@ public:
   {
     int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
     int32_t _formationIndex;  // The grid formation used for this level.
-    int32_t _ufoSpawnRate;    // Unit: alien deaths - spawn every rate deaths.
     bool _isCuttlesOn;        // Do cuttle fish spawn from crabs in this level?
     bool _isSchrodingerOn;
   };
@@ -602,6 +600,7 @@ public:
 
 private:
   void startNextLevel();
+  void updateBeatFreq();
   void updateActiveCycle();
   void endSpawning();
   void spawnCannon(bool takeLife);
@@ -612,9 +611,11 @@ private:
   void morphAlien(Alien& alien);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
+  void boomUfo();
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
+  void doInvasionTest();
   void doUfoSpawning();
   void doAlienMorphing(float dt);
   void doCannonMoving(float dt);
@@ -626,13 +627,15 @@ private:
   void doUfoMoving(float dt);
   void doAlienBombing(int32_t beats);
   void doAlienBooming(float dt);
-  void doUfoBooming(float dt);
+  void doUfoBoomScoring(float dt);
   void doBombBoomBooming(float dt);
   void doUfoReinforcing(float dt);
-  void doUfoAging(float dt);
+  void doCollisionsUfoBorders();
   void doCollisionsBombsHitbar();
   void doCollisionsBombsCannon();
+  void doCollisionsBombsLaser();
   void doCollisionsLaserAliens();
+  void doCollisionsLaserUfo();
   void doCollisionsLaserSky();
   bool doCollisionsAliensBorders();
   void doCollisionsBunkersBombs();
@@ -655,22 +658,31 @@ private:
 
 private:
   const Font* _font;
+  HUD* _hud;
 
+  static constexpr float beatFreqScale {0.5f};
   BeatBox _beatBox;
 
   Vector2i _worldSize;
   int32_t _worldScale;
 
   static constexpr int32_t paletteSize {7}; 
-  std::array<Color3f, paletteSize> _colorPallete;
+  std::array<Color3f, paletteSize> _colorPalette;
 
   static constexpr int32_t gridWidth {11};
   static constexpr int32_t gridHeight {5};
+  static constexpr int32_t gridSize {gridWidth * gridHeight};
   using GridRow = std::array<Alien, gridWidth>;
   std::array<GridRow, gridHeight> _grid; 
   Vector2i _alienShiftDisplacement;
+  static constexpr int32_t minSpawnDrops {3};
+  static constexpr int32_t baseAlienDropDisplacement {14};
+  static constexpr int32_t baseAlienTopRowHeight {186}; // num drops to invasion--v
+  static constexpr int32_t baseAlienInvasionRowHeight {32}; // note: 186 == 32 + (11 * 14)
+  static constexpr int32_t numDropsToInvasion {11}; // for top row of aliens.
   Vector2i _alienDropDisplacement;
-  Vector2i _aliensSpawnPosition;
+  Vector2i _aliensSpawnPosition;         // position of bottom-left alien of bottom row at spawn.
+  int32_t _alienInvasionHeight;
   int32_t _alienXSeperation;
   int32_t _alienYSeperation;
   int32_t _worldMargin;
@@ -692,25 +704,30 @@ private:
   bool _isAliensSpawning;
   bool _isAliensDropping;
   bool _isAliensFrozen;
+  bool _isAliensAboveInvasionRow;
+  bool _haveAliensInvaded;
 
   AlienClassId _lastClassAlive;           // part of the sos bodge, used by the sos state.
 
+  static constexpr int32_t schrodingerSpawnChance {3}; // 1 in spawnChance chance each ufo spawn.
   static constexpr int32_t ufoClassCount {2};
   std::array<UfoClass, ufoClassCount> _ufoClasses;
   Ufo _ufo;
-  int32_t _ufoSpawnNo;
-  int32_t _schrodingerSpawnNo;           // Which ufo becomes the schrodinger? spawn 0? spawn 4?
-  int32_t _ufoLastSpawnPop;              // Population of grid when last ufo spawned.
+  Mixer::Channel_t _ufoSfxChannel;
+  static constexpr int tillUfoMin {60};// each update we do --tillUfo, so for updates at 60hz,
+  static constexpr int tillUfoMax {180};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
+  int32_t _tillUfo;                      // when _tillUfo == 0, ufo spawns.
   int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
+  int32_t _ufoCounter;
+  int32_t _ufoLastScoreGiven;
   float _ufoSpawnY;                      // Height of ufos.
-  float _ufoLifetime;                    // Unit: seconds.
   float _ufoSpeed;                       // Unit: pixels per second.
-  float _ufoBoomDuration;                // Unit: seconds.
-  float _ufoScoreDuration;               // Unit: seconds.
+  float _ufoBoomScoreDuration;           // Unit: seconds.
   float _ufoPhaseDuration;               // Unit: seconds.
   float _ufoBoomScoreClock;
   bool _isUfoBooming;
   bool _isUfoScoring;                    // Is the score displaying after the ufo was destroyed?
+  bool _canUfosSpawn;                    // ufos cannot spawn if alien pop <= 8
 
   static constexpr int32_t cycleCount {13};
   static constexpr int32_t cycleLength {4};
@@ -750,6 +767,7 @@ private:
   float _bombBoomDuration;                          // Unit: seconds.
 
   Laser _laser;
+  int32_t _shotCounter;                             // used to detect bonus ufo hits.
   Cannon _cannon;
 
   std::unique_ptr<Hitbar> _hitbar;
@@ -774,6 +792,8 @@ private:
   bool _isGameOver;
   float _gameOverDuration;                    // Unit: seconds. Time to display game over message.
   float _gameOverClock;                       // Unit: seconds.
+
+  HUD::uid_t _uidUfoScoringText;
 
   //TextLabel _gameOverLabel;
   //TextLabel _scoreLabel;
@@ -812,7 +832,7 @@ public:
 
 private:
   static constexpr int32_t baseWorldMargin_px {60};    // base == before world scale.
-  static constexpr int32_t baseSpawnHeight_px {80};
+  static constexpr int32_t baseSpawnHeight_px {60};
   static constexpr int32_t baseTopMargin_px {40};
   static constexpr int32_t sosTextMargin_px {10};
   static constexpr int32_t sosTrailSpace_px {8};
@@ -887,7 +907,7 @@ private:
   Vector2i _moveVelocity;
   Mixer::Channel_t _woowooChannel;
   HUD::uid_t _uidTroubleText;
-  static constexpr int maxSosTextDrop {3};
+  static constexpr int maxSosTextDrop {4};
   std::array<HUD::uid_t, maxSosTextDrop> _uidSosText;
   int32_t _nextSosText;
   float _moveSpeed;

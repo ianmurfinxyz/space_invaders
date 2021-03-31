@@ -8,9 +8,9 @@
 - improve logging - remove the std::cout logs at start of spaceinvaders.cpp
 - add a morphing sound - currently using a copy of the invaderkill sound
 - add more formations and levels
-- add a game over state, a sos state, and a state to enter name into score table
+- [DONE] add a game over state, a sos state, and a state to enter name into score table
 - add mothership collisions 
-- handle collisions between alien and player missiles
+- [DONE] handle collisions between alien and player missiles
 - when the last alien gets to the bottom of the screen the game switches to another state
   where an alien spawns at the top of the screen, dropping decoys, moving quickly from left to
   right, do I want to implement this?
@@ -32,7 +32,7 @@
 - draw the cannons on the hud to show num lives - was drawing with old hud system that I
   stripped but not the new one. (is it even possible with the current setup of the new one?)
 - add the option to play the space invaders song instead of the beats? (or both?)
-- the high score system
+- [DONE] jthe high score system
 
 [26-03-2021]
 - added the beatbox but it needs to pause when the cannon booms, and during alien spawning etc,
@@ -49,7 +49,7 @@ On any wave, if the last alien you kill is from the bottom two rows, you will be
 a special 'fireworks' display and a 500 point bonus. If the bottom leftmost invader is the last 
 killed, the bonus is 1,000 points.
 
-The number of points you get for shooting the solid flying saucer (50 - 300) depends upon how 
+[DONE] The number of points you get for shooting the solid flying saucer (50 - 300) depends upon how 
 many shots you have fired in the wave. The 23rd shot and every 15th thereafter is worth 300 
 points if it hits the saucer. When there are eight or fewer invaders left, the flying saucers 
 no longer appear.
@@ -64,7 +64,7 @@ no longer appear.
        this vid --> https://www.youtube.com/watch?v=ZpI2i1XIBdI
 - also when you die all aliens flash red. not sure my implementation is setup to make such a 
   thing easy though so may not add that - look into it.
-- should consider if I want a text box to enter the high scorer name or a letter grid, a grid
+- [DONE] should consider if I want a text box to enter the high scorer name or a letter grid, a grid
   would be more authentic to the original but kinda pointless since I am making a PC game and
   you could just use the keyboard. I think the text grid would be more fun to implement though
   so lets do that.
@@ -77,3 +77,30 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 - appears to be a bug where the aliens vere of the screen and a seg fault happens, not sure
   why, it happened whilst the cannon was in respawn mode. Does the cannon respaning effect how
   the aliens are processed in any way?
+
+[31-03-2021]
+- the bombs do varying damage and move at varying speeds:
+    - straight are slow
+    - cross are fast
+    - wiggly are powerful (more damage to shelters)
+- bombs have a chance to survive collisions with lasers, wiggly powerful bombs very high chance
+- on screen 1 invaders need to drop 11 times to reach invasion row and win the game, from screen 
+  2 to 9 they get lower down the screen, at screen 10 they start with 11 drops again and the
+  cycle repeats.
+- bombs do not harm the player on the row above invasion row.
+- [DONE] the mystery ship is actually worth varying points: 50, 100, 150, 300. 300 if shot on the
+  23 laser fired, or every 15 after, so the pattern to max score is,
+      22 shots, 23rd hit ufo, 14 shots, 15th hit ufo, 14 shots, 15th hit ufo etc
+  it doesn't matter if your shots hit or miss, only the count matters.
+- [DONE] mothership spawn randomly approx every 25seconds
+- add a stats mode that runs after game over and before the high score mode which shows you
+  stats on how many aliens killed, how many motherships hit, lasers fired, hit rate etc.
+
+features added
+--------------
+want a full feature and gameplay list which details the exact specs of how the game plays:
+
+- bomb move at different speeds and have different chances to be destroyed. list the speeds and
+chances.
+- ufos have different score values - random set and a special set when you do...
+-
