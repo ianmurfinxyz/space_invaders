@@ -418,6 +418,7 @@ public:
     void setBeatFreq(float freq_hz);
     float getBeatFreq() const {return _beatFreq_hz;}
     void pause(){_isPaused = true;}
+    void unpause(){_isPaused = false;}
     void togglePause(){_isPaused = !_isPaused;}
     bool isPaused() const {return _isPaused;}
   private:
@@ -660,7 +661,7 @@ private:
   const Font* _font;
   HUD* _hud;
 
-  static constexpr float beatFreqScale {0.5f};
+  static constexpr float beatFreqScale {0.8f};
   BeatBox _beatBox;
 
   Vector2i _worldSize;
@@ -675,12 +676,14 @@ private:
   using GridRow = std::array<Alien, gridWidth>;
   std::array<GridRow, gridHeight> _grid; 
   Vector2i _alienShiftDisplacement;
-  static constexpr int32_t minSpawnDrops {3};
+  static constexpr int32_t minSpawnDrops {6};
   static constexpr int32_t baseAlienDropDisplacement {14};
+  static constexpr int32_t baseAlienSpawnDropDisplacement {7}; // fast baby steps
   static constexpr int32_t baseAlienTopRowHeight {186}; // num drops to invasion--v
   static constexpr int32_t baseAlienInvasionRowHeight {32}; // note: 186 == 32 + (11 * 14)
   static constexpr int32_t numDropsToInvasion {11}; // for top row of aliens.
   Vector2i _alienDropDisplacement;
+  Vector2i _alienSpawnDropDisplacement;
   Vector2i _aliensSpawnPosition;         // position of bottom-left alien of bottom row at spawn.
   int32_t _alienInvasionHeight;
   int32_t _alienXSeperation;
@@ -714,8 +717,8 @@ private:
   std::array<UfoClass, ufoClassCount> _ufoClasses;
   Ufo _ufo;
   Mixer::Channel_t _ufoSfxChannel;
-  static constexpr int tillUfoMin {60};// each update we do --tillUfo, so for updates at 60hz,
-  static constexpr int tillUfoMax {180};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
+  static constexpr int tillUfoMin {1200};// each update we do --tillUfo, so for updates at 60hz,
+  static constexpr int tillUfoMax {1800};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
   int32_t _tillUfo;                      // when _tillUfo == 0, ufo spawns.
   int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
   int32_t _ufoCounter;
@@ -730,6 +733,7 @@ private:
   bool _canUfosSpawn;                    // ufos cannot spawn if alien pop <= 8
 
   static constexpr int32_t cycleCount {13};
+  static constexpr int32_t spawnCycle {5};  // higher than 0 so we spawn faster.
   static constexpr int32_t cycleLength {4};
   static constexpr int32_t cycleStart {0};
   static constexpr int32_t cycleEnd {-1};

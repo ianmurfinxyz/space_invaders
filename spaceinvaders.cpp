@@ -85,7 +85,7 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   addState(std::move(scoreBoard));
   addState(std::move(sos));
 
-  switchState(GameState::name);
+  switchState(SplashState::name);
 
   return true;
 }
@@ -326,7 +326,7 @@ void SplashState::doEvents()
       {
       SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
       HUD& hud = si->getHud();
-      std::string text {"*Cloned by Pixrex*"};
+      std::string text {"*A Tribute by Pixrex*"};
       _uidAuthor = hud.addTextLabel({Vector2i{32, 24} * _worldScale, pxr::colors::cyan, text});
       si->showHud();
       break;
@@ -462,13 +462,14 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _alienShiftDisplacement = Vector2i{2, 0} * _worldScale;
   _alienDropDisplacement = Vector2i{0, -baseAlienDropDisplacement} * _worldScale;
+  _alienSpawnDropDisplacement = Vector2i{0, -baseAlienSpawnDropDisplacement} * _worldScale;
   _alienInvasionHeight = baseAlienInvasionRowHeight * _worldScale;
 
   _alienXSeperation = baseAlienDropDisplacement * _worldScale;
   _alienYSeperation = baseAlienDropDisplacement * _worldScale;
 
   _aliensSpawnPosition._x = (_worldSize._x - (gridWidth * _alienXSeperation)) / 2;
-  _aliensSpawnPosition._y = ((baseAlienTopRowHeight + (minSpawnDrops * baseAlienDropDisplacement))
+  _aliensSpawnPosition._y = ((baseAlienTopRowHeight + (minSpawnDrops * baseAlienSpawnDropDisplacement))
                              - ((gridHeight - 1) * baseAlienDropDisplacement)) * _worldScale; 
 
   //_worldSize._y - (gridHeight * _alienYSeperation) - 30;
@@ -643,9 +644,9 @@ void GameState::startNextLevel()
   if(_levelIndex >= levelCount)
     _levelIndex = levelCount - 1;
 
-  _activeCycle = 0;
+  _activeCycle = spawnCycle;
   _activeBeat = cycleStart;
-  updateBeatFreq();
+  _beatBox.pause();
   _nextMover = {0, 0};
   _alienMoveDirection = 1;
   _dropsDone = 0;
@@ -774,6 +775,8 @@ void GameState::endSpawning()
   _isAliensDropping = false;
   spawnCannon(false);
   _activeCycle = 0;
+  updateBeatFreq();
+  _beatBox.unpause();
 
   static_cast<SpaceInvaders*>(_app)->showHud();
 }
@@ -795,6 +798,7 @@ void GameState::spawnCannon(bool takeLife)
   _cannon._isBooming = false;
   _cannon._isAlive = true;
   _isAliensFrozen = false;
+  _beatBox.unpause();
 }
 
 void GameState::spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex)
@@ -882,6 +886,8 @@ void GameState::boomCannon()
   _cannon._isAlive = false;
 
   _isAliensFrozen = true;
+
+  _beatBox.pause();
 
   mixer->playSound(SpaceInvaders::SK_EXPLOSION);
 }
@@ -1141,7 +1147,7 @@ void GameState::doAlienMoving(int32_t beats)
     Alien& alien = _grid[_nextMover._row][_nextMover._col];
 
     if(_isAliensDropping){
-      alien._position += _alienDropDisplacement;
+      alien._position += _isAliensSpawning ? _alienSpawnDropDisplacement : _alienDropDisplacement;
     }
     else{
       alien._position += _alienShiftDisplacement * _alienMoveDirection;
@@ -1161,6 +1167,7 @@ void GameState::doAlienMoving(int32_t beats)
         std::cout << "top row y = " << _grid[gridHeight - 1][0]._position._y / _worldScale << std::endl;
 
         if(_isAliensSpawning){
+          mixer->playSound(SpaceInvaders::SK_FAST4);
           if(_dropsDone >= _levels[_levelIndex]._spawnDrops){
             endSpawning();
             std::cout << "done spawning" << std::endl;
@@ -1831,9 +1838,18 @@ void GameState::onUpdate(double now, float dt)
     _isGameOver = true;
   }
 
+  //
+  // TODO - want some sort of cleanup so when aliens invade or a game over happens, all 
+  // sounds are stopped and all aliens are destroyed as they are needed to be.
+  //
+
   if(_isGameOver){
+    // make sure to destroy all objects including ufos before we continue here without
+    // awarding points, and make sure to stop any ufo sounds.
+    _beatBox.pause();
     _gameOverClock -= dt;
     if(_gameOverClock <= 0){
+      if(_ufo._isAlive) mixer->stopChannel(_ufoSfxChannel);
       SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
       if(si->isHiScore(si->getScore()))
         _app->switchState(HiScoreRegState::name);
@@ -1844,6 +1860,7 @@ void GameState::onUpdate(double now, float dt)
   
   if(_alienPopulation == 0){ // TODO implement and ufo is not spawned
     static_cast<SpaceInvaders*>(_app)->addRound(1);
+    if(_ufo._isAlive) mixer->stopChannel(_ufoSfxChannel);
     _app->switchState(SosState::name);
   }
 
