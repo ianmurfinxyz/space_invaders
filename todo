@@ -74,3 +74,6 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 
 [29-03-2021]
 - need to implement the test for aliens reaching screen bottom.
+- appears to be a bug where the aliens vere of the screen and a seg fault happens, not sure
+  why, it happened whilst the cannon was in respawn mode. Does the cannon respaning effect how
+  the aliens are processed in any way?

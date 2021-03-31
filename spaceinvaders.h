@@ -28,7 +28,7 @@ public:
     BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, 
     BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, BMK_CANNONBOOM1, BMK_CANNONBOOM2, 
     BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII,
-    BMK_CONTROLS, BMK_MENU, BMK_COUNT
+    BMK_CONTROLS, BMK_MENU, BMK_SOS_TRAIL, BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
@@ -37,7 +37,7 @@ public:
     "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
     "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
     "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
-    "bombboommidair", "bunker", "partii", "controls", "menu"
+    "bombboommidair", "bunker", "partii", "controls", "menu", "sostrail"
   };
 
   static constexpr Assets::Key_t fontKey {1};
@@ -814,9 +814,14 @@ private:
   static constexpr int32_t baseWorldMargin_px {60};    // base == before world scale.
   static constexpr int32_t baseSpawnHeight_px {80};
   static constexpr int32_t baseTopMargin_px {40};
-  static constexpr float baseMoveSpeed {80};
+  static constexpr int32_t sosTextMargin_px {10};
+  static constexpr int32_t sosTrailSpace_px {8};
+  static constexpr float baseMoveSpeed {75};
   static constexpr float moveAngleRadians {0.9899310886f}; // 55 deg
-  static constexpr float engineFailPeriodSeconds {2.f};
+  static constexpr float engineFailPeriodSeconds {3.f};
+
+  static constexpr const char* troubleText {"ENGINE TROUBLE"};
+  static constexpr const char* sosText {"SOS  !!"};
 
   //
   // 1 in 'engineFailChance' chance for engine to fail each update, there are 60 updates 
@@ -826,16 +831,17 @@ private:
   //
   // engineFailHit is the number that the generator must return to indicate a fail has occured,
   // I am asuming the std::distribution has equal chance to return all numbers (as it claims) so 
-  // this value will not matter.
+  // this value should not matter (unless there actually is bias, in which case it does).
   //
   static constexpr int engineFailChance {720};
   static constexpr int engineFailHit {0};
 
   struct Alien
   {
-    static constexpr const float framePeriodSeconds {0.2f};
+    static constexpr const float framePeriodSeconds {0.1f};
     GameState::AlienClassId _classId;
     Vector2f _position;
+    Vector2f _failPosition;
     bool _frame;
     float _frameClockSeconds;
   };
@@ -849,6 +855,7 @@ private:
 
 private:
   void doMoving(float dt);
+  void doAlienAnimating(float dt);
   void doEngineFailing(float dt);
   void doEngineCheck();
   void doWallColliding();
@@ -865,6 +872,8 @@ private:
   friend SpaceInvaders;
   GameState* _gameState;
 
+  const Font* _font;
+  HUD* _hud;
   Alien _alien;
   Ufo _ufo;
   Vector2i _worldSize;
@@ -874,9 +883,13 @@ private:
   int32_t _worldRightMargin_px;
   int32_t _spawnMargin_px;
   int32_t _spawnHeight_px;
+  int32_t _sosTextPositionX;
   Vector2i _moveVelocity;
-  Vector2i _engineFailAlienPosition;
   Mixer::Channel_t _woowooChannel;
+  HUD::uid_t _uidTroubleText;
+  static constexpr int maxSosTextDrop {3};
+  std::array<HUD::uid_t, maxSosTextDrop> _uidSosText;
+  int32_t _nextSosText;
   float _moveSpeed;
   float _engineFailClockSeconds;
   bool _hasEngineFailed;
