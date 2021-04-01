@@ -791,7 +791,7 @@ private:
   std::array<Level, levelCount> _levels;
   int32_t _levelIndex;                        // Active level (index into _levels data).
 
-  static constexpr int32_t msgHeight_px {120};
+  static constexpr int32_t msgHeight_px {140};
   static constexpr const char* msgGameOver {"GAME OVER!"};
   static constexpr const char* msgVictory {"VICTORY!"};
   static constexpr const char* msgRoundIntro {"ROUND"};

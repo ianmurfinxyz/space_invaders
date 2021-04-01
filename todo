@@ -14,8 +14,8 @@
 - when the last alien gets to the bottom of the screen the game switches to another state
   where an alien spawns at the top of the screen, dropping decoys, moving quickly from left to
   right, do I want to implement this?
-- implement the schrodinger reinforcements
-- investigate and fix why the game isnt scaling when I resize the window. - If I remember correctly
+- [SKIP FOR NOW]implement the schrodinger reinforcements
+- [SKIP] investigate and fix why the game isnt scaling when I resize the window. - If I remember correctly
   I think it is because I can scale down the bunkers because I mask off arbitrary chunks of pixels
   thus a damaged bunker cannot be scaled down without loosing information, meaning I could not
   scale it back up again afterwards unless I created information. Yes I could store the larger
@@ -28,7 +28,7 @@
 - draw one of the cabinet arts for the background? see here,
     http://www.classicgaming.cc/classics/space-invaders/graphics
   artwork 2 looks most appropriate
-- a sign that pops up detailing the round number when aliens are spawning?
+- [DONE] a sign that pops up detailing the round number when aliens are spawning?
 - [DONE] draw the cannons on the hud to show num lives - was drawing with old hud system that I
   stripped but not the new one. (is it even possible with the current setup of the new one?)
 - add the option to play the space invaders song instead of the beats? (or both?)
@@ -62,7 +62,7 @@ no longer appear.
   3px per tick when moving right. This is to make it harder to calibrate your aiming since the
   speed keeps changing. I like that idea and should add it. 
        this vid --> https://www.youtube.com/watch?v=ZpI2i1XIBdI
-- also when you die all aliens flash red. not sure my implementation is setup to make such a 
+- [SKIP] also when you die all aliens flash red. not sure my implementation is setup to make such a 
   thing easy though so may not add that - look into it.
 - [DONE] should consider if I want a text box to enter the high scorer name or a letter grid, a grid
   would be more authentic to the original but kinda pointless since I am making a PC game and
@@ -95,14 +95,14 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 - [DONE] mothership spawn randomly approx every 25seconds
 - add a stats mode that runs after game over and before the high score mode which shows you
   stats on how many aliens killed, how many motherships hit, lasers fired, hit rate etc.
-- add an invasion state or animation or something
+- [DONE] - did the messages - add an invasion state or animation or something
 - setup formation and levels and how the game is to repeat.
 - do varying bomb damage to the shelters.
 - [DONE] make the schrodinger phase in and out
 - [SKIP] make the score flash when the round starts.
 - [SKIP] add some sound effects to the menu when you click options 
 - [SKIP] play the invader song during splash and menu?
-- check on how when I am making the aliens fire and perhaps make it better if needed. Chance to fire?
+- [DONE] check on how when I am making the aliens fire and perhaps make it better if needed. Chance to fire?
 - [DONE] add sounds when alien are spawn dropping
 - [DONE] dont start beat box until aliens have stopped spawning
 - [DONE] cleanup when game over and invasion.

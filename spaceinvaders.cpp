@@ -1040,6 +1040,8 @@ void GameState::doUfoSpawning()
   if(_isGameOver || _isVictory || _isRoundIntro)
     return;
 
+  if(_alienPopulation <= 8)
+    return;
 
   --_tillUfo;
   if(_tillUfo <= 0){
@@ -1374,7 +1376,7 @@ void GameState::doBombBoomBooming(float dt)
 
 void GameState::doUfoReinforcing(float dt)
 {
-
+  // TODO
 }
 
 void GameState::doCollisionsUfoBorders()
@@ -1880,8 +1882,9 @@ void GameState::doInvasionTest()
 
   if(minY == _alienInvasionHeight)
     startGameOver();
-  else if(minY == _alienInvasionHeight + _alienDropDisplacement._y)
-    _isAliensAboveInvasionRow == true;
+  else if(minY == _alienInvasionHeight + std::abs(_alienDropDisplacement._y)){
+    _isAliensAboveInvasionRow = true;
+  }
 }
 
 void GameState::startRoundIntro()
@@ -1947,8 +1950,13 @@ void GameState::doGameOver(float dt)
 
 void GameState::doVictoryTest()
 {
-  if(!_isVictory && _alienPopulation == 0 && !_ufo._isAlive)
-    startVictory();
+  if(!_isVictory && _alienPopulation == 0){
+    _beatBox.pause();
+    if(_ufo._isAlive)
+      return;
+    else
+      startVictory();
+  }
 }
 
 void GameState::startVictory()
