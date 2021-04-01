@@ -159,6 +159,8 @@ public:
   void setScore(int32_t score){_score = score;}
   void addScore(int32_t score){_score += score;}
   int32_t getScore() const {return _score;}
+  void startScoreHudFlash();
+  void stopScoreHudFlash();
 
   void setRound(int32_t round){_round = round;}
   void addRound(int32_t round){_round += round;}
@@ -590,6 +592,15 @@ private:
   void startNextLevel();
   void updateBeatFreq();
   void updateActiveCycle();
+  void updateActiveCycleBeat();
+  void addHudEndMsg(const char* endMsg, const Color3f& color);
+  void removeHudEndMsg();
+  void doInvasionTest();
+  void startGameOver();
+  void doGameOver(float dt);
+  void doVictoryTest();
+  void startVictory();
+  void doVictory(float dt);
   void endSpawning();
   void spawnCannon(bool takeLife);
   void spawnBomb(Vector2f position, BombClassId classId);
@@ -603,7 +614,6 @@ private:
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
-  void doInvasionTest();
   void doUfoSpawning();
   void doAlienMorphing(float dt);
   void doCannonMoving(float dt);
@@ -639,7 +649,6 @@ private:
   void drawLaser();
   void drawHitbar();
   void drawBunkers();
-  //void drawHud();
 
   // Predicates.
   static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
@@ -778,29 +787,19 @@ private:
   static constexpr int32_t levelCount {10};
   std::array<Level, levelCount> _levels;
   int32_t _levelIndex;                        // Active level (index into _levels data).
-  // int32_t _round;
-  // int32_t _score;
-  // int32_t _lives;
-  // int32_t _credit;
+
+  static constexpr int32_t endMsgHeight_px {120};
+  static constexpr const char* gameOverMsg {"GAME OVER!"};
+  static constexpr const char* victoryMsg {"VICTORY!"};
+  static constexpr float gameOverPeriodSeconds {4.f}; // Unit: seconds. Time to display game over message.
+  static constexpr float victoryPeriodSeconds {2.f};
+  float _gameOverClockSeconds;                        // Unit: seconds.
+  float _victoryClockSeconds;
   bool _isGameOver;
-  float _gameOverDuration;                    // Unit: seconds. Time to display game over message.
-  float _gameOverClock;                       // Unit: seconds.
+  bool _isVictory;
 
   HUD::uid_t _uidUfoScoringText;
-
-  //TextLabel _gameOverLabel;
-  //TextLabel _scoreLabel;
-  //TextLabel _recordLabel;
-  //TextLabel _roundLabel;
-  //TextLabel _creditLabel;
-  //IntLabel _scoreValueLabel;
-  //IntLabel _recordValueLabel;
-  //IntLabel _roundValueLabel;
-  //IntLabel _creditValueLabel;
-  //IntLabel _lifeValueLabel;
-  //BitmapLabel _lifeCannonLabel;
-  //int32_t _lifeCannonSpacingX;
-  //bool _showHud;
+  HUD::uid_t _uidEndMsgText;
 };
 
 //===============================================================================================//

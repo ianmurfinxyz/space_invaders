@@ -22,7 +22,7 @@
   copy and create a seperate smaller one, but what if my original bunker is actually the smaller
   one. Then I have no choice but to create information from nowhere.
 - [DONE] fix the 'y' on the splash screen
-- make it possible to skip the splash screen
+- [SKIP] make it possible to skip the splash screen
 - add a cheat mode which can be activated via a cli arg or via a .cfg file
 - [DONE] implement the music beats
 - draw one of the cabinet arts for the background? see here,
@@ -99,9 +99,9 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 - setup formation and levels and how the game is to repeat.
 - do varying bomb damage to the shelters.
 - [DONE] make the schrodinger phase in and out
-- make the score flash when the round starts.
-- add some sound effects to the menu when you click options 
-- play the invader song during splash and menu?
+- [SKIP] make the score flash when the round starts.
+- [SKIP] add some sound effects to the menu when you click options 
+- [SKIP] play the invader song during splash and menu?
 - check on how when I am making the aliens fire and perhaps make it better if needed. Chance to fire?
 - [DONE] add sounds when alien are spawn dropping
 - [DONE] dont start beat box until aliens have stopped spawning

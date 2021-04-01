@@ -142,6 +142,16 @@ void SpaceInvaders::showLivesHud()
       _hud.showBitmapLabel(_uidLivesBitmaps[life - 1]);
 }
 
+void SpaceInvaders::startScoreHudFlash()
+{
+  _hud.startIntLabelFlash(_uidScoreValue);
+}
+
+void SpaceInvaders::stopScoreHudFlash()
+{
+  _hud.stopIntLabelFlash(_uidScoreValue);
+}
+
 void SpaceInvaders::setLives(int32_t lives)
 {
   _lives = std::max(0, lives);
@@ -656,7 +666,6 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
 
   _levelIndex = -1;
   _isGameOver = false;
-  _gameOverDuration = 5.f;
 }
 
 void GameState::startNextLevel()
@@ -683,7 +692,6 @@ void GameState::startNextLevel()
   _isAliensSpawning = true;
   _isAliensFrozen = false;
   _isAliensAboveInvasionRow = false;
-  _haveAliensInvaded = false;
 
   // Reset aliens.
   for(int32_t col = 0; col < gridWidth; ++col){
@@ -751,6 +759,7 @@ void GameState::startNextLevel()
   }
 
   _isGameOver = false;
+  _isVictory = false;
 
   si->showHud();
   si->hideTopHud();
@@ -798,6 +807,13 @@ void GameState::updateActiveCycle()
   }
 }
 
+void GameState::updateActiveCycleBeat()
+{
+  ++_activeBeat;
+  if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
+    _activeBeat = cycleStart;
+}
+
 void GameState::endSpawning()
 {
   _isAliensSpawning = false;
@@ -816,8 +832,7 @@ void GameState::spawnCannon(bool takeLife)
     SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
     si->addLives(-1);
     if(si->getLives() <= 0){
-      _isGameOver = true;
-      _gameOverClock = _gameOverDuration;
+      startGameOver();
       return;
     }
   }
@@ -1011,32 +1026,6 @@ void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
   bunker._bitmap.regenerateBytes();
 }
 
-void GameState::doInvasionTest()
-{
-  if(_alienPopulation == 0)
-    return;
-
-  if(_isAliensFrozen)
-    return;
-
-  if(_isAliensSpawning)
-    return;
-
-  // dont trigger invasion until all alive have dropped.
-  if(_isAliensDropping)
-    return;
-
-  int32_t minY {std::numeric_limits<int32_t>::max()};
-  for(auto& row : _grid)
-    for(auto& alien : row)
-      if(alien._isAlive)
-        minY = std::min(minY, alien._position._y);
-
-  if(minY == _alienInvasionHeight)
-    _haveAliensInvaded = true;
-  else if(minY == _alienInvasionHeight + _alienDropDisplacement._y)
-    _isAliensAboveInvasionRow == true;
-}
 
 void GameState::doUfoSpawning()
 {
@@ -1321,9 +1310,6 @@ void GameState::doAlienBombing(int32_t beats)
 void GameState::doAlienBooming(float dt)
 {
   if(!_isAliensBooming)
-    return;
-
-  if(_alienPopulation == 0)
     return;
 
   _alienBoomClock -= dt;
@@ -1823,6 +1809,125 @@ bool GameState::incrementGridIndex(GridIndex& index)
   return false;
 }
 
+void GameState::addHudEndMsg(const char* endMsg, const Color3f& color)
+{
+  int32_t msgWidth = _font->calculateStringWidth(endMsg);
+  Vector2i msgPosition {
+    (_worldSize._x - msgWidth) / 2,
+    endMsgHeight_px * _worldScale
+  };
+
+  _uidEndMsgText = _hud->addTextLabel({
+    msgPosition, 
+    color,
+    endMsg,
+    0.5f,
+    true
+  });
+}
+
+void GameState::removeHudEndMsg()
+{
+  _hud->removeTextLabel(_uidEndMsgText);
+}
+
+void GameState::doInvasionTest()
+{
+  if(_isGameOver)
+    return;
+
+  if(_alienPopulation == 0)
+    return;
+
+  if(_isAliensFrozen)
+    return;
+
+  if(_isAliensSpawning)
+    return;
+
+  // dont trigger invasion until all alive have dropped.
+  if(_isAliensDropping)
+    return;
+
+  int32_t minY {std::numeric_limits<int32_t>::max()};
+  for(auto& row : _grid)
+    for(auto& alien : row)
+      if(alien._isAlive)
+        minY = std::min(minY, alien._position._y);
+
+  if(minY == _alienInvasionHeight)
+    startGameOver();
+  else if(minY == _alienInvasionHeight + _alienDropDisplacement._y)
+    _isAliensAboveInvasionRow == true;
+}
+
+void GameState::startGameOver()
+{
+  _cannon._isAlive = false;
+  _beatBox.pause();
+  
+  if(_ufo._isAlive) 
+    mixer->stopChannel(_ufoSfxChannel);
+
+  static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
+
+  addHudEndMsg(gameOverMsg, colors::red);
+
+  _gameOverClockSeconds = 0.f;
+  _isGameOver = true;
+}
+
+void GameState::doGameOver(float dt)
+{
+  if(!_isGameOver)
+    return;
+
+  _gameOverClockSeconds += dt;
+  if(_gameOverClockSeconds >= gameOverPeriodSeconds){
+    SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+    si->stopScoreHudFlash();
+    removeHudEndMsg();
+    if(si->isHiScore(si->getScore()))
+      _app->switchState(HiScoreRegState::name);
+    else 
+      _app->switchState(HiScoreBoardState::name);
+  }
+}
+
+void GameState::doVictoryTest()
+{
+  if(!_isVictory && _alienPopulation == 0 && !_ufo._isAlive)
+    startVictory();
+}
+
+void GameState::startVictory()
+{
+  _beatBox.pause();
+  if(_ufo._isAlive) 
+    mixer->stopChannel(_ufoSfxChannel);
+
+  addHudEndMsg(victoryMsg, colors::green);
+  static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
+
+  _victoryClockSeconds = 0.f;
+  _isVictory = true;
+}
+
+void GameState::doVictory(float dt)
+{
+  if(!_isVictory)
+    return;
+
+  _victoryClockSeconds += dt;
+  if(_victoryClockSeconds > victoryPeriodSeconds){
+    SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
+    si->addRound(1);
+    si->stopScoreHudFlash();
+    removeHudEndMsg();
+    _app->switchState(SosState::name);
+  }
+}
+
 void GameState::onUpdate(double now, float dt)
 {
   int32_t beats = _cycles[_activeCycle][_activeBeat]; 
@@ -1841,7 +1946,6 @@ void GameState::onUpdate(double now, float dt)
   doBombBoomBooming(dt);
   doUfoBoomScoring(dt);
   doCannonFiring();
-
   doCollisionsUfoBorders();
   doCollisionsBombsHitbar();
   doCollisionsBombsCannon();
@@ -1853,11 +1957,8 @@ void GameState::onUpdate(double now, float dt)
   doCollisionsLaserUfo();
   doCollisionsLaserSky();
 
-  doInvasionTest();
 
   //================================================================================
-  
-  // TEMP - TODO- implement collision detectin to boom cannon and aliens.
   
   if(pxr::input->isKeyPressed(Input::KEY_b))
     boomCannon();
@@ -1875,43 +1976,12 @@ void GameState::onUpdate(double now, float dt)
   BOOMED:
 
   //================================================================================
-  
-  if(_haveAliensInvaded){
-    // make sure to destroy all objects including ufos before we continue here without
-    // awarding points, and make sure to stop any ufo sounds.
-    _isGameOver = true;
-  }
 
-  //
-  // TODO - want some sort of cleanup so when aliens invade or a game over happens, all 
-  // sounds are stopped and all aliens are destroyed as they are needed to be.
-  //
-
-  if(_isGameOver){
-    // make sure to destroy all objects including ufos before we continue here without
-    // awarding points, and make sure to stop any ufo sounds.
-    _beatBox.pause();
-    _gameOverClock -= dt;
-    if(_gameOverClock <= 0){
-      if(_ufo._isAlive) mixer->stopChannel(_ufoSfxChannel);
-      SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
-      if(si->isHiScore(si->getScore()))
-        _app->switchState(HiScoreRegState::name);
-      else 
-        _app->switchState(HiScoreBoardState::name);
-    }
-  }
-  
-  if(_alienPopulation == 0){ // TODO implement and ufo is not spawned
-    static_cast<SpaceInvaders*>(_app)->addRound(1);
-    if(_ufo._isAlive) mixer->stopChannel(_ufoSfxChannel);
-    _app->switchState(SosState::name);
-  }
-
-  ++_activeBeat;
-  if(_cycles[_activeCycle][_activeBeat] == cycleEnd)
-    _activeBeat = cycleStart;
-
+  doVictoryTest();
+  doVictory(dt);
+  doInvasionTest();
+  doGameOver(dt);
+  updateActiveCycleBeat();
   _beatBox.doBeats(dt);
 }
 
