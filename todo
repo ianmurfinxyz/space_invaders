@@ -98,12 +98,12 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 - add an invasion state or animation or something
 - setup formation and levels and how the game is to repeat.
 - do varying bomb damage to the shelters.
-- make the schrodinger phase in and out
+- [DONE] make the schrodinger phase in and out
 - make the score flash when the round starts.
 - add some sound effects to the menu when you click options 
 - play the invader song during splash and menu?
 - check on how when I am making the aliens fire and perhaps make it better if needed. Chance to fire?
-- add sounds when alien are spawn dropping
+- [DONE] add sounds when alien are spawn dropping
 - [DONE] dont start beat box until aliens have stopped spawning
 - cleanup when game over and invasion.
 

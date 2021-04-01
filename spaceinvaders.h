@@ -477,6 +477,8 @@ public:
     int32_t _width;
     int32_t _height;
     int32_t _colorIndex;
+    float _phasePeriodSeconds;
+    bool _isPhaser;
     Assets::Key_t _shipKey;
     Assets::Key_t _boomKey;
   };
@@ -485,8 +487,8 @@ public:
   {
     UfoClassId _classId;
     Vector2f _position;
-    float _phaseClock;
-    bool _phase;
+    float _phaseClockSeconds;
+    bool _phase;                // true==on/visible, false==off/invisible
     bool _isAlive;
   };
 
@@ -584,30 +586,6 @@ public:
     bool _isSchrodingerOn;
   };
 
-  // TEMP - TODO - replace this with UI elements or something once the UI is done. Preferable
-  // one in which the text can draw over time for the game over label.
-  
-  // struct TextLabel
-  // {
-  //   Vector2f _position;
-  //   std::string _message;
-  //   int32_t _colorIndex;
-  // };
-
-  // struct IntLabel
-  // {
-  //   Vector2f _position;
-  //   int32_t* _value;
-  //   int32_t _colorIndex;
-  // };
-
-  // struct BitmapLabel
-  // {
-  //   Vector2f _position;
-  //   Assets::Key_t _bitmapKey;
-  //   int32_t _colorIndex;
-  // };
-
 private:
   void startNextLevel();
   void updateBeatFreq();
@@ -635,6 +613,7 @@ private:
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
   void doUfoMoving(float dt);
+  void doUfoPhasing(float dt);
   void doAlienBombing(int32_t beats);
   void doAlienBooming(float dt);
   void doUfoBoomScoring(float dt);
@@ -721,6 +700,7 @@ private:
 
   AlienClassId _lastClassAlive;           // part of the sos bodge, used by the sos state.
 
+  static constexpr float schrodingerPhasePeriodSeconds {0.4f};
   static constexpr int32_t schrodingerSpawnChance {3}; // 1 in spawnChance chance each ufo spawn.
   static constexpr int32_t ufoClassCount {2};
   std::array<UfoClass, ufoClassCount> _ufoClasses;

@@ -574,8 +574,8 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _ufoClasses = {{
-    {{50, 100, 150}, 300, 16 * _worldScale, 7 * _worldScale, 0, SpaceInvaders::BMK_SAUCER, SpaceInvaders::BMK_UFOBOOM},
-    {{300, 350, 400}, 1000, 15 * _worldScale, 7 * _worldScale, 3, SpaceInvaders::BMK_SCHRODINGER, SpaceInvaders::BMK_UFOBOOM}
+    {{50, 100, 150}, 300, 16 * _worldScale, 7 * _worldScale, 0, 0.f, false, SpaceInvaders::BMK_SAUCER, SpaceInvaders::BMK_UFOBOOM},
+    {{300, 350, 400}, 1000, 15 * _worldScale, 7 * _worldScale, 3, schrodingerPhasePeriodSeconds, true, SpaceInvaders::BMK_SCHRODINGER, SpaceInvaders::BMK_UFOBOOM}
   }};
 
   _ufoSpawnY = 210.f * _worldScale;
@@ -655,27 +655,8 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   }};
 
   _levelIndex = -1;
-  //_round = -1;
-
-  //_lives = 5; // requires 1 life for initial spawn, thus actually start with 4.
   _isGameOver = false;
   _gameOverDuration = 5.f;
-
-  // Set HUD elements.
-  
-  // _gameOverLabel = {{72.f * _worldScale, 188.f * _worldScale}, "GAME OVER", 3};
-  // _scoreLabel = {{10.f * _worldScale, 240.f * _worldScale}, "SCORE", 4};
-  // _recordLabel = {{90.f * _worldScale, 240.f * _worldScale}, "RECORD", 0};
-  // _roundLabel = {{170.f * _worldScale, 240.f * _worldScale}, "ROUND", 5};
-  // _creditLabel = {{130.f * _worldScale, 6.f * _worldScale}, "CREDIT", 3};
-  // _scoreValueLabel = {{16.f * _worldScale, 230.f * _worldScale}, &_score, 6};
-  // _recordValueLabel = {{96.f * _worldScale, 230.f * _worldScale}, &_score, 1};
-  // _roundValueLabel = {{190.f * _worldScale, 230.f * _worldScale}, &_round, 3};
-  // _creditValueLabel = {{190.f * _worldScale, 6.f * _worldScale}, &_credit, 4};
-  // _lifeValueLabel = {{10.f * _worldScale, 6.f * _worldScale}, &_lives, 5};
-  // _lifeCannonLabel = {{20.f * _worldScale, 6.f * _worldScale}, SpaceInvaders::BMK_CANNON0, 4};
-  // _lifeCannonSpacingX = 16 * _worldScale;
-
 }
 
 void GameState::startNextLevel()
@@ -899,6 +880,7 @@ void GameState::spawnUfo(UfoClassId classId)
   _ufoDirection = (randUniformSignedInt(0, 1) == 0) ? 1 : -1;
   _ufo._position._x = (_ufoDirection == 1) ? 0 : _worldSize._x;
   _ufo._position._y = _ufoSpawnY;
+  _ufo._phase = true;
   _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_HIGH_PITCH, 1000);
 }
 
@@ -1260,6 +1242,23 @@ void GameState::doUfoMoving(float dt)
   _ufo._position._x += _ufoSpeed * _ufoDirection * dt;
 }
 
+void GameState::doUfoPhasing(float dt)
+{
+  if(!_ufo._isAlive) 
+    return;
+
+  const UfoClass& uc = _ufoClasses[_ufo._classId];
+
+  if(!uc._isPhaser)
+    return;
+
+  _ufo._phaseClockSeconds += dt;
+  if(_ufo._phaseClockSeconds >= uc._phasePeriodSeconds){
+    _ufo._phase = !_ufo._phase;
+    _ufo._phaseClockSeconds = 0.f;
+  }
+}
+
 void GameState::doAlienBombing(int32_t beats)
 {
   // Cycles determine alien bomb rate. Aliens bomb every N beats, thus the higher beat rate
@@ -1562,6 +1561,9 @@ void GameState::doCollisionsLaserUfo()
   if(!_ufo._isAlive)
     return;
 
+  if(!_ufo._phase)
+    return;
+
   Vector2i aPosition {}; 
   Vector2i bPosition {};
 
@@ -1832,6 +1834,7 @@ void GameState::onUpdate(double now, float dt)
   doAlienBombing(beats);
   doCannonMoving(dt);
   doUfoMoving(dt);
+  doUfoPhasing(dt);
   doUfoSpawning();
   doCannonBooming(dt);
   doAlienBooming(dt);
@@ -1943,7 +1946,7 @@ void GameState::drawGrid()
 
 void GameState::drawUfo()
 {
-  if(!(_ufo._isAlive || _isUfoBooming || _isUfoScoring))
+  if(!((_ufo._isAlive && _ufo._phase) || _isUfoBooming || _isUfoScoring))
     return;
 
   const UfoClass& uc = _ufoClasses[_ufo._classId];
@@ -2027,34 +2030,6 @@ void GameState::drawBunkers()
     renderer->blitBitmap(bunker->_position, bunker->_bitmap, _colorPalette[_bunkerColorIndex]);
 }
 
-// void GameState::drawHud()
-// {
-//   if(!_showHud)
-//     return;
-// 
-//   renderer->blitText(_scoreLabel._position, _scoreLabel._message, *_font, _colorPalette[_scoreLabel._colorIndex]);
-//   renderer->blitText(_recordLabel._position, _recordLabel._message, *_font, _colorPalette[_recordLabel._colorIndex]);
-//   renderer->blitText(_roundLabel._position, _roundLabel._message, *_font, _colorPalette[_roundLabel._colorIndex]);
-//   renderer->blitText(_creditLabel._position, _creditLabel._message, *_font, _colorPalette[_creditLabel._colorIndex]);
-// 
-//   renderer->blitText(_scoreValueLabel._position, std::to_string(*_scoreValueLabel._value), *_font, _colorPalette[_scoreValueLabel._colorIndex]);
-//   renderer->blitText(_recordValueLabel._position, std::to_string(*_recordValueLabel._value), *_font, _colorPalette[_recordValueLabel._colorIndex]);
-//   renderer->blitText(_roundValueLabel._position, std::to_string(*_roundValueLabel._value), *_font, _colorPalette[_roundValueLabel._colorIndex]);
-//   renderer->blitText(_creditValueLabel._position, std::to_string(*_creditValueLabel._value), *_font, _colorPalette[_creditValueLabel._colorIndex]);
-//   renderer->blitText(_lifeValueLabel._position, std::to_string(*_lifeValueLabel._value), *_font, _colorPalette[_lifeValueLabel._colorIndex]);
-// 
-//   const Bitmap& cannonBitmap = pxr::assets->getBitmap(_lifeCannonLabel._bitmapKey, _worldScale);
-//   Vector2f position {};
-//   for(int i = 0; i < _lives - 1; ++i){
-//     position._x = _lifeCannonLabel._position._x + (_lifeCannonSpacingX * i);
-//     position._y = _lifeCannonLabel._position._y;
-//     renderer->blitBitmap(position, cannonBitmap, _colorPalette[_lifeCannonLabel._colorIndex]);
-//   }
-// 
-//   if(_isGameOver)
-//     renderer->blitText(_gameOverLabel._position, _gameOverLabel._message, *_font, _colorPalette[_gameOverLabel._colorIndex]);
-// }
-
 void GameState::onDraw(double now, float dt)
 {
   renderer->clearViewport(colors::black);
@@ -2066,7 +2041,6 @@ void GameState::onDraw(double now, float dt)
   drawLaser();
   drawBunkers();
   drawHitbar();
-  //drawHud();
 }
 
 void GameState::onEnter()
