@@ -115,6 +115,7 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
       and chances.
     - ufos have different score values - random set and a special set when you do...
       etc.
+    - invulnerable above invasion row
 
 [01-04-2021]
 - strip the cheats out of the game loop
