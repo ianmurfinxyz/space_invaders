@@ -237,6 +237,7 @@ Input::KeyCode Input::convertSdlKeyCode(int sdlCode)
     case SDLK_RIGHT: return KEY_RIGHT;
     case SDLK_DOWN: return KEY_DOWN;
     case SDLK_UP: return KEY_UP;
+    case SDLK_ESCAPE: return KEY_ESCAPE;
     default: return KEY_COUNT;
   }
 }

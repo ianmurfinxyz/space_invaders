@@ -589,6 +589,7 @@ public:
   };
 
 private:
+  void doAbortToMenuTest();
   void startNextLevel();
   void updateBeatFreq();
   void updateActiveCycle();
@@ -622,7 +623,7 @@ private:
   void doCannonMoving(float dt);
   void doCannonBooming(float dt);
   void doCannonFiring();
-  void doAlienMoving(int32_t beats);
+  void doAlienMoving(int32_t beats, float dt);
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
   void doUfoMoving(float dt);
@@ -661,7 +662,6 @@ private:
   const Font* _font;
   HUD* _hud;
 
-  static constexpr float beatFreqScale {0.8f};
   BeatBox _beatBox;
 
   Vector2i _worldSize;
@@ -735,7 +735,7 @@ private:
 
   static constexpr int32_t cycleCount {13};
   static constexpr int32_t spawnCycle {5};  // higher than 0 so we spawn faster.
-  static constexpr int32_t cycleLength {4};
+  static constexpr int32_t cycleLength {5}; // including end
   static constexpr int32_t cycleStart {0};
   static constexpr int32_t cycleEnd {-1};
   using Cycle = std::array<int32_t, cycleLength>;

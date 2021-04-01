@@ -451,6 +451,17 @@ GameState::BeatBox::BeatBox(std::array<Mixer::Key_t, beatCount> beats, float bea
   _isPaused{false}
 {}
 
+void GameState::doAbortToMenuTest()
+{
+  if(pxr::input->isKeyPressed(Input::KEY_ESCAPE)){
+    if(_ufo._isAlive) 
+      mixer->stopChannel(_ufoSfxChannel);
+    if(_isRoundIntro || _isGameOver || _isVictory)
+      removeHudMsg();
+    _app->switchState(MenuState::name);
+  }
+}
+
 void GameState::BeatBox::doBeats(float dt)
 {
   if(_isPaused) return;
@@ -548,32 +559,73 @@ void GameState::initialize(Vector2i worldSize, int32_t worldScale)
   // update tick N+1, and repeat, so 1 beat in N+2 etc. Since the engine guarantees an update
   // rate of 60Hz (only slower if the CPU is too slow), the cycle controls the game speed. Yes
   // game speed is tied to update rate, but the update rate is independent of hardware.
-
-  // Theses cycles will produce exponentially increasing beat rates resulting in exponentially
-  // increasing alien speed and firing.
   //
-  //                          ticks to      fleet moves    
-  //                          move fleet    each sec
-  //                          ----------    -----------
+  // The original game increased game speed as a side effect of the reduction in the amount of
+  // aliens on the screen, thus each game tick would move a single alien, fewer aliens would
+  // mean fewer aliens to move so the game would run faster, this combined with there being
+  // fewer aliens to move meant the remaining aliens moved more often. The latter factor creates 
+  // an exponential increase in move speed. So for example the last alien moves at twice the rate
+  // of the last pair because that single alien moves every frame now rather than every two. Note
+  // that the increase in FPS due to the reduction in aliens is likely only a linear increase,
+  // not an exponential one, thus this factor does not explain the exponential increase in
+  // move speed.
+  //
+  // To simulate this (since I will of course not be increasing the FPS as aliens die) I have
+  // created the concept of cyles, where cycles are a set of beats. Each beat is effectively a
+  // single update (a tick of the mainloop), thus if you double the beat rate you double the
+  // update rate. Hence by increasing the beat rate I can simulate an increasing FPS. Note that
+  // the entire real mainloop is not actually run beat number of times since the same result
+  // can be achieved more efficiently with a more targetted use of beats.
+  //
+  // The cycles below are used to simulate a linear increase in FPS. The frequency of the 
+  // simulated FPS is given by the forumla,
+  //
+  //   sim_fps_of_cycle =  real_fps / ((grid_size / sum(beats_in_cycle)) * num_ticks_in_cycle)
+  //
+  // where,
+  //    grid_size = max alien population of the grid, so 55 (5 rows of 11 aliens).
+  //
+  // for example, a cycle such as,
+  //      {2, 3, 4, cycleEnd}
+  //
+  // has 2+3+4=9 beats, and 3 ticks (tick1 has 2 beats, tick2 has 3 beats, tick3 has 4 beats).
+  // So its simulated frequency is, 60 / ((55/9) * 3) = 3.27 hz
+  //
+  // This linear increase in simulated fps combined with the exponential increase in move speed
+  // due to moving an increasing small set of invaders one at a time each tick produces the 
+  // desired result.
+  //
+  // Note that the music beats use the simulated fps as the beat frequency, which also controls
+  // the fire rate of the aliens.
+  //
+  //                          sim fps
+  //                          -----------
   _cycles = {{
-    {1,  cycleEnd, 0, 0},  // ticks:55.00   freq:1.09
-    {1,  1, 2, cycleEnd},  // ticks:42.00   freq:1.43
-    {1,  2, cycleEnd, 0},  // ticks:37.00   freq:1.60
-    {2,  cycleEnd, 0, 0},  // ticks:27.50   freq:2.18
-    {2,  3, cycleEnd, 0},  // ticks:22.00   freq:2.70
-    {5,  cycleEnd, 0, 0},  // ticks:18.33   freq:3.33
-    {7,  cycleEnd, 0, 0},  // ticks:13.75   freq:4.35
-    {10, cycleEnd, 0, 0},  // ticks:11.00   freq:5.56
-    {14, cycleEnd, 0, 0},  // ticks:9.17    freq:6.67
-    {19, cycleEnd, 0, 0},  // ticks:7.86    freq:7.69
-    {25, cycleEnd, 0, 0},  // ticks:6.88    freq:9.09
-    {34, cycleEnd, 0, 0},  // ticks:6.11    freq:9.81
-    {46, cycleEnd, 0, 0}   // ticks:5.00    freq:12.00
+    {1,  cycleEnd, 0, 0, 0},  // freq:1.09
+    {1,  1, 2, cycleEnd, 0},  // freq:1.45
+    {1,  1, 2, 2, cycleEnd},  // freq:1.63
+    {1,  2, 2, cycleEnd, 0},  // freq:1.81
+    {1,  2, 3, cycleEnd, 0},  // freq:2.18
+    {1,  2, 3, cycleEnd, 0},  // freq:2.18
+    {1,  2, 3, cycleEnd, 0},  // freq:2.18
+    {1,  2, 3, cycleEnd, 0},  // freq:2.18
+    {2,  2, 2, 3, cycleEnd},  // freq:2.45
+    {2,  2, 3, 3, cycleEnd},  // freq:2.72
+    {2,  2, 3, 3, cycleEnd},  // freq:2.72
+    {2,  2, 3, 3, cycleEnd},  // freq:2.72
+    /*
+    {2,  3, 3, 3, cycleEnd},  // freq:3.00
+    {3,  3, 3, 3, cycleEnd},  // freq:3.27
+    {3,  3, 3, 4, cycleEnd},  // freq:3.54
+    {3,  3, 4, 4, cycleEnd},  // freq:3.81
+    {3,  4, 4, 4, cycleEnd},  // freq:4.09
+    {4,  4, 4, 4, cycleEnd},  // freq:4.36
+    */
   }};
 
   // The alien population that triggers the cycle.
   // note: the last element MUST == 0, else a segfault will happen when we select the next cycle.
-  _cycleTransitions = {49, 42, 35, 28, 21, 14, 10, 7, 5, 4, 3, 2, 0};
+  _cycleTransitions = {50, 45, 40, 35, 30, 25, 20, 15, 9, 4, 2, 1, 0};
 
   _alienClasses = {{
     {8  * _worldScale, 8 * _worldScale, 30, 1, {SpaceInvaders::BMK_SQUID0    , SpaceInvaders::BMK_SQUID1    }},
@@ -787,9 +839,8 @@ void GameState::updateBeatFreq()
   //
   // hence note that the fequency of the beating equals the frequency of full fleet movements.
   //
-  //                    v-- the fixed frame rate set in the engine.
-  float beatFreq_hz = (60.f / ((gridSize / beatsPerCycle) * ticksPerCycle)) * beatFreqScale;
-  //                                                  base rate a little intense --^
+  //                                   v-- the fixed frame rate set in the engine.
+  float beatFreq_hz = powf(2.f, (60.f / ((gridSize / beatsPerCycle) * ticksPerCycle)));
 
   _beatBox.setBeatFreq(beatFreq_hz);
 }
@@ -1149,25 +1200,11 @@ void GameState::doCannonFiring()
   }
 }
 
-void GameState::doAlienMoving(int32_t beats)
+void GameState::doAlienMoving(int32_t beats, float dt)
 {
-  // Aliens move at fixed displacements independent of time, thus alien movement speed is an 
-  // emergent property of the rate of update ticks, and importantly, the number of aliens moved 
-  // in each tick. Note the engine guarantees a tick rate of 60Hz thus alien speed in game is 
-  // controlled by the second factor; the number of aliens moved in each tick. Since the game is 
-  // ticked at 60Hz, if a single alien is moved in each tick then 55 aliens will be moved in 55 
-  // ticks so in 55/60 seconds. Moving 2 aliens per tick will result in twice the speed. 
-  //
-  // The number of aliens moved each update tick is equal to the number of beats performed in that
-  // tick (see cycles note in spaceinvaders.h). Thus a cycle such as {1, 2, end} will mean update 
-  // 1 alien in tick N, 2 aliens in tick N + 1, and repeat. This results in (when you do the math) 
-  // all 55 aliens moving in 37 ticks, i.e. it takes 37/60 seconds to complete one full grid 
-  // movement, giving a frequency of grid movements of 60/37 Hz.
-  //
-  // note: this design makes alien movement speed dependent on the number of aliens in the grid. 
-  // The more aliens the more beats are required to complete one grid movement and each grid 
-  // movement results in a fixed grid displacement. Thus if you change the number of aliens you 
-  // must also change all cycles to tune the gameplay.
+
+  static int loopCount = 0;
+  static float timer_s = 0.f;
 
   if(_isRoundIntro)
     return;
@@ -1179,38 +1216,53 @@ void GameState::doAlienMoving(int32_t beats)
     return;
 
   for(int i = 0; i < beats; ++i){
-    Alien& alien = _grid[_nextMover._row][_nextMover._col];
+    bool movedLive = false; // TEMP
+    while(!movedLive){ // TEMP
+      Alien& alien = _grid[_nextMover._row][_nextMover._col];
 
-    if(_isAliensDropping){
-      alien._position += _isAliensSpawning ? _alienSpawnDropDisplacement : _alienDropDisplacement;
-    }
-    else{
-      alien._position += _alienShiftDisplacement * _alienMoveDirection;
-    }
+      movedLive = alien._isAlive; // TEMP
 
-    alien._frame = !alien._frame;
-
-    bool looped = incrementGridIndex(_nextMover);
-
-    if(looped){
       if(_isAliensDropping){
-        ++_dropsDone;
+        alien._position += _isAliensSpawning ? _alienSpawnDropDisplacement : _alienDropDisplacement;
+      }
+      else{
+        alien._position += _alienShiftDisplacement * _alienMoveDirection;
+      }
 
-        if(_isAliensSpawning){
-          mixer->playSound(SpaceInvaders::SK_FAST4);
-          if(_dropsDone >= _levels[_levelIndex]._spawnDrops){
-            endSpawning();
+      alien._frame = !alien._frame;
+
+      bool looped = incrementGridIndex(_nextMover);
+
+      if(looped){
+
+        loopCount++;
+
+        if(_isAliensDropping){
+          ++_dropsDone;
+
+          if(_isAliensSpawning){
+            mixer->playSound(SpaceInvaders::SK_FAST4);
+            if(_dropsDone >= _levels[_levelIndex]._spawnDrops){
+              endSpawning();
+            }
+          }
+          else{
+            _isAliensDropping = false;
+            _alienMoveDirection *= -1;
           }
         }
-        else{
-          _isAliensDropping = false;
-          _alienMoveDirection *= -1;
+        else if(doCollisionsAliensBorders()){
+          _isAliensDropping = true;
         }
       }
-      else if(doCollisionsAliensBorders()){
-        _isAliensDropping = true;
-      }
     }
+  }
+
+  timer_s += dt;
+  if(timer_s > 10.f){
+    std::cout << "fleet move freq = " << static_cast<float>(loopCount / 10.f) << std::endl;
+    timer_s = 0.f;
+    loopCount = 0;
   }
 }
 
@@ -1996,11 +2048,12 @@ void GameState::onUpdate(double now, float dt)
 {
   int32_t beats = _cycles[_activeCycle][_activeBeat]; 
 
+  doAbortToMenuTest();
   doRoundIntro(dt);
   doAlienMorphing(dt);
   doBombMoving(beats, dt);
   doLaserMoving(dt);
-  doAlienMoving(beats);
+  doAlienMoving(beats, dt);
   doAlienBombing(beats);
   doCannonMoving(dt);
   doUfoMoving(dt);
