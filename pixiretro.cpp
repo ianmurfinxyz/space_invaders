@@ -1560,21 +1560,21 @@ void HUD::hideBitmapLabel(uid_t uid)
       label._isHidden = true;
 }
 
-void HUD::unhideTextLabel(uid_t uid)
+void HUD::showTextLabel(uid_t uid)
 {
   for(auto& label : _textLabels)
     if(label._uid == uid)
       label._isHidden = false;
 }
 
-void HUD::unhideIntLabel(uid_t uid)
+void HUD::showIntLabel(uid_t uid)
 {
   for(auto& label : _intLabels)
     if(label._uid == uid)
       label._isHidden = false;
 }
 
-void HUD::unhideBitmapLabel(uid_t uid)
+void HUD::showBitmapLabel(uid_t uid)
 {
   for(auto& label : _bitmapLabels)
     if(label._uid == uid)
@@ -1724,9 +1724,15 @@ void HUD::updateIntLabels()
       label._value = *(label._source);
       std::string text = std::to_string(label._value); 
       label._text = std::string{};
-      for(int i = 0; i < label._precision - text.length(); ++i)
+      int sign {0};
+      if(label._value < 0){
+        assert(text.front() == '-');
+        sign = 1; 
+        label._text += '-';
+      }
+      for(int i = 0; i < label._precision - (text.length() - sign); ++i)
         label._text += '0';
-      label._text += text;
+      label._text.append(text.begin() + sign, text.end());
     }
   }
 }

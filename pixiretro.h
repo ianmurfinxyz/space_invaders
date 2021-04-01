@@ -968,9 +968,9 @@ public:
   void hideTextLabel(uid_t uid);
   void hideIntLabel(uid_t uid);
   void hideBitmapLabel(uid_t uid);
-  void unhideTextLabel(uid_t uid);
-  void unhideIntLabel(uid_t uid);
-  void unhideBitmapLabel(uid_t uid);
+  void showTextLabel(uid_t uid);
+  void showIntLabel(uid_t uid);
+  void showBitmapLabel(uid_t uid);
 
   void startTextLabelFlash(uid_t uid);
   void startIntLabelFlash(uid_t uid);

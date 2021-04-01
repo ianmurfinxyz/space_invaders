@@ -54,6 +54,9 @@ public:
     "fastinvader2", "fastinvader3", "fastinvader4", "scorebeep", "topscore", "sos"
   };
 
+  static constexpr int maxPlayerLives {4};
+  static constexpr int maxLivesHudCannons {maxPlayerLives - 1};
+
   static constexpr size_t hiscoreNameLen = sizeof(int32_t);  
   static constexpr size_t hiscoreCount = 10;
 
@@ -148,8 +151,10 @@ public:
   void hideHud(){_isHudVisible = false;}   // faster way to hide entire hud.
   void showHud(){_isHudVisible = true;}
   bool isHudVisible() const {return _isHudVisible;}
-  void hideHudTop();                     // slower but hides part of hud.
-  void showHudTop();
+  void hideTopHud();
+  void showTopHud();
+  void hideLivesHud();
+  void showLivesHud();
 
   void setScore(int32_t score){_score = score;}
   void addScore(int32_t score){_score += score;}
@@ -163,9 +168,10 @@ public:
   void addCredit(int32_t credit){_credit += credit;}
   int32_t getCredit() const {return _credit;}
 
-  void setLives(int32_t lives){_lives = lives;}
-  void addLives(int32_t lives){_lives += lives;}
+  void setLives(int32_t lives);
+  void addLives(int32_t lives);
   int32_t getLives() const {return _lives;}
+  void updateLivesHud();
 
   void resetGameStats();
 
@@ -207,12 +213,15 @@ private:
   HUD::uid_t _uidRoundValue;
   HUD::uid_t _uidCreditText;
   HUD::uid_t _uidCreditValue;
+  HUD::uid_t _uidLivesValue;
+  std::array<HUD::uid_t, maxLivesHudCannons> _uidLivesBitmaps;
   int32_t _score;
   int32_t _hiscore;
   int32_t _round;
   int32_t _credit;
   int32_t _lives;
   ScoreName _playerName;
+  bool _isLivesHudVisible;
   bool _isHudVisible;
 };
 

@@ -21,7 +21,7 @@
   scale it back up again afterwards unless I created information. Yes I could store the larger
   copy and create a seperate smaller one, but what if my original bunker is actually the smaller
   one. Then I have no choice but to create information from nowhere.
-- fix the 'b' on the splash screen
+- [DONE] fix the 'y' on the splash screen
 - make it possible to skip the splash screen
 - add a cheat mode which can be activated via a cli arg or via a .cfg file
 - [DONE] implement the music beats
@@ -29,15 +29,15 @@
     http://www.classicgaming.cc/classics/space-invaders/graphics
   artwork 2 looks most appropriate
 - a sign that pops up detailing the round number when aliens are spawning?
-- draw the cannons on the hud to show num lives - was drawing with old hud system that I
+- [DONE] draw the cannons on the hud to show num lives - was drawing with old hud system that I
   stripped but not the new one. (is it even possible with the current setup of the new one?)
 - add the option to play the space invaders song instead of the beats? (or both?)
 - [DONE] jthe high score system
 
 [26-03-2021]
-- added the beatbox but it needs to pause when the cannon booms, and during alien spawning etc,
+- [DONE] added the beatbox but it needs to pause when the cannon booms, and during alien spawning etc,
   also need to decide how to vary beat with game state.
-- currently freeze the player and aliens when an alien dies to mimic the origin game, however
+- [DONE] currently freeze the player and aliens when an alien dies to mimic the origin game, however
   do not freeze bombs thus can die when frozen...bad game design, either freeze the bombs or rm
   the freezes. I should freeze the aliens but not the player, easy solution.
 - there are a few gameplay aspects I was unaware of that I would like to add, see here,
@@ -73,7 +73,7 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
   the crab invaders only start splitting into cuttles after lvl 3.
 
 [29-03-2021]
-- need to implement the test for aliens reaching screen bottom.
+- [DONE] need to implement the test for aliens reaching screen bottom.
 - appears to be a bug where the aliens vere of the screen and a seg fault happens, not sure
   why, it happened whilst the cannon was in respawn mode. Does the cannon respaning effect how
   the aliens are processed in any way?
@@ -83,7 +83,7 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
     - straight are slow
     - cross are fast
     - wiggly are powerful (more damage to shelters)
-- bombs have a chance to survive collisions with lasers, wiggly powerful bombs very high chance
+- [DONE] bombs have a chance to survive collisions with lasers, wiggly powerful bombs very high chance
 - [DONE] on screen 1 invaders need to drop 11 times to reach invasion row and win the game, from screen 
   2 to 9 they get lower down the screen, at screen 10 they start with 11 drops again and the
   cycle repeats.

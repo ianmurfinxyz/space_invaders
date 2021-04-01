@@ -19,14 +19,6 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   _worldSize = baseWorldSize * _worldScale;
 
-  // TEMP - TODO - remove this ================================================================
-
-  std::cout << "world scale = " << _worldScale << std::endl;
-  std::cout << "window width = " << windowWidth << std::endl;
-  std::cout << "window height = " << windowHeight << std::endl;
-
-  //============================================================================================
-
   Application::onWindowResize(windowWidth, windowHeight);
 
   Assets::Manifest_t manifest{};
@@ -48,8 +40,6 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
 
   pxr::mixer->loadSoundsWAV(mixmanifest);
 
-  resetGameStats();
-
   _isHudVisible = false;
   _hud.initialize(&(pxr::assets->getFont(fontKey, _worldScale)), flashPeriod, phasePeriod);
   _uidScoreText = _hud.addTextLabel({Vector2i{10, 240} * _worldScale, pxr::colors::magenta, "SCORE"});
@@ -60,6 +50,17 @@ bool SpaceInvaders::initialize(Engine* engine, int32_t windowWidth, int32_t wind
   _uidRoundValue = _hud.addIntLabel({Vector2i{170, 230} * _worldScale, pxr::colors::magenta, &_round, 5});
   _uidCreditText = _hud.addTextLabel({Vector2i{130, 6} * _worldScale, pxr::colors::magenta, "CREDIT"});
   _uidCreditValue = _hud.addIntLabel({Vector2i{190, 6} * _worldScale, pxr::colors::cyan, &_credit, 1});
+  _uidLivesValue = _hud.addIntLabel({Vector2i{10, 6} * _worldScale, pxr::colors::yellow, &_lives, 1});
+
+  for(int i{0}; i < maxLivesHudCannons; ++i){
+    _uidLivesBitmaps[i] = _hud.addBitmapLabel({
+      Vector2i{(20 + (16 * i)), 6} * _worldScale, 
+      pxr::colors::green, 
+      &(assets->getBitmap(SpaceInvaders::BMK_CANNON0, _worldScale))
+    });
+  }
+
+  resetGameStats();
 
   std::unique_ptr<ApplicationState> game = std::make_unique<GameState>(this);
   std::unique_ptr<ApplicationState> menu = std::make_unique<MenuState>(this);
@@ -104,7 +105,7 @@ void SpaceInvaders::onDraw(double now, float dt)
     _hud.onDraw();
 }
 
-void SpaceInvaders::hideHudTop()
+void SpaceInvaders::hideTopHud()
 {
   _hud.hideTextLabel(_uidScoreText);
   _hud.hideIntLabel(_uidScoreValue);
@@ -114,23 +115,66 @@ void SpaceInvaders::hideHudTop()
   _hud.hideIntLabel(_uidRoundValue);
 }
 
-void SpaceInvaders::showHudTop()
+void SpaceInvaders::showTopHud()
 {
-  _hud.unhideTextLabel(_uidScoreText);
-  _hud.unhideIntLabel(_uidScoreValue);
-  _hud.unhideTextLabel(_uidHiScoreText);
-  _hud.unhideIntLabel(_uidHiScoreValue);
-  _hud.unhideTextLabel(_uidRoundText);
-  _hud.unhideIntLabel(_uidRoundValue);
+  _hud.showTextLabel(_uidScoreText);
+  _hud.showIntLabel(_uidScoreValue);
+  _hud.showTextLabel(_uidHiScoreText);
+  _hud.showIntLabel(_uidHiScoreValue);
+  _hud.showTextLabel(_uidRoundText);
+  _hud.showIntLabel(_uidRoundValue);
+}
+
+void SpaceInvaders::hideLivesHud()
+{
+  _isLivesHudVisible = false;
+  _hud.hideIntLabel(_uidLivesValue);
+  for(auto uid : _uidLivesBitmaps)
+    _hud.hideBitmapLabel(uid);
+}
+
+void SpaceInvaders::showLivesHud()
+{
+  _isLivesHudVisible = true;
+  _hud.showIntLabel(_uidLivesValue);
+  for(int life{1}; life < maxPlayerLives; ++life)
+    if(life < _lives)
+      _hud.showBitmapLabel(_uidLivesBitmaps[life - 1]);
+}
+
+void SpaceInvaders::setLives(int32_t lives)
+{
+  _lives = std::max(0, lives);
+  updateLivesHud();
+}
+
+void SpaceInvaders::addLives(int32_t lives)
+{
+  _lives += lives;
+  _lives = std::max(0, _lives);
+  updateLivesHud();
+}
+
+void SpaceInvaders::updateLivesHud()
+{
+  if(!_isLivesHudVisible)
+    return;
+
+  for(int life{1}; life < maxPlayerLives; ++life){
+    if(life < _lives)
+      _hud.showBitmapLabel(_uidLivesBitmaps[life - 1]);
+    else
+      _hud.hideBitmapLabel(_uidLivesBitmaps[life - 1]);
+  }
 }
 
 void SpaceInvaders::resetGameStats()
 {
-  _lives = 4;
+  setLives(maxPlayerLives);
+  clearPlayerName();
   _round = 0;
   _credit = 0;
   _score = 0;
-  clearPlayerName();
 }
 
 void SpaceInvaders::loadHiScores()
@@ -329,6 +373,7 @@ void SplashState::doEvents()
       std::string text {"*A Tribute by Pixrex*"};
       _uidAuthor = hud.addTextLabel({Vector2i{32, 24} * _worldScale, pxr::colors::cyan, text});
       si->showHud();
+      si->hideLivesHud();
       break;
       }
     case EVENT_END:
@@ -347,6 +392,7 @@ void SplashState::doEvents()
 
 void SplashState::onEnter()
 {
+  static_cast<SpaceInvaders*>(_app)->hideHud();
   _masterClock = 0.f;
   _nextNode = 0;
   (*_spaceSign).reset();
@@ -725,7 +771,9 @@ void GameState::startNextLevel()
 
   _isGameOver = false;
 
-  si->hideHud();
+  si->showHud();
+  si->hideTopHud();
+  si->showLivesHud();
 }
 
 void GameState::updateBeatFreq()
@@ -778,7 +826,7 @@ void GameState::endSpawning()
   updateBeatFreq();
   _beatBox.unpause();
 
-  static_cast<SpaceInvaders*>(_app)->showHud();
+  static_cast<SpaceInvaders*>(_app)->showTopHud();
 }
 
 void GameState::spawnCannon(bool takeLife)
@@ -786,7 +834,7 @@ void GameState::spawnCannon(bool takeLife)
   if(takeLife){
     SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
     si->addLives(-1);
-    if(si->getLives() < 0){
+    if(si->getLives() <= 0){
       _isGameOver = true;
       _gameOverClock = _gameOverDuration;
       return;
@@ -1113,7 +1161,6 @@ void GameState::doCannonFiring()
     _laser._isAlive = true;
     mixer->playSound(SpaceInvaders::SK_SHOOT);
     ++_shotCounter;
-    std::cout << "shot count = " << _shotCounter << std::endl;
   }
 }
 
@@ -1161,16 +1208,10 @@ void GameState::doAlienMoving(int32_t beats)
       if(_isAliensDropping){
         ++_dropsDone;
 
-        std::cout << "//////////////////////" << std::endl;
-        std::cout << "drop done = " << _dropsDone << std::endl;
-        std::cout << "bottom row y = " << _grid[0][0]._position._y / _worldScale << std::endl;
-        std::cout << "top row y = " << _grid[gridHeight - 1][0]._position._y / _worldScale << std::endl;
-
         if(_isAliensSpawning){
           mixer->playSound(SpaceInvaders::SK_FAST4);
           if(_dropsDone >= _levels[_levelIndex]._spawnDrops){
             endSpawning();
-            std::cout << "done spawning" << std::endl;
           }
         }
         else{
@@ -2276,6 +2317,8 @@ void MenuState::onEnter()
   SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
   populateHud();
   si->showHud();
+  si->hideLivesHud();
+  si->showTopHud();
   si->resetGameStats();
 }
 
