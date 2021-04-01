@@ -9,7 +9,7 @@
 - add a morphing sound - currently using a copy of the invaderkill sound
 - add more formations and levels
 - [DONE] add a game over state, a sos state, and a state to enter name into score table
-- add mothership collisions 
+- [DONE] add mothership collisions 
 - [DONE] handle collisions between alien and player missiles
 - when the last alien gets to the bottom of the screen the game switches to another state
   where an alien spawns at the top of the screen, dropping decoys, moving quickly from left to
@@ -105,7 +105,7 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 - check on how when I am making the aliens fire and perhaps make it better if needed. Chance to fire?
 - [DONE] add sounds when alien are spawn dropping
 - [DONE] dont start beat box until aliens have stopped spawning
-- cleanup when game over and invasion.
+- [DONE] cleanup when game over and invasion.
 
 - features added readme:
   want a full feature and gameplay list which details the exact specs of how the game plays in 
@@ -115,3 +115,6 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
       and chances.
     - ufos have different score values - random set and a special set when you do...
       etc.
+
+[01-04-2021]
+- strip the cheats out of the game loop

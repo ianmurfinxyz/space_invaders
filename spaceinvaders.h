@@ -593,8 +593,10 @@ private:
   void updateBeatFreq();
   void updateActiveCycle();
   void updateActiveCycleBeat();
-  void addHudEndMsg(const char* endMsg, const Color3f& color);
-  void removeHudEndMsg();
+  void addHudMsg(const char* endMsg, const Color3f& color);
+  void removeHudMsg();
+  void startRoundIntro();
+  void doRoundIntro(float dt);
   void doInvasionTest();
   void startGameOver();
   void doGameOver(float dt);
@@ -610,6 +612,7 @@ private:
   void morphAlien(Alien& alien);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
+  void boomAllBombs();
   void boomUfo();
   void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
@@ -788,18 +791,18 @@ private:
   std::array<Level, levelCount> _levels;
   int32_t _levelIndex;                        // Active level (index into _levels data).
 
-  static constexpr int32_t endMsgHeight_px {120};
-  static constexpr const char* gameOverMsg {"GAME OVER!"};
-  static constexpr const char* victoryMsg {"VICTORY!"};
-  static constexpr float gameOverPeriodSeconds {4.f}; // Unit: seconds. Time to display game over message.
-  static constexpr float victoryPeriodSeconds {2.f};
-  float _gameOverClockSeconds;                        // Unit: seconds.
-  float _victoryClockSeconds;
+  static constexpr int32_t msgHeight_px {120};
+  static constexpr const char* msgGameOver {"GAME OVER!"};
+  static constexpr const char* msgVictory {"VICTORY!"};
+  static constexpr const char* msgRoundIntro {"ROUND"};
+  static constexpr float msgPeriodSeconds {4.f}; 
+  float _msgClockSeconds;
+  bool _isRoundIntro;
   bool _isGameOver;
   bool _isVictory;
 
   HUD::uid_t _uidUfoScoringText;
-  HUD::uid_t _uidEndMsgText;
+  HUD::uid_t _uidMsgText;
 };
 
 //===============================================================================================//

@@ -1604,23 +1604,32 @@ void HUD::startBitmapLabelFlash(uid_t uid)
 
 void HUD::stopTextLabelFlash(uid_t uid)
 {
-  for(auto& label : _textLabels)
-    if(label._uid == uid)
+  for(auto& label : _textLabels){
+    if(label._uid == uid){
       label._flash = false;
+      label._isVisible = true;
+    }
+  }
 }
 
 void HUD::stopIntLabelFlash(uid_t uid)
 {
-  for(auto& label : _intLabels)
-    if(label._uid == uid)
+  for(auto& label : _intLabels){
+    if(label._uid == uid){
       label._flash = false;
+      label._isVisible = true;
+    }
+  }
 }
 
 void HUD::stopBitmapLabelFlash(uid_t uid)
 {
-  for(auto& label : _bitmapLabels)
-    if(label._uid == uid)
+  for(auto& label : _bitmapLabels){
+    if(label._uid == uid){
       label._flash = false;
+      label._isVisible = true;
+    }
+  }
 }
 
 void HUD::onReset()
@@ -2153,9 +2162,7 @@ void Engine::onUpdateTick(Duration_t gameNow, Duration_t gameDt, Duration_t real
 
 void Engine::onDrawTick(Duration_t gameNow, Duration_t gameDt, Duration_t realDt, float tickDt)
 {
-  // TODO - temp - clear the game viewport only in the game and menu states - only clear window
-  // when toggle perf stats
-  pxr::renderer->clearWindow(colors::gainsboro);
+  pxr::renderer->clearWindow(colors::jet);
 
   double now = durationToSeconds(gameNow);
 

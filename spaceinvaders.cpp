@@ -713,7 +713,7 @@ void GameState::startNextLevel()
 
   std::fill(_columnPops.begin(), _columnPops.end(), gridHeight);
   std::fill(_rowPops.begin(), _rowPops.end(), gridWidth);
-  _alienPopulation = gridWidth * gridHeight;
+  _alienPopulation = gridSize;
 
   _isUfoBooming = false;
   _isUfoScoring = false;
@@ -760,6 +760,7 @@ void GameState::startNextLevel()
 
   _isGameOver = false;
   _isVictory = false;
+  startRoundIntro();
 
   si->showHud();
   si->hideTopHud();
@@ -950,6 +951,7 @@ void GameState::boomUfo()
 {
   _ufo._isAlive = false;
   _isUfoBooming = true;
+  _ufoBoomScoreClock = 0.f;
 
   const UfoClass& uc = _ufoClasses[_ufo._classId];
 
@@ -1035,6 +1037,10 @@ void GameState::doUfoSpawning()
   if(_isAliensSpawning || _isAliensDropping)
     return;
 
+  if(_isGameOver || _isVictory || _isRoundIntro)
+    return;
+
+
   --_tillUfo;
   if(_tillUfo <= 0){
     if(pxr::randUniformSignedInt(0, schrodingerSpawnChance) == 0)
@@ -1075,6 +1081,9 @@ void GameState::doAlienMorphing(float dt)
 void GameState::doCannonMoving(float dt)
 {
   if(!_cannon._isAlive)
+    return;
+
+  if(_isVictory)
     return;
 
   bool lKey = pxr::input->isKeyDown(Input::KEY_LEFT);
@@ -1124,7 +1133,10 @@ void GameState::doCannonFiring()
   if(_laser._isAlive)
     return;
 
-  if(pxr::input->isKeyDown(Input::KEY_UP)){
+  if(_isVictory)
+    return;
+
+  if(pxr::input->isKeyDown(Input::KEY_SPACE)){
     Vector2f position = _cannon._position;
     position._x += _cannon._width / 2;
     position._y += _cannon._height;
@@ -1154,6 +1166,9 @@ void GameState::doAlienMoving(int32_t beats)
   // The more aliens the more beats are required to complete one grid movement and each grid 
   // movement results in a fixed grid displacement. Thus if you change the number of aliens you 
   // must also change all cycles to tune the gameplay.
+
+  if(_isRoundIntro)
+    return;
 
   if(_isAliensFrozen)
     return;
@@ -1398,6 +1413,14 @@ void GameState::doCollisionsBombsHitbar()
 
     Vector2i boomPosition {bithit, _hitbar->_positionY + _hitbar->_height};
     boomBomb(bomb, true, boomPosition, BOMBHIT_BOTTOM);
+  }
+}
+
+void GameState::boomAllBombs()
+{
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive) continue;
+    boomBomb(bomb, false);
   }
 }
 
@@ -1809,26 +1832,26 @@ bool GameState::incrementGridIndex(GridIndex& index)
   return false;
 }
 
-void GameState::addHudEndMsg(const char* endMsg, const Color3f& color)
+void GameState::addHudMsg(const char* msg, const Color3f& color)
 {
-  int32_t msgWidth = _font->calculateStringWidth(endMsg);
+  int32_t msgWidth = _font->calculateStringWidth(msg);
   Vector2i msgPosition {
     (_worldSize._x - msgWidth) / 2,
-    endMsgHeight_px * _worldScale
+    msgHeight_px * _worldScale
   };
 
-  _uidEndMsgText = _hud->addTextLabel({
+  _uidMsgText = _hud->addTextLabel({
     msgPosition, 
     color,
-    endMsg,
+    msg,
     0.5f,
     true
   });
 }
 
-void GameState::removeHudEndMsg()
+void GameState::removeHudMsg()
 {
-  _hud->removeTextLabel(_uidEndMsgText);
+  _hud->removeTextLabel(_uidMsgText);
 }
 
 void GameState::doInvasionTest()
@@ -1861,9 +1884,34 @@ void GameState::doInvasionTest()
     _isAliensAboveInvasionRow == true;
 }
 
+void GameState::startRoundIntro()
+{
+  int32_t round = static_cast<SpaceInvaders*>(_app)->getRound();
+  std::string msg {};
+  msg += msgRoundIntro;
+  msg += " ";
+  msg += std::to_string(round);
+  addHudMsg(msg.c_str(), colors::red);
+  _msgClockSeconds = 0.f;
+  _isRoundIntro = true;
+}
+
+void GameState::doRoundIntro(float dt)
+{
+  if(!_isRoundIntro)
+    return;
+
+  _msgClockSeconds += dt;
+  if(_msgClockSeconds >= msgPeriodSeconds){
+    removeHudMsg();
+    _isRoundIntro = false;
+  }
+}
+
 void GameState::startGameOver()
 {
   _cannon._isAlive = false;
+  _isAliensFrozen = true;
   _beatBox.pause();
   
   if(_ufo._isAlive) 
@@ -1871,9 +1919,9 @@ void GameState::startGameOver()
 
   static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
 
-  addHudEndMsg(gameOverMsg, colors::red);
+  addHudMsg(msgGameOver, colors::red);
 
-  _gameOverClockSeconds = 0.f;
+  _msgClockSeconds = 0.f;
   _isGameOver = true;
 }
 
@@ -1882,11 +1930,14 @@ void GameState::doGameOver(float dt)
   if(!_isGameOver)
     return;
 
-  _gameOverClockSeconds += dt;
-  if(_gameOverClockSeconds >= gameOverPeriodSeconds){
+  assert(!_isVictory);
+  assert(!_isRoundIntro);
+
+  _msgClockSeconds += dt;
+  if(_msgClockSeconds >= msgPeriodSeconds){
     SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
     si->stopScoreHudFlash();
-    removeHudEndMsg();
+    removeHudMsg();
     if(si->isHiScore(si->getScore()))
       _app->switchState(HiScoreRegState::name);
     else 
@@ -1906,10 +1957,12 @@ void GameState::startVictory()
   if(_ufo._isAlive) 
     mixer->stopChannel(_ufoSfxChannel);
 
-  addHudEndMsg(victoryMsg, colors::green);
+  addHudMsg(msgVictory, colors::green);
   static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
 
-  _victoryClockSeconds = 0.f;
+  boomAllBombs();
+
+  _msgClockSeconds = 0.f;
   _isVictory = true;
 }
 
@@ -1918,12 +1971,15 @@ void GameState::doVictory(float dt)
   if(!_isVictory)
     return;
 
-  _victoryClockSeconds += dt;
-  if(_victoryClockSeconds > victoryPeriodSeconds){
+  assert(!_isGameOver);
+  assert(!_isRoundIntro);
+
+  _msgClockSeconds += dt;
+  if(_msgClockSeconds > msgPeriodSeconds){
     SpaceInvaders* si = static_cast<SpaceInvaders*>(_app);
     si->addRound(1);
     si->stopScoreHudFlash();
-    removeHudEndMsg();
+    removeHudMsg();
     _app->switchState(SosState::name);
   }
 }
@@ -1932,6 +1988,7 @@ void GameState::onUpdate(double now, float dt)
 {
   int32_t beats = _cycles[_activeCycle][_activeBeat]; 
 
+  doRoundIntro(dt);
   doAlienMorphing(dt);
   doBombMoving(beats, dt);
   doLaserMoving(dt);
@@ -1987,6 +2044,9 @@ void GameState::onUpdate(double now, float dt)
 
 void GameState::drawGrid()
 {
+  if(_isRoundIntro) 
+    return;
+
   for(const auto& row : _grid){
     for(const auto& alien : row){
       if(alien._isAlive){
