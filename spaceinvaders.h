@@ -5,38 +5,109 @@
 
 using namespace pxr;
 
-//===============================================================================================//
-// ##>SPACE INVADERS                                                                             //
-//===============================================================================================//
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// SPACE INVADERS                                                                               //
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
-class SpaceInvaders final : public Application
+class SI final : public Application
 {
 public:
-  static constexpr const char* name = "Space Invaders";
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // APP DATA                                                                                   //
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+
+  static constexpr const char* name {"Space Invaders"};
 
   static constexpr int32_t version_major {0};
   static constexpr int32_t version_minor {1};
 
-  static constexpr Vector2i baseWorldSize {224, 256};
-
-public:
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // ASSET DATA                                                                                 //
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  
   enum BitmapKey : Assets::Key_t
   {
-    BMK_CANNON0, BMK_SQUID0, BMK_SQUID1, BMK_CRAB0, BMK_CRAB1, BMK_OCTOPUS0, BMK_OCTOPUS1, 
-    BMK_CUTTLE0, BMK_CUTTLE1, BMK_CUTTLETWIN, BMK_SAUCER, BMK_SCHRODINGER, BMK_UFOBOOM, 
-    BMK_CROSS0, BMK_CROSS1, BMK_CROSS2, BMK_CROSS3, BMK_ZIGZAG0, BMK_ZIGZAG1, BMK_ZIGZAG2, 
-    BMK_ZIGZAG3, BMK_ZAGZIG0, BMK_ZAGZIG1, BMK_ZAGZIG2, BMK_ZAGZIG3, BMK_LASER0, BMK_CANNONBOOM0, 
-    BMK_CANNONBOOM1, BMK_CANNONBOOM2, BMK_HITBAR, BMK_ALIENBOOM, BMK_BOMBBOOMBOTTOM, 
-    BMK_BOMBBOOMMIDAIR, BMK_BUNKER, BMK_PARTII, BMK_CONTROLS, BMK_MENU, BMK_SOS_TRAIL, BMK_COUNT
+    BMK_CANNON0, 
+    BMK_SQUID0, 
+    BMK_SQUID1, 
+    BMK_CRAB0, 
+    BMK_CRAB1, 
+    BMK_OCTOPUS0, 
+    BMK_OCTOPUS1, 
+    BMK_CUTTLE0, 
+    BMK_CUTTLE1, 
+    BMK_CUTTLETWIN, 
+    BMK_SAUCER, 
+    BMK_SCHRODINGER, 
+    BMK_UFOBOOM, 
+    BMK_CROSS0, 
+    BMK_CROSS1, 
+    BMK_CROSS2, 
+    BMK_CROSS3, 
+    BMK_ZIGZAG0, 
+    BMK_ZIGZAG1, 
+    BMK_ZIGZAG2, 
+    BMK_ZIGZAG3, 
+    BMK_ZAGZIG0, 
+    BMK_ZAGZIG1, 
+    BMK_ZAGZIG2, 
+    BMK_ZAGZIG3, 
+    BMK_LASER0, 
+    BMK_CANNONBOOM0, 
+    BMK_CANNONBOOM1, 
+    BMK_CANNONBOOM2, 
+    BMK_HITBAR, 
+    BMK_ALIENBOOM, 
+    BMK_BOMBBOOMBOTTOM, 
+    BMK_BOMBBOOMMIDAIR, 
+    BMK_BUNKER, 
+    BMK_PARTII, 
+    BMK_CONTROLS, 
+    BMK_MENU, 
+    BMK_SOS_TRAIL, 
+    BMK_COUNT
   };
 
   static constexpr std::array<Assets::Name_t, BMK_COUNT> _bitmapNames {
-    "cannon0", "squid0", "squid1", "crab0", "crab1", "octopus0", "octopus1", "cuttle0", "cuttle1",
-    "cuttletwin", "saucer", "schrodinger", "ufoboom", 
-    "cross0", "cross1", "cross2", "cross3", "zigzag0", "zigzag1", 
-    "zigzag2", "zigzag3", "zagzig0", "zagzig1", "zagzig2", "zagzig3", "laser0",
-    "cannonboom0", "cannonboom1", "cannonboom2", "hitbar", "alienboom", "bombboombottom", 
-    "bombboommidair", "bunker", "partii", "controls", "menu", "sostrail"
+    "cannon0", 
+    "squid0", 
+    "squid1", 
+    "crab0", 
+    "crab1", 
+    "octopus0", 
+    "octopus1", 
+    "cuttle0", 
+    "cuttle1",
+    "cuttletwin", 
+    "saucer", 
+    "schrodinger", 
+    "ufoboom", 
+    "cross0", 
+    "cross1", 
+    "cross2", 
+    "cross3", 
+    "zigzag0", 
+    "zigzag1", 
+    "zigzag2", 
+    "zigzag3", 
+    "zagzig0", 
+    "zagzig1", 
+    "zagzig2", 
+    "zagzig3", 
+    "laser0", 
+    "cannonboom0", 
+    "cannonboom1", 
+    "cannonboom2", 
+    "hitbar", 
+    "alienboom", 
+    "bombboombottom", 
+    "bombboommidair", 
+    "bunker", 
+    "partii", 
+    "controls", 
+    "menu", 
+    "sostrail"
   };
 
   static constexpr Assets::Key_t fontKey {1};
@@ -44,15 +115,275 @@ public:
 
   enum SoundKey : Mixer::Key_t
   {
-    SK_EXPLOSION, SK_SHOOT, SK_INVADER_KILLED, SK_INVADER_MORPHED, SK_UFO_HIGH_PITCH, 
-    SK_UFO_LOW_PITCH, SK_FAST1, SK_FAST2, SK_FAST3, SK_FAST4, SK_SCORE_BEEP, SK_TOPSCORE, 
-    SK_SOS, SK_COUNT
+    SK_EXPLOSION, 
+    SK_SHOOT, 
+    SK_INVADER_KILLED, 
+    SK_INVADER_MORPHED, 
+    SK_UFO_HIGH_PITCH, 
+    SK_UFO_LOW_PITCH, 
+    SK_FAST1, 
+    SK_FAST2, SK_FAST3, 
+    SK_FAST4, 
+    SK_SCORE_BEEP, 
+    SK_TOPSCORE, 
+    SK_SOS, 
+    SK_COUNT
   };
 
   static constexpr std::array<Mixer::Name_t, SK_COUNT> _soundNames {
-    "explosion", "shoot", "invaderkilled", "invadermorphed", "ufo_highpitch", "ufo_lowpitch", "fastinvader1", 
-    "fastinvader2", "fastinvader3", "fastinvader4", "scorebeep", "topscore", "sos"
+    "explosion", 
+    "shoot", 
+    "invaderkilled", 
+    "invadermorphed", 
+    "ufo_highpitch", 
+    "ufo_lowpitch", 
+    "fastinvader1", 
+    "fastinvader2", 
+    "fastinvader3", 
+    "fastinvader4", 
+    "scorebeep", 
+    "topscore", 
+    "sos"
   };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // GAME CONTROLS                                                                              //
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+
+  static constexpr pxr::Input::KeyCode fireKey      { pxr::Input::KeyCode::KEY_SPACE };
+  static constexpr pxr::Input::KeyCode moveLeftKey  { pxr::Input::KeyCode::KEY_LEFT  };
+  static constexpr pxr::Input::KeyCode moveRightKey { pxr::Input::KeyCode::KEY_RIGHT };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // GAME CONFIGURATION                                                                         //
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // units
+  // -----------------------------------------------
+  // positions and displacements : pixels
+  // clocks and durations        : seconds
+  // speeds                      : pixels per second
+  
+  static constexpr Vector2i worldSize {224, 256};
+
+  static constexpr int   worldWidth                   { 224  };
+  static constexpr int   worldHeight                  { 256  };
+  static constexpr int   alienSeperation              { 16   };
+  static constexpr int   alienDropDisplacement        { 8    };
+  static constexpr int   alienShiftDisplacement       { 2    };
+  static constexpr int   alienFastShiftDisplacement   { 3    };
+  static constexpr int   alienInvasionRowHeight       { 32   };
+  static constexpr int   alienMinSpawnDrops           { 6    };
+  static constexpr float alienBoomDuration            { 0.1f };
+  static constexpr float alienMorphDuration           { 0.2f };
+  static constexpr int   worldMargin                  { 5    };
+  static constexpr int   worldTopMargin               { 30   };
+  static constexpr int   fleetWidth                   { 11   };
+  static constexpr int   fleetHeight                  { 5    };
+  static constexpr int   minUfoSpawnCountdown         { 1200 };
+  static constexpr int   maxUfoSpawnCountdown         { 1800 };
+  static constexpr int   messageHeight                { 140  };
+  static constexpr int   ufoSpawnHeight               { 210  };
+  static constexpr int   cannonBoomFrameDuration      { 0.2f };
+  static constexpr int   cannonBoomDuration           { 1.0f };
+
+  static constexpr const char* messageGameOver {"GAME OVER!"};
+  static constexpr const char* messageVictory  {"VICTORY!"};
+  static constexpr const char* messageNewRound {"ROUND"};
+
+  static constexpr int   fleetSize { fleetWidth * fleetHeight};
+ 
+  enum AlienClassID { SQUID, CRAB, OCTOPUS, CUTTLE, CUTTLETWIN };
+
+  struct AlienClass
+  {
+    static constexpr int alienFramesCount {2};
+    std::array<Assets::Key_t, alienFramesCount> _bitmapKeys;
+    int _width;
+    int _height;
+    int _scoreValue;
+    int _colorIndex;
+  };
+
+  enum UfoClassID { SAUCER, SCHRODINGER };
+
+  struct UfoClass
+  {
+    int _width;
+    int _height;
+    int _colorIndex;
+    float _phasePeriodSeconds;
+    bool _isPhaser;
+    Assets::Key_t _shipKey;
+    Assets::Key_t _boomKey;
+  };
+
+  enum BombClassID { CROSS, ZIGZAG, ZAGZIG }; // zigzag is the wiggle!
+
+  struct BombClass
+  {
+    static constexpr int bombFramesCount {4};
+    std::array<Assets::Key_t, bombFramesCount> _bitmapKeys; 
+    float _speed;
+    int _width;
+    int _height;
+    int _colorIndex;
+    int _frameInterval;
+    int _laserSurvivalChance;
+  };
+
+  enum CannonClassID { LASER_BASE };
+
+  struct CannonClass
+  {
+    static constexpr int boomFrameCount {3};
+    std::array<Assets::Key_t, boomFrameCount> _boomKeys;
+    Assets::Key_t _bitmapKey;
+    int _width;
+    int _height;
+    int _colorIndex;
+    float _speed;
+  };
+
+  struct Round
+  {
+    int _startHeight;
+    int _spawnDrops;
+    int _formationIndex;
+    bool _canCuttlesSpawn;
+    bool _canSchrodingerSpawn;
+  };
+
+  static constexpr int colorCount {7};
+  static constexpr std::array<Color3f, colorCount> palette {
+    colors::red,    
+    colors::green,  
+    colors::blue,   
+    colors::magenta,
+    colors::cyan,   
+    colors::yellow, 
+    colors::white   
+  };
+
+  static constexpr int alienClassCount {5};
+  static constexpr std::array<AlienClass, alienClassCount> alienClasses = {{
+  //---------------------------------------------------------------------------------------------
+  //  bitmap_keys                         width  height  score  color
+  //---------------------------------------------------------------------------------------------
+    {{BMK_SQUID0    , BMK_SQUID1     }  , 8    , 8      , 30    , 1  },
+    {{BMK_CRAB0     , BMK_CRAB1      }  , 11   , 8      , 20    , 4  },
+    {{BMK_OCTOPUS0  , BMK_OCTOPUS1   }  , 12   , 8      , 10    , 3  },
+    {{BMK_CUTTLE0   , BMK_CUTTLE1    }  , 8    , 8      , 30    , 5  },
+    {{BMK_CUTTLETWIN, BMK_CUTTLETWIN }  , 19   , 8      , 60    , 5  }
+  }}; 
+
+  static constexpr int ufoClassCount {2};
+  static constexpr std::array<UfoClass, ufoClassCount> ufoClasses = {{
+  //---------------------------------------------------------------------------------------------
+  //  width  height  color  phase  isphase  bmk_ship         bmk_boom
+  //---------------------------------------------------------------------------------------------
+    { 16 ,   7,      0,     0.f ,  false,   BMK_SAUCER     , BMK_UFOBOOM},
+    { 15 ,   7,      3,     0.4f,  true,    BMK_SCHRODINGER, BMK_UFOBOOM}
+  }};
+
+  static constexpr int ufoScoreTableSize;
+  using UfoScoreTable = std::array<int, ufoScoreTableSize>;
+
+  static constexpr std::array<UfoScoreTable, ufoClassCount> ufoScoreTable = {{
+    {100, 50 , 50 , 100, 150, 100, 100, 50 , 300, 100, 100, 100, 50 , 150, 100, 50  },
+    {200, 100, 100, 200, 300, 200, 200, 100, 600, 200, 200, 200, 100, 300, 200, 100 }
+  }};
+
+  static constexpr int bombClassCount {3};
+  static constexpr std::array<BombClass, bombClassCount> bombClasses = {{
+  //---------------------------------------------------------------------------------------------
+  // bitmap_keys    speed   width  height  color  frame  survival
+  //---------------------------------------------------------------------------------------------
+    {{BMK_CROSS0 , 
+      BMK_CROSS1 , 
+      BMK_CROSS2 , 
+      BMK_CROSS3 }, -80.f,  3,     6,      0,     20,    0 },
+    {{BMK_ZIGZAG0, 
+      BMK_ZIGZAG1, 
+      BMK_ZIGZAG2, 
+      BMK_ZIGZAG3}, -120.f, 3,     7,      4,     20,    10 },
+    {{BMK_ZAGZIG0, 
+      BMK_ZAGZIG1, 
+      BMK_ZAGZIG2, 
+      BMK_ZAGZIG3}, -100.f, 3,     7,      5,     20,    4 }
+  }};
+
+  // note: formations are read upside down, so the top row in the file is the bottom row in
+  // the game.
+
+  using Formation = std::array<AlienClassID, fleetSize>;
+
+  static constexpr int formationCount {2};
+  static constexpr std::array<Formation, formationCount> formations = {{
+  //---------------------------------------------------------------------------------------------
+  // formation 0
+  //---------------------------------------------------------------------------------------------
+    {
+      OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,
+      OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,
+      CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,
+      CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,
+      SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  
+    },
+  //---------------------------------------------------------------------------------------------
+  // formation 1
+  //---------------------------------------------------------------------------------------------
+    {
+      OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,
+      OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,OCTOPUS,
+      CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,
+      CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,CRAB   ,
+      SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  ,SQUID  
+    }
+  }};
+
+  static constexpr int cannonClassCount {1};
+  static constexpr std::array<CannonClass, cannonClassCount> cannonClasses = {{
+  //---------------------------------------------------------------------------------------------
+  //  boom_keys          bitmap_key   width   height   color   speed
+  //---------------------------------------------------------------------------------------------
+    {{BMK_CANNONBOOM0,
+      BMK_CANNONBOOM1, 
+      BMK_CANNONBOOM2 }, BMK_CANNON0, 13,     8,       0,      50.f }
+  }};
+
+  // note: the start_y is the y-axis position of the reference alien (bottom-left alien) post
+  // spawn drops. Alien positions are the bottom-left coordinate of the aliens's 16x16px 
+  // bounding box.
+
+  static constexpr int roundCount {9};
+  std::array<Round, roundCount> rounds = {{
+  //---------------------------------------------------------------------------------------------
+  // start_y  spawn_drops  formation  cuttles  schrodinger
+  //---------------------------------------------------------------------------------------------
+    {120    , 6          , 0        , true   , true       },
+    {96     , 9          , 0        , true   , true       },
+    {80     , 11         , 0        , true   , true       },
+    {72     , 12         , 0        , true   , true       },
+    {72     , 12         , 0        , true   , true       },
+    {72     , 12         , 0        , true   , true       },
+    {64     , 13         , 0        , true   , true       },
+    {64     , 13         , 0        , true   , true       },
+    {64     , 13         , 0        , true   , true       }
+  }};
+
+  static constexpr int   alienReferenceSpawnX 
+  { (worldWidth - (fleetWidth * alienSeperation)) / 2 };
+
+  static constexpr int   alienReferenceSpawnY         
+  { rounds[0]._startHeight + (alienMinSpawnDrops * alienDropDisplacement) };
+
+  static constexpr int   worldLeftBorderX  { worldMargin };
+  static constexpr int   worldRightBorderX { worldWidth - worldMargin };
+  static constexpr int   worldTopBorderY   { worldHeight - worldTopMargin };
+  static constexpr int   cannonSpawnX      { worldLeftBorder };
+  static constexpr int   cannonSpawnY      { alienInvasionRowHeight };
+
 
   static constexpr int maxPlayerLives {4};
   static constexpr int maxLivesHudCannons {maxPlayerLives - 1};
@@ -411,7 +742,7 @@ public:
 public:
   GameState(Application* app);
   ~GameState() = default;
-  void initialize(Vector2i worldSize, int32_t worldScale);
+  void initialize();
   void onUpdate(double now, float dt);
   void onDraw(double now, float dt);
   void onEnter();
@@ -441,27 +772,9 @@ public:
     bool _isPaused;
   };
 
-  struct GridIndex
-  {
-    int32_t _row;
-    int32_t _col;
-  };
-
-  enum AlienClassId { SQUID, CRAB, OCTOPUS, CUTTLE, CUTTLETWIN };
-
-  static constexpr int32_t alienFramesCount {2};
-  struct AlienClass
-  {
-    int32_t _width;
-    int32_t _height;
-    int32_t _scoreValue;
-    int32_t _colorIndex;
-    std::array<Assets::Key_t, alienFramesCount> _bitmapKeys;
-  };
-
   struct Alien
   {
-    AlienClassId _classId;
+    AlienClassID _classID;
     Vector2i _position;
     int32_t _row;
     int32_t _col;
@@ -469,48 +782,18 @@ public:
     bool _isAlive;
   };
 
-  enum UfoClassId { SAUCER, SCHRODINGER };
-
-  struct UfoClass
-  {
-    static constexpr int32_t randScoreValueCount {3};
-    std::array<int32_t, randScoreValueCount> _randScoreValues;
-    int32_t _specialScoreValue;                                 // achieved if correct num shot.
-    int32_t _width;
-    int32_t _height;
-    int32_t _colorIndex;
-    float _phasePeriodSeconds;
-    bool _isPhaser;
-    Assets::Key_t _shipKey;
-    Assets::Key_t _boomKey;
-  };
-
   struct Ufo
   {
-    UfoClassId _classId;
-    Vector2f _position;
+    UfoClassID _classID;
+    Vector2f _position;  // TODO - do I need a float position? since I bet I add int displacements.
     float _phaseClockSeconds;
     bool _phase;                // true==on/visible, false==off/invisible
     bool _isAlive;
   };
 
-  enum BombClassId { CROSS, ZIGZAG, ZAGZIG }; // zigzag is the wiggle!
-
-  static constexpr int32_t bombFramesCount {4};
-  struct BombClass
-  {
-    int32_t _width;
-    int32_t _height;
-    float _speed;                                             // Unit: pixels per second.
-    int32_t _colorIndex;
-    int32_t _frameInterval;                                   // Beats between draw frames.
-    int32_t _laserSurvivalChance;                             // one in this chance to survive.
-    std::array<Assets::Key_t, bombFramesCount> _bitmapKeys; 
-  };
-
   struct Bomb
   {
-    BombClassId _classId;
+    BombClassID _classID;
     Vector2f _position;
     int32_t _frameClock;       // unit: Cycle beats.
     int32_t _frame;            // Constraint: value=[0, 4).
@@ -539,25 +822,16 @@ public:
     Assets::Key_t _bitmapKey;
   };
 
-  static constexpr int32_t cannonBoomFramesCount {3};
   struct Cannon
   {
-    Vector2f _spawnPosition;
-    Vector2f _position;
-    int32_t _colorIndex;
-    int32_t _width;
-    int32_t _height;
-    int32_t _moveDirection;          // -1 == left, 0 == still, +1 == right.
-    float _speed;                    // Unit: pixels per second.
-    float _boomDuration;             // Unit: seconds - total length of boom animation.
-    float _boomClock;                // Unit: seconds.
-    float _boomFrameDuration;        // Unit: seconds - how many beats per frame.
-    int32_t _boomFrame;              // Current boom animation frame.
-    float _boomFrameClock;           // Unit: seconds.
-    bool _isBooming;
-    bool _isAlive;
-    Assets::Key_t _cannonKey;
-    std::array<Assets::Key_t, cannonBoomFramesCount> _boomKeys;
+    SI::CannonClassID _classID;
+    Vector2f          _position;
+    int               _moveDirection;
+    int               _boomFrame;
+    float             _boomClock;
+    float             _boomFrameClock;
+    bool              _isBooming;
+    bool              _isAlive;
   };
 
   struct Hitbar
@@ -580,17 +854,13 @@ public:
     Vector2f _position;
   };
 
-  struct Level
-  {
-    int32_t _spawnDrops;      // Number of times the aliens drop upon spawning.
-    int32_t _formationIndex;  // The grid formation used for this level.
-    bool _isCuttlesOn;        // Do cuttle fish spawn from crabs in this level?
-    bool _isSchrodingerOn;
-  };
-
 private:
+  std::pair<int, int> getAlienRowRange(int row);
+  Alien& getAlien(int row, int col);
+
+  //void doFleetBeats();
   void doAbortToMenuTest();
-  void startNextLevel();
+  void startNextRound();
   void updateBeatFreq();
   void updateActiveCycle();
   void updateActiveCycleBeat();
@@ -606,10 +876,10 @@ private:
   void doVictory(float dt);
   void endSpawning();
   void spawnCannon(bool takeLife);
-  void spawnBomb(Vector2f position, BombClassId classId);
+  void spawnBomb(Vector2f position, BombClassID classID);
   void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
-  void spawnUfo(UfoClassId classId);
+  void spawnUfo(UfoClassID classID);
   void morphAlien(Alien& alien);
   void boomCannon();
   void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
@@ -623,7 +893,7 @@ private:
   void doCannonMoving(float dt);
   void doCannonBooming(float dt);
   void doCannonFiring();
-  void doAlienMoving(int32_t beats, float dt);
+  void doAlienMoving();
   void doBombMoving(int32_t beats, float dt);
   void doLaserMoving(float dt);
   void doUfoMoving(float dt);
@@ -644,8 +914,8 @@ private:
   void doCollisionsBunkersBombs();
   void doCollisionsBunkersLaser();
   void doCollisionsBunkersAliens();
-  bool incrementGridIndex(GridIndex& index);
-  void drawGrid();
+  bool incrementFleetIndex(FleetIndex& index);
+  void drawFleet();
   void drawUfo();
   void drawCannon();
   void drawBombs();
@@ -659,49 +929,56 @@ private:
   static bool isBombBoomAlive(const BombBoom& boom) {return boom._isAlive;}
 
 private:
+  SpaceInvaders* _si;   // cast from the _app pointer in the base class.
+
   const Font* _font;
   HUD* _hud;
 
   BeatBox _beatBox;
 
-  Vector2i _worldSize;
-  int32_t _worldScale;
+  //Vector2i _alienShiftDisplacement;
 
-  static constexpr int32_t paletteSize {7}; 
-  std::array<Color3f, paletteSize> _colorPalette;
+  //static constexpr int32_t minSpawnDrops {6};
+  //static constexpr int32_t baseAlienDropDisplacement {14};
+  //static constexpr int32_t baseAlienSpawnDropDisplacement {7}; // fast baby steps
+  //static constexpr int32_t baseAlienTopRowHeight {186}; // num drops to invasion--v
+  //static constexpr int32_t baseAlienInvasionRowHeight {32}; // note: 186 == 32 + (11 * 14)
+  //static constexpr int32_t numDropsToInvasion {11}; // for top row of aliens.
 
-  static constexpr int32_t gridWidth {11};
-  static constexpr int32_t gridHeight {5};
-  static constexpr int32_t gridSize {gridWidth * gridHeight};
-  using GridRow = std::array<Alien, gridWidth>;
-  std::array<GridRow, gridHeight> _grid; 
-  Vector2i _alienShiftDisplacement;
-  static constexpr int32_t minSpawnDrops {6};
-  static constexpr int32_t baseAlienDropDisplacement {14};
-  static constexpr int32_t baseAlienSpawnDropDisplacement {7}; // fast baby steps
-  static constexpr int32_t baseAlienTopRowHeight {186}; // num drops to invasion--v
-  static constexpr int32_t baseAlienInvasionRowHeight {32}; // note: 186 == 32 + (11 * 14)
-  static constexpr int32_t numDropsToInvasion {11}; // for top row of aliens.
-  Vector2i _alienDropDisplacement;
-  Vector2i _alienSpawnDropDisplacement;
-  Vector2i _aliensSpawnPosition;         // position of bottom-left alien of bottom row at spawn.
-  int32_t _alienInvasionHeight;
-  int32_t _alienXSeperation;
-  int32_t _alienYSeperation;
-  int32_t _worldMargin;
-  int32_t _worldLeftBorderX;
-  int32_t _worldRightBorderX;
-  int32_t _worldTopBorderY;
-  int32_t _alienMoveDirection;            // Limited to values -1 for left, +1 for right.
-  int32_t _dropsDone;
-  int32_t _alienPopulation;               // Count of the number of aliens alive.
-  GridIndex _nextMover;                   // The alien to move in the next tick.
-  Alien* _alienBoomer;                    // The alien going BOOM! (not your dad).
-  float _alienBoomClock;                  // Unit: seconds.
-  float _alienBoomDuration;               // Unit: seconds.
-  Alien* _alienMorpher;                   // The alien morphing into a cuttle fish.
+  //Vector2i _alienDropDisplacement;
+  //Vector2i _alienSpawnDropDisplacement;
+  //Vector2i _aliensSpawnPosition;         // position of bottom-left alien of bottom row at spawn.
+
+
+  //
+  // configuration constants  - TODO bubble up to space invaders class
+  //
+
+  //
+  // The alien fleet, indexed [row][col]. Rows are arraged as,
+  //                y
+  //    row4        ^
+  //    row3        |  screen axes
+  //    row2        |
+  //    row1        o----> x
+  //    row0       
+  //
+  // i.e. row number ascends up the screen.
+  //
+  // Columns are numbered from left to right in ascending order, starting with column 0.
+  //
+  std::array<Alien, fleetSize> _fleet; 
+
+  std::array<int, fleetWidth> _alienColPop;     // Populations of alive aliens in each column.
+  std::array<int, fleetHeight> _alienRowPop;    // Populations of alive aliens in each row.
+  int _alienPop;                                // Count of the number of aliens alive.
+  int _alienMoveDirection;                      // Limited to values -1 for left, +1 for right.
+  int _alienDropsDone;
+  int _nextMover;                               // The alien to move in the next tick.
+  Alien* _alienBoomer;                          // The alien going BOOM! (not your dad).
+  float _alienBoomClock;
+  Alien* _alienMorpher;                         // The alien morphing into a cuttle fish.
   float _alienMorphClock;
-  float _alienMorphDuration;              // Unit: seconds. How long it takes to morph into a cuttle fish.
   bool _isAliensMorphing;
   bool _isAliensBooming;
   bool _isAliensSpawning;
@@ -709,17 +986,14 @@ private:
   bool _isAliensFrozen;
   bool _isAliensAboveInvasionRow;
   bool _haveAliensInvaded;
-
-  AlienClassId _lastClassAlive;           // part of the sos bodge, used by the sos state.
+  AlienClassID _lastClassAlive;           // part of the sos bodge, used by the sos state.
 
   static constexpr float schrodingerPhasePeriodSeconds {0.4f};
   static constexpr int32_t schrodingerSpawnChance {3}; // 1 in spawnChance chance each ufo spawn.
-  static constexpr int32_t ufoClassCount {2};
-  std::array<UfoClass, ufoClassCount> _ufoClasses;
   Ufo _ufo;
   Mixer::Channel_t _ufoSfxChannel;
-  static constexpr int tillUfoMin {1200};// each update we do --tillUfo, so for updates at 60hz,
-  static constexpr int tillUfoMax {1800};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
+  //static constexpr int tillUfoMin {1200};// each update we do --tillUfo, so for updates at 60hz,
+  //static constexpr int tillUfoMax {1800};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
   int32_t _tillUfo;                      // when _tillUfo == 0, ufo spawns.
   int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
   int32_t _ufoCounter;
@@ -733,33 +1007,23 @@ private:
   bool _isUfoScoring;                    // Is the score displaying after the ufo was destroyed?
   bool _canUfosSpawn;                    // ufos cannot spawn if alien pop <= 8
 
-  static constexpr int32_t cycleCount {13};
-  static constexpr int32_t spawnCycle {5};  // higher than 0 so we spawn faster.
-  static constexpr int32_t cycleLength {5}; // including end
-  static constexpr int32_t cycleStart {0};
-  static constexpr int32_t cycleEnd {-1};
-  using Cycle = std::array<int32_t, cycleLength>;
-  std::array<Cycle, cycleCount> _cycles;
-  std::array<int32_t, cycleCount> _cycleTransitions;
-  int32_t _activeCycle;
-  int32_t _activeBeat;  // A beat is an element of a cycle.
+  //static constexpr int32_t cycleCount {13};
+  //static constexpr int32_t spawnCycle {5};  // higher than 0 so we spawn faster.
+  //static constexpr int32_t cycleLength {5}; // including end
+  //static constexpr int32_t cycleStart {0};
+  //static constexpr int32_t cycleEnd {-1};
+  //using Cycle = std::array<int32_t, cycleLength>;
+  //std::array<Cycle, cycleCount> _cycles;
+  //std::array<int32_t, cycleCount> _cycleTransitions;
+  //int32_t _activeCycle;
+  //int32_t _activeBeat;  // A beat is an element of a cycle.
 
-  static constexpr int32_t alienClassCount {5};
-  std::array<AlienClass, alienClassCount> _alienClasses;
-
-  static constexpr int32_t formationCount {2};
-  using Formation = std::array<std::array<AlienClassId, gridWidth>, gridHeight>;
-  std::array<Formation, formationCount> _formations;
 
   float _bombIntervalDeviation;                    // Max deviation in bomb drop beat count.
-  std::array<int32_t, cycleCount> _bombIntervals;  // Beats between bomb drops.
+  //std::array<int32_t, cycleCount> _bombIntervals;  // Beats between bomb drops.
   int32_t _bombInterval;                           // Base beat count between firing.
   int32_t _bombClock;                              // Unit: beats - used to time the firing.
-  std::array<int32_t, gridWidth> _columnPops;      // Populations of alive aliens in each column.
-  std::array<int32_t, gridHeight> _rowPops;        // Populations of alive aliens in each row.
 
-  static constexpr int32_t bombClassCount {3};
-  std::array<BombClass, bombClassCount> _bombClasses;
 
   static constexpr int32_t maxBombs {20};
   std::array<Bomb, maxBombs> _bombs;
@@ -787,15 +1051,9 @@ private:
   int32_t _bunkerHeight;
   int32_t _bunkerDeleteThreshold; // The bunker will be deleted if it has threshold or fewer pixels.
 
-  static constexpr int32_t levelCount {10};
-  std::array<Level, levelCount> _levels;
-  int32_t _levelIndex;                        // Active level (index into _levels data).
+  //int _levelIndex;                        // Active level (index into _levels data).
+  int _activeRoundNo;
 
-  static constexpr int32_t msgHeight_px {140};
-  static constexpr const char* msgGameOver {"GAME OVER!"};
-  static constexpr const char* msgVictory {"VICTORY!"};
-  static constexpr const char* msgRoundIntro {"ROUND"};
-  static constexpr float msgPeriodSeconds {4.f}; 
   float _msgClockSeconds;
   bool _isRoundIntro;
   bool _isGameOver;
@@ -854,7 +1112,7 @@ private:
   struct Alien
   {
     static constexpr const float framePeriodSeconds {0.1f};
-    GameState::AlienClassId _classId;
+    GameState::AlienClassID _classID;
     Vector2f _position;
     Vector2f _failPosition;
     bool _frame;
@@ -863,7 +1121,7 @@ private:
 
   struct Ufo
   {
-    GameState::UfoClassId _classId;
+    GameState::UfoClassID _classID;
     Vector2f _position;
     int32_t _width;       // store here for faster access.
   };

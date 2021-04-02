@@ -4,8 +4,47 @@
    #   #   # #   # #   #
    #   ##### ####  #####
 
+found source code of game online:
+http://computerarcheology.com/Arcade/SpaceInvaders/Code.html
+should read this to learn how to make my game play like the original.
+
+also check out this break down of the code,
+https://www.computerarcheology.com/Arcade/SpaceInvaders/
+
+firing:
+- in the original game the aliens could only fire 3 missiles at once. The fire rate was based
+on the number of steps the missiles already fired had made. Say 2 missiles have been fired, MI
+and MII, say MI has made 8 steps and MII has made 11. When it comes to firing MIII the game reads
+the lowest number of steps made by the other missiles, so that would be MI's steps = 8 and
+compares this to a reload number. If the lowest steps is less than the reload number then fire.
+The game then varies the reload number based on the player score, so by making the reload num
+smaller, the fire rate increases. The game also targetted the player, finding the grid column
+closest the player with a living alien to fire from.
+
+moving:
+- in the original game only the bottom-left alien actually moves, called the reference alien.
+  The game moves the reference alien, then waits for all living aliens to draw at positions
+  calculated from the new reference position. A single living alien is draw each ISR (interupt
+  service routine) i.e. mainloop. Thus if 55 aliens are alive, then the reference alien will
+  move every 55 frames, if 1 alien is alive then the reference alien will move every frame,
+  since there is only a single alien to draw so it takes only a single frame to draw all aliens.
+
+  Thus I was correct that alien move speed increases exponentially due to the number of aliens
+  dropping not because the fps is increasing but because the game will move the same aliens
+  more times per second as it effectively moves 1 living alien a frame. So if alien pop == 55 
+  then each alien moves every 55 frames, if pop == 3 then each alien moves every 3 frames. The
+  aliens move at fixed displacements.
+
+  Thus the movement speed is an emergent property from the combination of fps increase (which is
+  prob linear) and the exponential increase of the game having a smaller set of aliens to move.
+
+round starts:
+
+aliens drop 8px
+
+
 [25-03-2021]
-- improve logging - remove the std::cout logs at start of spaceinvaders.cpp
+- [SKIP] improve logging - remove the std::cout logs at start of spaceinvaders.cpp
 - add a morphing sound - currently using a copy of the invaderkill sound
 - add more formations and levels
 - [DONE] add a game over state, a sos state, and a state to enter name into score table
@@ -25,13 +64,13 @@
 - [SKIP] make it possible to skip the splash screen
 - add a cheat mode which can be activated via a cli arg or via a .cfg file
 - [DONE] implement the music beats
-- draw one of the cabinet arts for the background? see here,
+- [SKIP] draw one of the cabinet arts for the background? see here,
     http://www.classicgaming.cc/classics/space-invaders/graphics
   artwork 2 looks most appropriate
 - [DONE] a sign that pops up detailing the round number when aliens are spawning?
 - [DONE] draw the cannons on the hud to show num lives - was drawing with old hud system that I
   stripped but not the new one. (is it even possible with the current setup of the new one?)
-- add the option to play the space invaders song instead of the beats? (or both?)
+- [SKIP] add the option to play the space invaders song instead of the beats? (or both?)
 - [DONE] jthe high score system
 
 [26-03-2021]
@@ -119,3 +158,11 @@ https://spaceinvaders.fandom.com/wiki/Space_Invaders_Part_II
 
 [01-04-2021]
 - strip the cheats out of the game loop
+- I actually got a floating point exception error that caused a core dump - investigate why - I
+may have a divide by zero happening
+
+[02-04-2021]
+- the bonus life is awarded when score reaches 1500
+  https://www.robotron-2084.co.uk/manuals/invaders/taito_space_invader_part_II_upright_manual.pdf
+- double the length of the name input? The base game uses a string of max length = 10
+
