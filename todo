@@ -42,6 +42,77 @@ round starts:
 
 aliens drop 8px
 
+allien shots:
+
+a alien missile makes a step every 3 frames and steps 4px per frame, so it has a speed of 
+4*(60/3)=80px/s
+
+when alienPop < 8, step changes to 5px, so speed,
+5*(60/3)=100px/s
+
+each shot counts its steps, the min of the steps of alive shots is taken each frame and compared
+to a reload rate, if the min is greater than the reload rate a new hot is fired. (up to max 3).
+
+reload rates are stored in a table, the players score is used to convert to an index into the 
+table, the table is,
+
+note, you can convert these to period between shots in seconds, since if a shot has to make say
+48 steps before the next shot is fired, and a shot steps every 3 frames, then clearly it will take
+48*3=144 frames between shots, at 60Hz fps, this will be 2.4s.
+
+score       reload   rate(s)
+-----       ------   -------
+0-512       48       2.4
+513-4096    16       0.8
+4097-8192   11       0.55
+8193-12288  8        0.4
+12288+      7        0.35
+
+shots select the columns to fire from based on the shot. A column table exists which the shots
+maintain a pointer into, incrementing the pointer each time a shot is fired. The table gives a 
+column number to fire from. The table is,
+
+ColFireTable:
+; This table decides which column a shot will fall from. The column number is read from the
+; table (1-11) and the pointer increases for the shot type. For instance, the "squiggly" shot
+; will fall from columns in this order: 0B, 01, 06, 03. If you play the game you'll see that
+; order.
+;
+; The "plunger" shot uses index 00-0F (inclusive)
+; The "squiggly" shot uses index 06-14 (inclusive)
+; The "rolling" shot targets the player
+1D00: 01 07 01 01 01 04 0B 01 06 03 01 01 0B 09 02 08
+1D10: 02 0B 04 07 0A
+
+note that the rolling shot using a targetting method to select the column instead and does not
+use the table.
+
+the plunger shot is disabled when only 1 alien is left, this allows the tracking shot to be used
+more often so the player is targetted more.
+
+tracking method: 
+
+My implementation
+-----------------
+
+I have the benfit of random numbers and floating point math so I will use them to make for 
+better gameplay.
+
+My missiles will use float speeds and positions so they can move smoother rather than jumping 
+4 and 5px every frame.
+
+I will use random numbers to select the firing column, clearly the original game did not have 
+this ability thus it used a fixed number sequence rather than a random one.
+
+Shot targetting will be used for the rolling shots, this is simply selecting the closest column
+to the player.
+
+I will use the converted fire rates in seconds and time them, but will still base fire rate on 
+player score.
+
+will limit the game to 3 shots at once, watching gameplay this does seem enough. Can also increase
+the limit if I like later. Ensure my implementation makes this as easy as chaning a compile time 
+constant.
 
 [25-03-2021]
 - [SKIP] improve logging - remove the std::cout logs at start of spaceinvaders.cpp

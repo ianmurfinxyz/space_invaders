@@ -509,10 +509,6 @@ void GameState::initialize()
 
 
 
-  _bombBoomKeys = {{SpaceInvaders::BMK_BOMBBOOMBOTTOM, SpaceInvaders::BMK_BOMBBOOMMIDAIR}};
-  _bombBoomWidth = 8 * _worldScale;
-  _bombBoomHeight = 8 * _worldScale;
-  _bombBoomDuration = 0.4f;
 
   _laser._width = 1 * _worldScale;
   _laser._height = 6 * _worldScale;
@@ -543,10 +539,10 @@ void GameState::startNextRound()
   //_activeBeat = cycleStart;
   _beatBox.pause();
 
-  _alienPop = fleetSize;
   std::fill(_alienRowPop.begin(), _alienRowPop.end(), fleetWidth);
   std::fill(_alienColPop.begin(), _alienColPop.end(), fleetHeight);
 
+  _alienPop = fleetSize;
   _alienMoveDirection = 1;
   _alienDropsDone = 0;
   _nextMover = 0;
@@ -574,23 +570,25 @@ void GameState::startNextRound()
     }
   }
 
+  _bombCount = 0;
+  _bombReloadTableIndex = 0;
+  _bombClock = 0.f;
+  for(auto& bomb : _bombs) 
+    bomb._isAlive = false;
+
+  for(auto& boom : _booms)
+    boom._isAlive = false;
+
+  _cannon._shotCounter = 0;
+
+
 
   _isUfoBooming = false;
   _isUfoScoring = false;
   _ufo._isAlive = false;
   _tillUfo = pxr::randUniformSignedInt(tillUfoMin, tillUfoMax);
   _ufoCounter = 0;
-  _canUfosSpawn = true;
 
-  // Reset bombs.
-  for(auto& bomb : _bombs)
-    bomb._isAlive = false;
-
-  _bombCount = 0;
-
-  // Reset bomb booms.
-  for(auto& boom : _bombBooms)
-    boom._isAlive = false;
 
   _laser._isAlive = false;
   _shotCounter = 0;
@@ -714,45 +712,57 @@ void GameState::spawnCannon(bool takeLife)
   _cannon._position._x = SI::cannonSpawnX;
   _cannon._position._y = SI::cannonSpawnY;
   _cannon._moveDirection = 0;
-  _cannon._isBooming = false;
   _cannon._isAlive = true;
   _isAliensFrozen = false;
   _beatBox.unpause();
 }
 
-void GameState::spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex)
+void GameState::spawnBoom(SI::BoomClassID classID, Vector2i position, int colorIndex)
 {
-  auto search = std::find_if_not(_bombBooms.begin(), _bombBooms.end(), isBombBoomAlive);
-
-  // If this asserts then expand the booms array until it does not.
-  assert(search != _bombBooms.end());
-
-  (*search)._hit = hit;
-  (*search)._colorIndex = colorIndex;
-  (*search)._position = position;
-  (*search)._boomClock = _bombBoomDuration;
-  (*search)._isAlive = true;
+  bool boomed {false};
+  for(auto& boom : _booms){
+    if(boom._isAlive) continue;
+    boom._classID = classID;
+    boom._position = position;
+    boom._boomClock = 0.f;
+    boom._boomFrameClock = 0.f;
+    boom._colorIndex = colorIndex;
+    boom._boomFrame = 0;
+    boom._isAlive = boomed = true;
+    break;
+  }
+  assert(boomed);
 }
 
-void GameState::spawnBomb(Vector2f position, BombClassId classId)
+void GameState::spawnBomb(int fleetCol, BombClassId bombClassId)
 {
-  // If this condition does occur then increase the max bombs until it doesn't.
   assert(_bombCount != maxBombs);
+  
+  Alien* lowestAlien {nullptr};
+  for(int row {0}; row < SI::fleetHeight; ++row){
+    lowestAlien = &getAlien(row, fleetCol);
+    if(lowestAlien->_isAlive)
+      break;
+  }
 
-  // Find a 'dead' bomb instance to use.
+  assert(lowestAlien != nullptr);
+
   Bomb* bomb {nullptr};
   for(auto& b : _bombs)
     if(!b._isAlive)
       bomb = &b;
 
-  // If this occurs my bomb counts are off.
   assert(bomb != nullptr);
 
-  bomb->_classId = classId;
-  bomb->_position = position;
+  const auto& bc = SI::bombClasses[bombClassID];
+  const auto& ac = SI::alienClasses[lowestAlien->_classID];
+
+  bomb->_classId = bombClassId;
+  bomb->_position._x += alien->_position._x + (ac._width / 2);
+  bomb->_position._y += alien->_position._y - bc._height;
+  bomb->_frameClock = 0.f
   bomb->_frame = 0;
   bomb->_isAlive = true;
-  bomb->_frameClock = _bombClasses[classId]._frameInterval;
 
   ++_bombCount;
 }
@@ -775,15 +785,16 @@ void GameState::spawnUfo(UfoClassId classId)
 }
 
 void GameState::morphAlien(Alien& alien)
-  // predicate: alien->_col != fleetWidth - 1
 {
-  static_cast<SpaceInvaders*>(_app)->addScore(_alienClasses[alien._classId]._scoreValue);
+  // cannot spawn a twin to the right if there is no twin.
+  assert(alien._col < SI::fleetWidth - 1);
 
-  alien._classId = CUTTLETWIN;
+  _si->addScore(_alienClasses[alien._classId]._scoreValue);
+
+  alien._classId = CUTTLE_TWIN;
   _alienMorpher = &alien;
-  _alienMorphClock = _alienMorphDuration;
+  _alienMorphClock = 0.f;
   _isAliensFrozen = true;
-  _isAliensMorphing = true;
 
   Alien& neighbour = getAlien(alien._row, alien._col + 1);
   if(neighbour._isAlive){
@@ -809,13 +820,12 @@ void GameState::boomCannon()
   mixer->playSound(SpaceInvaders::SK_EXPLOSION);
 }
 
-void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, BombHit hit)
+void GameState::boomBomb(Bomb& bomb, bool makeBoom, Vector2i boomPosition, SI::BoomClassID boomClassID)
 {
   --_bombCount;
+  assert(_bombCount >= 0);
   bomb._isAlive = false;
-
-  if(makeBoom)
-    spawnBoom(boomPosition, hit, _bombClasses[bomb._classId]._colorIndex);
+  if(makeBoom) spawnBoom(boomClassID, boomPosition, _bombClasses[bomb._classId]._colorIndex);
 }
 
 void GameState::boomUfo()
@@ -838,25 +848,14 @@ void GameState::boomUfo()
   _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_LOW_PITCH);
 }
 
-void GameState::boomAlien(Alien& alien)
+void GameState::killAlien(Alien& alien)
 {
-  static_cast<SpaceInvaders*>(_app)->addScore(_alienClasses[alien._classId]._scoreValue);
-
+  _si->addScore(SI::alienClasses[alien._classId]._scoreValue);
   alien._isAlive = false;
-  _alienBoomer = &alien;
-  _alienBoomClock = _alienBoomDuration;
-  _isAliensFrozen = true;
-  _isAliensBooming = true;
   --(_alienColPop[alien._col]);
   --(_alienRowPop[alien._row]);
   --_alienPop;
-  updateBeatFreq();
-  if(_alienPop <= 0)
-    _lastClassAlive = alien._classId;
-  if(_alienPop <= 8)
-    _canUfosSpawn = false;
-  //updateActiveCycle();
-
+  if(_alienPop <= 0) _si->setLastAlienClassAlive(alien._classId);
   mixer->playSound(SpaceInvaders::SK_INVADER_KILLED);
 }
 
@@ -925,15 +924,15 @@ void GameState::doUfoSpawning()
   }
 }
 
-void GameState::doAlienMorphing(float dt)
+void GameState::tryMorphAlien(float dt)
 {
-  if(!_isAliensMorphing) return;
+  if(_alienMorpher == nullptr) return;
   if(_alienPop == 0) return;
+  if(_isAliensFrozen) return;
 
-  _alienMorphClock -= dt;
-  if(_alienMorphClock > 0) return;
+  _alienMorphClock += dt;
+  if(_alienMorphClock < SI::alienMorphDuration) return;
 
-  assert(_alienMorpher != nullptr);
   assert(_alienMorpher->_col < (fleetWidth - 1));
 
   _alienMorpher->_classId = CUTTLE;
@@ -945,12 +944,11 @@ void GameState::doAlienMorphing(float dt)
   ++(_alienRowPop[neighbour._row]);
   ++_alienPop;
 
-  _isAliensMorphing = false;
   _isAliensFrozen = false;
   _alienMorpher = nullptr;
 }
 
-void GameState::doCannonMoving(float dt)
+void GameState::moveCannon(float dt)
 {
   if(!_cannon._isAlive) return;
   if(_isVictory) return;
@@ -978,25 +976,25 @@ void GameState::doCannonMoving(float dt)
   );
 }
 
-void GameState::doCannonBooming(float dt)
-{
-  if(!_cannon._isBooming) return;
+// void GameState::doCannonBooming(float dt)
+// {
+//   if(!_cannon._isBooming) return;
+// 
+//   _cannon._boomClock += dt;
+//   if(_cannon._boomClock >= SI::cannonBoomDuration){
+//     _cannon._isBooming = false;
+//     spawnCannon(true);
+//     return;
+//   }
+// 
+//   _cannon._boomFrameClock += dt;
+//   if(_cannon._boomFrameClock >= SI::cannonBoomFrameDuration){
+//     _cannon._boomFrame = pxr::wrap(_cannon._boomFrame + 1, 0, SI::CannonClass::boomFrameCount - 1);
+//     _cannon._boomFrameClock = 0.f;
+//   }
+// }
 
-  _cannon._boomClock += dt;
-  if(_cannon._boomClock >= SI::cannonBoomDuration){
-    _cannon._isBooming = false;
-    spawnCannon(true);
-    return;
-  }
-
-  _cannon._boomFrameClock += dt;
-  if(_cannon._boomFrameClock >= SI::cannonBoomFrameDuration){
-    _cannon._boomFrame = pxr::wrap(_cannon._boomFrame + 1, 0, SI::CannonClass::boomFrameCount - 1);
-    _cannon._boomFrameClock = 0.f;
-  }
-}
-
-void GameState::doCannonFiring()
+void GameState::fireCannon()
 {
   if(!_cannon._isAlive) return;
   if(_laser._isAlive) return;
@@ -1007,12 +1005,12 @@ void GameState::doCannonFiring()
     _laser._position._x += _cannon._position._x + (cc._width / 2);
     _laser._position._y += _cannon._position._y + cc._height;
     _laser._isAlive = true;
-    ++_shotCounter;
+    ++_cannon._shotCounter;
     mixer->playSound(SI::SK_SHOOT);
   }
 }
 
-void GameState::doAlienMoving()
+void GameState::moveAliens()
 {
   if(_isRoundIntro) return;
   if(_isAliensFrozen) return;
@@ -1052,67 +1050,25 @@ void GameState::doAlienMoving()
       }
     }
   }
-
-  //for(int i = 0; i < beats; ++i){
-  //  bool movedLive = false; // TEMP
-  //  while(!movedLive){ // TEMP
-  //    Alien& alien = _fleet[_nextMover._row][_nextMover._col];
-
-  //    movedLive = alien._isAlive; // TEMP
-
-  //    if(_isAliensDropping){
-  //      alien._position += _isAliensSpawning ? _alienSpawnDropDisplacement : _alienDropDisplacement;
-  //    }
-  //    else{
-  //      alien._position += _alienShiftDisplacement * _alienMoveDirection;
-  //    }
-
-  //    alien._frame = !alien._frame;
-
-  //    bool looped = incrementFleetIndex(_nextMover);
-
-  //    if(looped){
-
-  //      loopCount++;
-  //      //_hasFleetLooped = true;
-
-  //      if(_isAliensDropping){
-  //        ++_alienDropsDone;
-
-  //        if(_isAliensSpawning){
-  //          mixer->playSound(SpaceInvaders::SK_FAST4);
-  //          if(_alienDropsDone >= _levels[_levelIndex]._spawnDrops){
-  //            endSpawning();
-  //          }
-  //        }
-  //        else{
-  //          _isAliensDropping = false;
-  //          _alienMoveDirection *= -1;
-  //        }
-  //      }
-  //      else if(doCollisionsAliensBorders()){
-  //        _isAliensDropping = true;
-  //      }
-  //    }
-  //  }
-  //}
 }
 
-void GameState::doBombMoving(int32_t beats, float dt)
+void GameState::moveBombs(float dt)
 {
   for(auto& bomb : _bombs){
-    if(!bomb._isAlive)
-      continue;
+    if(!bomb._isAlive) continue;
+    const auto& bc = SI::bombClasses[bomb._classId];
+    bomb._position._y += bc._speed * dt;
+  }
+}
 
-    const BombClass& bombClass = _bombClasses[bomb._classId];
-
-    bomb._position._y += bombClass._speed * dt;
-
-    bomb._frameClock -= beats;
-    if(bomb._frameClock <= 0){
-      bomb._frame = pxr::wrap(++bomb._frame, 0, bombFramesCount - 1);
-      bomb._frameClock = bombClass._frameInterval;
-    }
+void GameState::animateBombs(float dt)
+{
+  for(auto& bomb : _bombs){
+    if(!bomb._isAlive) continue;
+    bomb._frameClock += dt;
+    if(bomb._frameClock < SI::bombFrameDuration) continue;
+    bomb._frame = wrap(frame + 1, 0, SI::BombClass::bombFramesCount - 1);
+    bomb._frameClock = 0.f;
   }
 }
 
@@ -1149,71 +1105,78 @@ void GameState::doUfoPhasing(float dt)
   }
 }
 
-void GameState::doAlienBombing(int32_t beats){}
-//void GameState::doAlienBombing(int32_t beats)
-//{
-//  // Cycles determine alien bomb rate. Aliens bomb every N beats, thus the higher beat rate
-//  // the higher the rate of bombing. Randomness is added in a random deviation to the bomb 
-//  // interval and to the choice of alien which does the bombing.
-//
-//  if(_isAliensFrozen) return;
-//  if(_isAliensSpawning) return;
-//  if(_alienPopulation == 0) return;
-//  
-//  _bombClock -= beats;
-//  if(_bombClock > 0) return;
-//
-//  // Select the column to bomb from, taking into account unpopulated columns.
-//  int32_t populatedCount = fleetWidth - std::count(_columnPops.begin(), _columnPops.end(), 0);
-//
-//  // This condition should of already been detected as a level win.
-//  assert(populatedCount != 0);
-//
-//  int32_t colShift = randUniformSignedInt(1, fleetWidth) % populatedCount;
-//  int32_t col {-1};
-//  do {
-//    ++col;
-//    while(_columnPops[col] == 0) 
-//      ++col;
-//  }
-//  while(--colShift >= 0);
-//
-//  // Find the alien that will do the bombing.
-//  Alien* alien {nullptr};
-//  for(int32_t row = 0; row < fleetHeight; ++row){
-//    if(_fleet[row][col]._isAlive){
-//      alien = &_fleet[row][col];
-//      break;
-//    }
-//  }
-//
-//  assert(alien != nullptr); // The column selection should ensure this never happens.
-//  
-//  const AlienClass& alienClass = _alienClasses[alien->_classId];
-//
-//  BombClassId classId = static_cast<BombClassId>(randUniformSignedInt(CROSS, ZAGZIG));
-//  const BombClass& bombClass = _bombClasses[classId]; 
-//
-//  Vector2f position {};
-//  position._x += alien->_position._x + (alienClass._width * 0.5f);
-//  position._y += alien->_position._y - bombClass._height;
-//
-//  spawnBomb(position, classId);
-//
-//  _bombClock = _bombIntervals[_activeCycle];
-//}
-
-void GameState::doAlienBooming(float dt)
+void GameState::dropAlienBombs(float dt)
 {
-  if(!_isAliensBooming) return;
+  if(_isAliensFrozen) return;
+  if(_isAliensSpawning) return;
+  if(_alienPopulation == 0) return;
 
-  _alienBoomClock -= dt;
-  if(_alienBoomClock <= 0.f){
-    _alienBoomer = nullptr;
-    _isAliensFrozen = false;
-    _isAliensBooming = false;
-  }
+  _bombClock += dt;
+  if(_bombClock < SI::bombReloadTable[_bombReloadTableIndex]._reloadDuration) return;
+  if(_bombCount >= SI::maxBombCount) return;
+
+  auto bc = static_cast<SI::BombClassID>(
+      randUniformSignedInt(SI::SQUIGGLY, _alienPop == 1 ? SI::ROLLING : SI::PLUNGER)
+  );
+
+  if(bc._canTarget)
+    dropTargetBomb(bc);
+  else
+    dropRandomBomb(bc);
+
+  _bombClock = 0.f;
 }
+
+void GameState::dropTargetBomb(SI::BombClassID bombClassID)
+{
+  assert(_bombCount != SI::maxBombCount); 
+
+  int closestCol {std::numeric_limits<int>::max()};
+  int minDistance {std::numeric_limits<int>::max()};
+
+  float referenceAlienMiddleX = _fleet[0]._position._x + (SI::alienSeperation / 2);
+  for(int col {0}; col < fleetWidth; ++col){
+    if(_alienColPop[col] == 0) continue;
+    float colMiddleX = referenceAlienMiddleX + (SI::alienSeperation * col); 
+    float distanceToCannon = std::abs(_cannon._position._x - colMiddleX);
+    if(distanceToCannon < minDistance){
+      minDistance = distanceToCannon;
+      closestCol = col;
+    }
+  }
+
+  assert(closestCol != std::numeric_limits<int>::max());
+  assert(minDistance != std::numeric_limits<int>::max());
+
+  spawnBomb(closestCol, bombClassID);
+}
+
+void GameState::dropRandomBomb(SI::BombClassID bombClassID)
+{
+  assert(_bombCount != SI::maxBombCount); 
+
+  std::array<int, SI::fleetWidth> populatedCols {};
+  int numPopulated {0};
+  for(col {0}; col < SI::fleetWidth; ++col)
+    if(_alienColPop[col] > 0)
+      populatedCols[numPopulated++] = col;
+
+  int colChoice = randUniformSignedInt(0, numPopulated - 1);
+
+  spawnBomb(colChoice, bombClassID);
+}
+
+//void GameState::doAlienBooming(float dt)
+//{
+//  if(!_isAliensBooming) return;
+//
+//  _alienBoomClock -= dt;
+//  if(_alienBoomClock <= 0.f){
+//    _alienBoomer = nullptr;
+//    _isAliensFrozen = false;
+//    _isAliensBooming = false;
+//  }
+//}
 
 void GameState::doUfoBoomScoring(float dt)
 {
@@ -1240,15 +1203,22 @@ void GameState::doUfoBoomScoring(float dt)
   }
 }
 
-void GameState::doBombBoomBooming(float dt)
+void GameState::ageBooms(float dt)
 {
-  for(auto& boom : _bombBooms){
-    if(!boom._isAlive)
-      continue;
-
-    boom._boomClock -= dt;
-    if(boom._boomClock <= 0.f)
+  for(auto& boom : _booms){
+    if(!boom._isAlive) continue;
+    const auto& bc = SI::boomClasses[boom._classID];
+    boom._boomClock += dt;
+    if(boom._boomClock >= bc._boomDuration){
       boom._isAlive = false;
+      onBoomEnd(boom._classID);
+      continue;
+    }
+    boom._boomFrameClock += dt;
+    if(boom._boomFrameClock >= bc._boomFrameDuration){
+      boom._boomFrame = wrap(boom._boomFrame + 1, 0, SI::BoomClass::boomFrameCount - 1);
+      boom._boomFrameClock = 0.f;
+    }
   }
 }
 
@@ -1416,7 +1386,7 @@ void GameState::doCollisionsLaserAliens()
     const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
 
     if(c._isCollision){
-      if(alien._classId == CUTTLETWIN){
+      if(alien._classId == CUTTLE_TWIN){
         _alienMorpher = nullptr;
         _isAliensMorphing = false;
       }
@@ -1815,24 +1785,31 @@ void GameState::doVictory(float dt)
 
 void GameState::onUpdate(double now, float dt)
 {
-  int32_t beats = 1;//_cycles[_activeCycle][_activeBeat]; 
+
+
+
+  tryMoveCannon(dt);
+  tryFireCannon();
+  moveAliens();
+  moveBombs(dt);
+  tryMorphAlien(dt);
+  tryDropAlienBombs(dt);
+  ageBooms(dt);
+  animateBombs(dt);
+
+
+
 
   doAbortToMenuTest();
   doRoundIntro(dt);
-  doAlienMorphing(dt);
-  doBombMoving(beats, dt);
   doLaserMoving(dt);
-  doAlienMoving();
-  doAlienBombing(beats);
-  doCannonMoving(dt);
   doUfoMoving(dt);
   doUfoPhasing(dt);
   doUfoSpawning();
-  doCannonBooming(dt);
-  doAlienBooming(dt);
-  doBombBoomBooming(dt);
+  //doCannonBooming(dt);
+  //doAlienBooming(dt);
   doUfoBoomScoring(dt);
-  doCannonFiring();
+
   doCollisionsUfoBorders();
   doCollisionsBombsHitbar();
   doCollisionsBombsCannon();
@@ -1929,26 +1906,26 @@ void GameState::drawCannon()
 void GameState::drawBombs()
 {
   for(auto& bomb : _bombs){
-    if(!bomb._isAlive)
-      continue;
-
-    const BombClass& bc = _bombClasses[bomb._classId];
-    Assets::Key_t bitmapKey = bc._bitmapKeys[bomb._frame];
-    Color3f& color = _colorPalette[bc._colorIndex];
-    renderer->blitBitmap(bomb._position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
+    if(!bomb._isAlive) continue;
+    const auto& bc = SI::bombClasses[bomb._classID];
+    renderer->blitBitmap(
+        bomb._position, 
+        pxr::assets->getBitmap(bc._bitmapKeys[bomb._frame]), 
+        SI::palette[bomb._colorIndex]
+    );
   }
 }
 
-void GameState::drawBombBooms()
+void GameState::drawBooms()
 {
   for(auto& boom : _bombBooms){
-    if(!boom._isAlive)
-      continue;
-
-    Assets::Key_t bitmapKey = _bombBoomKeys[boom._hit];
-    Color3f& color = _colorPalette[boom._colorIndex];
-    Vector2f position = Vector2f(boom._position._x, boom._position._y);
-    renderer->blitBitmap(position, pxr::assets->getBitmap(bitmapKey, _worldScale), color);
+    if(!boom._isAlive) continue;
+    const auto& bc = SI::boomClasses[boom._classID];
+    renderer->blitBitmap(
+      boom._position, 
+      assets->getBitmap(bc._bitmapKey), 
+      SI::palette[boom._colorIndex]
+    );
   }
 }
 

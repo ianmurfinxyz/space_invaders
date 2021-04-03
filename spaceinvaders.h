@@ -59,8 +59,9 @@ public:
     BMK_CANNONBOOM2, 
     BMK_HITBAR, 
     BMK_ALIENBOOM, 
-    BMK_BOMBBOOMBOTTOM, 
-    BMK_BOMBBOOMMIDAIR, 
+    BMK_BOOM_BOTTOM, 
+    BMK_BOOM_MIDAIR, 
+    BMK_BOOM_TOP, 
     BMK_BUNKER, 
     BMK_PARTII, 
     BMK_CONTROLS, 
@@ -174,7 +175,6 @@ public:
   static constexpr int   alienFastShiftDisplacement   { 3    };
   static constexpr int   alienInvasionRowHeight       { 32   };
   static constexpr int   alienMinSpawnDrops           { 6    };
-  static constexpr float alienBoomDuration            { 0.1f };
   static constexpr float alienMorphDuration           { 0.2f };
   static constexpr int   worldMargin                  { 5    };
   static constexpr int   worldTopMargin               { 30   };
@@ -184,8 +184,10 @@ public:
   static constexpr int   maxUfoSpawnCountdown         { 1800 };
   static constexpr int   messageHeight                { 140  };
   static constexpr int   ufoSpawnHeight               { 210  };
-  static constexpr int   cannonBoomFrameDuration      { 0.2f };
-  static constexpr int   cannonBoomDuration           { 1.0f };
+  static constexpr int   maxBombCount                 { 3    };
+  static constexpr int   maxBoomCount                 { 8    };
+  static constexpr int   boomWidth                    { 8    };
+  static constexpr int   boomHeight                   { 8    };
 
   static constexpr const char* messageGameOver {"GAME OVER!"};
   static constexpr const char* messageVictory  {"VICTORY!"};
@@ -193,7 +195,7 @@ public:
 
   static constexpr int   fleetSize { fleetWidth * fleetHeight};
  
-  enum AlienClassID { SQUID, CRAB, OCTOPUS, CUTTLE, CUTTLETWIN };
+  enum AlienClassID { SQUID, CRAB, OCTOPUS, CUTTLE, CUTTLE_TWIN };
 
   struct AlienClass
   {
@@ -218,7 +220,7 @@ public:
     Assets::Key_t _boomKey;
   };
 
-  enum BombClassID { CROSS, ZIGZAG, ZAGZIG }; // zigzag is the wiggle!
+  enum BombClassID { SQUIGGLY, ROLLING, PLUNGER };
 
   struct BombClass
   {
@@ -230,6 +232,17 @@ public:
     int _colorIndex;
     int _frameInterval;
     int _laserSurvivalChance;
+    bool _canTarget;
+  };
+
+  enum BoomClassID { BOOM_BOMB, BOOM_LASER, BOOM_CANNON, BOOM_ALIEN };
+
+  struct BoomClass
+  {
+    static constexpr int boomFrameCount {2};
+    std::array<Assets::Key_t, boomFrameCount> _bitmapKeys;
+    float _boomDuration;
+    float _boomFrameDuration;
   };
 
   enum CannonClassID { LASER_BASE };
@@ -254,8 +267,8 @@ public:
     bool _canSchrodingerSpawn;
   };
 
-  static constexpr int colorCount {7};
-  static constexpr std::array<Color3f, colorCount> palette {
+  static constexpr int paletteSize {7};
+  static constexpr std::array<Color3f, paletteSize> palette {
     colors::red,    
     colors::green,  
     colors::blue,   
@@ -297,20 +310,55 @@ public:
   static constexpr int bombClassCount {3};
   static constexpr std::array<BombClass, bombClassCount> bombClasses = {{
   //---------------------------------------------------------------------------------------------
-  // bitmap_keys    speed   width  height  color  frame  survival
+  // bitmap_keys      speed   width  height  color  frame  survival   targets
   //---------------------------------------------------------------------------------------------
-    {{BMK_CROSS0 , 
-      BMK_CROSS1 , 
-      BMK_CROSS2 , 
-      BMK_CROSS3 }, -80.f,  3,     6,      0,     20,    0 },
-    {{BMK_ZIGZAG0, 
-      BMK_ZIGZAG1, 
-      BMK_ZIGZAG2, 
-      BMK_ZIGZAG3}, -120.f, 3,     7,      4,     20,    10 },
-    {{BMK_ZAGZIG0, 
-      BMK_ZAGZIG1, 
-      BMK_ZAGZIG2, 
-      BMK_ZAGZIG3}, -100.f, 3,     7,      5,     20,    4 }
+    {{BMK_PLUNGER0  , 
+      BMK_PLUNGER1  , 
+      BMK_PLUNGER2  , 
+      BMK_PLUNGER3 }, -80.f,  3,     6,      0,     20,    0,       false},
+    {{BMK_SQUIGGLE0 , 
+      BMK_SQUIGGLE1 , 
+      BMK_SQUIGGLE2 , 
+      BMK_SQUIGGLE3}, -120.f, 3,     7,      4,     20,    10,      false },
+    {{BMK_ROLLING0  , 
+      BMK_ROLLING1  , 
+      BMK_ROLLING2  , 
+      BMK_ROLLING3 }, -100.f, 3,     7,      5,     20,    4,       true }
+  }};
+
+  static constexpr int boomClassCount {3};
+  static constexpr std::array<BoomClass, boomClassCount> boomClasses = {{
+  //---------------------------------------------------------------------------------------------
+  // bitmap_keys                           duration    frame_duration
+  //---------------------------------------------------------------------------------------------
+    {{BMK_BOOM_BOMB, BMK_BOOM_BOMB      },  0.4f,       1.0f   },
+    {{BMK_BOOM_LASER, BMK_BOOM_LASER    },  0.4f,       1.0f   },
+    {{BMK_BOOM_CANNON0, BMK_BOOM_CANNON1},  1.0f,       0.2f   },
+    {{BMK_BOOM_ALIEN, BMK_BOOM_ALIEN    },  0.1f,       1.f    }
+  }};
+
+  // The reload table defines the rate at which the aliens reload their bombs, i.e. the alien
+  // fire (bomb) rate. The reload duration is a time duration, a delay in seconds, between each 
+  // bomb. The score is the player score. The rate with the smallest associated score that is 
+  // larger than the current player score is the active rate. For example, a player score of 
+  // 5600 will use table entry 2, i.e. 0.8f.
+
+  struct BombReloadTableEntry
+  {
+    int _score;
+    float _reloadDuration;
+  };
+
+  static constexpr int bombReloadTableSize {5};
+  static constexpr std::array<BombReloadTableEntry> bombReloadTable = {{
+  //---------------------------------------------------------------------------------------------
+  // score     reload
+  //---------------------------------------------------------------------------------------------
+    {512   ,   2.4f  },
+    {4096  ,   0.8f  },
+    {8192  ,   0.55f },
+    {12288 ,   0.4f  },
+    {99999 ,   0.35f }
   }};
 
   // note: formations are read upside down, so the top row in the file is the bottom row in
@@ -357,7 +405,7 @@ public:
   // bounding box.
 
   static constexpr int roundCount {9};
-  std::array<Round, roundCount> rounds = {{
+  static constexpr std::array<Round, roundCount> rounds = {{
   //---------------------------------------------------------------------------------------------
   // start_y  spawn_drops  formation  cuttles  schrodinger
   //---------------------------------------------------------------------------------------------
@@ -518,6 +566,9 @@ public:
   bool registerHiScore(const Score& score);
   size_t findScoreBoardPosition(int32_t scoreValue);
   void updateHudHiScore();
+
+  void setLastAlienClassAlive(AlienClassID classID);
+  AlienClassID getLastAlienClassAlive() const;
 
   //
   // scores are guaranteed to be sorted with increasing scores in order of ascending index.
@@ -776,38 +827,38 @@ public:
   {
     AlienClassID _classID;
     Vector2i _position;
-    int32_t _row;
-    int32_t _col;
+    int _row;
+    int _col;
     bool _frame;
     bool _isAlive;
   };
 
   struct Ufo
   {
-    UfoClassID _classID;
-    Vector2f _position;  // TODO - do I need a float position? since I bet I add int displacements.
+    SI::UfoClassID _classID;
+    Vector2f _position;
     float _phaseClockSeconds;
-    bool _phase;                // true==on/visible, false==off/invisible
+    bool _phase;
     bool _isAlive;
   };
 
   struct Bomb
   {
-    BombClassID _classID;
+    SI::BombClassID _classID;
     Vector2f _position;
-    int32_t _frameClock;       // unit: Cycle beats.
-    int32_t _frame;            // Constraint: value=[0, 4).
+    float _frameClock;
+    int _frame;
     bool _isAlive;
   };
 
-  enum BombHit { BOMBHIT_BOTTOM, BOMBHIT_MIDAIR };
-
-  struct BombBoom
+  struct Boom
   {
-    BombHit _hit;
+    SI::BoomClassID _classID;
     Vector2i _position;
-    int32_t _colorIndex;
-    float _boomClock;     // Unit: seconds. 
+    float _boomClock;
+    float _boomFrameClock;
+    int _colorIndex;
+    int _boomFrame;
     bool _isAlive;
   };
 
@@ -825,13 +876,10 @@ public:
   struct Cannon
   {
     SI::CannonClassID _classID;
-    Vector2f          _position;
-    int               _moveDirection;
-    int               _boomFrame;
-    float             _boomClock;
-    float             _boomFrameClock;
-    bool              _isBooming;
-    bool              _isAlive;
+    Vector2f _position;
+    int _moveDirection;
+    int _shotCounter;
+    bool _isAlive;
   };
 
   struct Hitbar
@@ -858,12 +906,36 @@ private:
   std::pair<int, int> getAlienRowRange(int row);
   Alien& getAlien(int row, int col);
 
+  void dropTargetBomb(SI::BombClassID classID);
+  void dropRandomBomb(SI::BombClassID classID);
+  void spawnBomb(int fleetCol, SI::BombClassID bombClassID);
+  void tryDropAlienBombs(float dt);
+
+  void boomBomb(Bomb& bomb);
+  void boomAllBombs();
+
+  void moveBombs(float dt);
+  void animateBombs(float dt);
+
+  void spawnBoom(SI::BoomClassID classID, Vector2i position, int colorIndex); 
+
+  void ageBooms(float dt);
+
+  void killAlien(Alien& alien);
+  void morphAlien(Alien& alien);
+  void moveAliens();
+  void morphAliens(float dt);
+  //void doAlienBooming(float dt);
+
+  void moveCannon(float dt);
+  void fireCannon();
+
   //void doFleetBeats();
   void doAbortToMenuTest();
   void startNextRound();
-  void updateBeatFreq();
-  void updateActiveCycle();
-  void updateActiveCycleBeat();
+  //void updateBeatFreq();
+  //void updateActiveCycle();
+  //void updateActiveCycleBeat();
   void addHudMsg(const char* endMsg, const Color3f& color);
   void removeHudMsg();
   void startRoundIntro();
@@ -876,32 +948,18 @@ private:
   void doVictory(float dt);
   void endSpawning();
   void spawnCannon(bool takeLife);
-  void spawnBomb(Vector2f position, BombClassID classID);
-  void spawnBoom(Vector2i position, BombHit hit, int32_t colorIndex); 
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
   void spawnUfo(UfoClassID classID);
-  void morphAlien(Alien& alien);
   void boomCannon();
-  void boomBomb(Bomb& bomb, bool makeBoom = false, Vector2i boomPosition = {}, BombHit hit = BOMBHIT_MIDAIR);
-  void boomAllBombs();
   void boomUfo();
-  void boomAlien(Alien& alien);
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
   void doUfoSpawning();
-  void doAlienMorphing(float dt);
-  void doCannonMoving(float dt);
-  void doCannonBooming(float dt);
-  void doCannonFiring();
-  void doAlienMoving();
-  void doBombMoving(int32_t beats, float dt);
+  //void doCannonBooming(float dt);
   void doLaserMoving(float dt);
   void doUfoMoving(float dt);
   void doUfoPhasing(float dt);
-  void doAlienBombing(int32_t beats);
-  void doAlienBooming(float dt);
   void doUfoBoomScoring(float dt);
-  void doBombBoomBooming(float dt);
   void doUfoReinforcing(float dt);
   void doCollisionsUfoBorders();
   void doCollisionsBombsHitbar();
@@ -914,19 +972,20 @@ private:
   void doCollisionsBunkersBombs();
   void doCollisionsBunkersLaser();
   void doCollisionsBunkersAliens();
-  bool incrementFleetIndex(FleetIndex& index);
+  
+  //bool incrementFleetIndex(FleetIndex& index);
+  
   void drawFleet();
   void drawUfo();
   void drawCannon();
   void drawBombs();
-  void drawBombBooms();
+  void drawBooms();
   void drawLaser();
   void drawHitbar();
   void drawBunkers();
 
   // Predicates.
   static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
-  static bool isBombBoomAlive(const BombBoom& boom) {return boom._isAlive;}
 
 private:
   SpaceInvaders* _si;   // cast from the _app pointer in the base class.
@@ -951,10 +1010,6 @@ private:
 
 
   //
-  // configuration constants  - TODO bubble up to space invaders class
-  //
-
-  //
   // The alien fleet, indexed [row][col]. Rows are arraged as,
   //                y
   //    row4        ^
@@ -967,17 +1022,21 @@ private:
   //
   // Columns are numbered from left to right in ascending order, starting with column 0.
   //
+  // The alien at fleet position (row, col) is accessed via, 
+  //            col + (row * fleetWidth)
+  //
   std::array<Alien, fleetSize> _fleet; 
 
-  std::array<int, fleetWidth> _alienColPop;     // Populations of alive aliens in each column.
-  std::array<int, fleetHeight> _alienRowPop;    // Populations of alive aliens in each row.
-  int _alienPop;                                // Count of the number of aliens alive.
-  int _alienMoveDirection;                      // Limited to values -1 for left, +1 for right.
+  std::array<int, fleetWidth>  _alienColPop;
+  std::array<int, fleetHeight> _alienRowPop;
+
+  Alien* _alienBoomer;
+  Alien* _alienMorpher;
+
+  int _alienPop;
+  int _alienMoveDirection;
   int _alienDropsDone;
-  int _nextMover;                               // The alien to move in the next tick.
-  Alien* _alienBoomer;                          // The alien going BOOM! (not your dad).
-  float _alienBoomClock;
-  Alien* _alienMorpher;                         // The alien morphing into a cuttle fish.
+  int _nextMover;
   float _alienMorphClock;
   bool _isAliensMorphing;
   bool _isAliensBooming;
@@ -986,6 +1045,19 @@ private:
   bool _isAliensFrozen;
   bool _isAliensAboveInvasionRow;
   bool _haveAliensInvaded;
+
+  std::array<Bomb, SI::maxBombCount> _bombs;
+  int _bombCount;
+  int _bombReloadTableIndex;
+  float _bombClock;
+
+  std::array<Boom, SI::maxBoomCount> _booms;
+
+  Cannon _cannon;
+  Laser _laser;
+
+
+
   AlienClassID _lastClassAlive;           // part of the sos bodge, used by the sos state.
 
   static constexpr float schrodingerPhasePeriodSeconds {0.4f};
@@ -1018,26 +1090,14 @@ private:
   //int32_t _activeCycle;
   //int32_t _activeBeat;  // A beat is an element of a cycle.
 
-
-  float _bombIntervalDeviation;                    // Max deviation in bomb drop beat count.
+  //float _bombIntervalDeviation;                    // Max deviation in bomb drop beat count.
   //std::array<int32_t, cycleCount> _bombIntervals;  // Beats between bomb drops.
-  int32_t _bombInterval;                           // Base beat count between firing.
-  int32_t _bombClock;                              // Unit: beats - used to time the firing.
+  //int32_t _bombInterval;                           // Base beat count between firing.
+  //int32_t _bombClock;                              // Unit: beats - used to time the firing.
 
 
-  static constexpr int32_t maxBombs {20};
-  std::array<Bomb, maxBombs> _bombs;
-  int32_t _bombCount;
 
-  std::array<BombBoom, maxBombs> _bombBooms;
-  std::array<Assets::Key_t, 2> _bombBoomKeys;
-  int32_t _bombBoomWidth;
-  int32_t _bombBoomHeight;
-  float _bombBoomDuration;                          // Unit: seconds.
 
-  Laser _laser;
-  int32_t _shotCounter;                             // used to detect bonus ufo hits.
-  Cannon _cannon;
 
   std::unique_ptr<Hitbar> _hitbar;
 
