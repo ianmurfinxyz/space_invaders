@@ -116,12 +116,11 @@ public:
 
   enum SoundKey : Mixer::Key_t
   {
-    SK_EXPLOSION, 
+    SK_CANNON_BOOM, 
+    SK_ALIEN_BOOM, 
+    SK_UFO_BOOM, 
     SK_SHOOT, 
-    SK_INVADER_KILLED, 
-    SK_INVADER_MORPHED, 
-    SK_UFO_HIGH_PITCH, 
-    SK_UFO_LOW_PITCH, 
+    SK_UFO_MOVE, 
     SK_FAST1, 
     SK_FAST2, SK_FAST3, 
     SK_FAST4, 
@@ -132,12 +131,12 @@ public:
   };
 
   static constexpr std::array<Mixer::Name_t, SK_COUNT> _soundNames {
-    "explosion", 
+    "cannonboom", 
+    "alienboom", 
+    "ufoboom", 
     "shoot", 
-    "invaderkilled", 
     "invadermorphed", 
-    "ufo_highpitch", 
-    "ufo_lowpitch", 
+    "ufomove", 
     "fastinvader1", 
     "fastinvader2", 
     "fastinvader3", 
@@ -175,7 +174,7 @@ public:
   static constexpr int   alienFastShiftDisplacement   { 3    };
   static constexpr int   alienInvasionRowHeight       { 32   };
   static constexpr int   alienMinSpawnDrops           { 6    };
-  static constexpr float alienMorphDuration           { 0.2f };
+  static constexpr float cuttleTwinDuration           { 0.2f };
   static constexpr int   worldMargin                  { 5    };
   static constexpr int   worldTopMargin               { 30   };
   static constexpr int   fleetWidth                   { 11   };
@@ -188,6 +187,9 @@ public:
   static constexpr int   maxBoomCount                 { 8    };
   static constexpr int   boomWidth                    { 8    };
   static constexpr int   boomHeight                   { 8    };
+  static constexpr int   ufoSpawnHeight               { 210  };
+  static constexpr float ufoScorePopupDuration        { 0.5f };
+  static constexpr int   schrodingerSpawnChance       { 3    };
 
   static constexpr const char* messageGameOver {"GAME OVER!"};
   static constexpr const char* messageVictory  {"VICTORY!"};
@@ -211,13 +213,14 @@ public:
 
   struct UfoClass
   {
+    Assets::Key_t _shipKey;
+    Mixer::Key_t _moveSfx;
     int _width;
     int _height;
     int _colorIndex;
-    float _phasePeriodSeconds;
+    float _speed;
+    float _phaseDuration;
     bool _isPhaser;
-    Assets::Key_t _shipKey;
-    Assets::Key_t _boomKey;
   };
 
   enum BombClassID { SQUIGGLY, ROLLING, PLUNGER };
@@ -235,12 +238,13 @@ public:
     bool _canTarget;
   };
 
-  enum BoomClassID { BOOM_BOMB, BOOM_LASER, BOOM_CANNON, BOOM_ALIEN };
+  enum BoomClassID { BOOM_BOMB, BOOM_LASER, BOOM_CANNON, BOOM_ALIEN, BOOM_UFO };
 
   struct BoomClass
   {
     static constexpr int boomFrameCount {2};
     std::array<Assets::Key_t, boomFrameCount> _bitmapKeys;
+    Mixer::Key_t _boomSfx;
     float _boomDuration;
     float _boomFrameDuration;
   };
@@ -251,6 +255,17 @@ public:
   {
     static constexpr int boomFrameCount {3};
     std::array<Assets::Key_t, boomFrameCount> _boomKeys;
+    Assets::Key_t _bitmapKey;
+    int _width;
+    int _height;
+    int _colorIndex;
+    float _speed;
+  };
+
+  enum ShotClassID { SHOT_LASER };
+
+  struct ShotClass
+  {
     Assets::Key_t _bitmapKey;
     int _width;
     int _height;
@@ -293,10 +308,10 @@ public:
   static constexpr int ufoClassCount {2};
   static constexpr std::array<UfoClass, ufoClassCount> ufoClasses = {{
   //---------------------------------------------------------------------------------------------
-  //  width  height  color  phase  isphase  bmk_ship         bmk_boom
+  //  bitmap_key       move_sfx     width  height  color  speed   phase  isphaser 
   //---------------------------------------------------------------------------------------------
-    { 16 ,   7,      0,     0.f ,  false,   BMK_SAUCER     , BMK_UFOBOOM},
-    { 15 ,   7,      3,     0.4f,  true,    BMK_SCHRODINGER, BMK_UFOBOOM}
+    { BMK_SAUCER     , SK_UFO_MOVE, 16,    7,      0,     40.f,   0.f ,  false },
+    { BMK_SCHRODINGER, SK_UFO_MOVE, 15,    7,      3,     40.f,   0.4f,  true  }
   }};
 
   static constexpr int ufoScoreTableSize;
@@ -329,12 +344,13 @@ public:
   static constexpr int boomClassCount {3};
   static constexpr std::array<BoomClass, boomClassCount> boomClasses = {{
   //---------------------------------------------------------------------------------------------
-  // bitmap_keys                           duration    frame_duration
+  // bitmap_keys                           boom_sfx        duration    frame_duration
   //---------------------------------------------------------------------------------------------
-    {{BMK_BOOM_BOMB, BMK_BOOM_BOMB      },  0.4f,       1.0f   },
-    {{BMK_BOOM_LASER, BMK_BOOM_LASER    },  0.4f,       1.0f   },
-    {{BMK_BOOM_CANNON0, BMK_BOOM_CANNON1},  1.0f,       0.2f   },
-    {{BMK_BOOM_ALIEN, BMK_BOOM_ALIEN    },  0.1f,       1.f    }
+    {{BMK_BOOM_BOMB, BMK_BOOM_BOMB      }, SK_COUNT      , 0.4f,       1.0f   },
+    {{BMK_BOOM_LASER, BMK_BOOM_LASER    }, SK_COUNT      , 0.4f,       1.0f   },
+    {{BMK_BOOM_CANNON0, BMK_BOOM_CANNON1}, SK_CANNON_BOOM, 1.0f,       0.2f   },
+    {{BMK_BOOM_ALIEN, BMK_BOOM_ALIEN    }, SK_ALIEN_BOOM , 0.1f,       1.f    },
+    {{BMK_BOOM_UFO  , BMK_BOOM_UFO      }, SK_UFO_BOOM   , 0.5f,       1.f    }
   }};
 
   // The reload table defines the rate at which the aliens reload their bombs, i.e. the alien
@@ -398,6 +414,14 @@ public:
     {{BMK_CANNONBOOM0,
       BMK_CANNONBOOM1, 
       BMK_CANNONBOOM2 }, BMK_CANNON0, 13,     8,       0,      50.f }
+  }};
+
+  static constexpr int shotClassCount {1};
+  static constexpr std::array<ShotClass, shotClassCount> shotClasses = {{
+  //---------------------------------------------------------------------------------------------
+  // bitmap_key   width   height   color   speed
+  //---------------------------------------------------------------------------------------------
+    {BMK_LASER,   1,      6,       6,      300.f  }
   }};
 
   // note: the start_y is the y-axis position of the reference alien (bottom-left alien) post
@@ -801,6 +825,8 @@ public:
 
 public:
 
+  enum class State { roundIntro, aliensSpawning, playing, cannonSpawning, victory, gameOver };
+
   class BeatBox
   {
   public:
@@ -835,9 +861,11 @@ public:
 
   struct Ufo
   {
+    Mixer::Channel_t _sfxChannel;
     SI::UfoClassID _classID;
     Vector2f _position;
-    float _phaseClockSeconds;
+    int _direction;
+    float _phaseClock;
     bool _phase;
     bool _isAlive;
   };
@@ -862,15 +890,11 @@ public:
     bool _isAlive;
   };
 
-  struct Laser
+  struct Shot
   {
+    SI::ShotClassID _classID;
     Vector2f _position;
-    int32_t _width;
-    int32_t _height;
-    int32_t _colorIndex;
-    float _speed;             // Unit: pixels per second.
     bool _isAlive;
-    Assets::Key_t _bitmapKey;
   };
 
   struct Cannon
@@ -906,33 +930,75 @@ private:
   std::pair<int, int> getAlienRowRange(int row);
   Alien& getAlien(int row, int col);
 
+  enum class State { roundIntro, aliensSpawning, playing, cannonSpawning, victory, gameOver };
+
+  void onEnterRoundIntro();
+  void onUpdateRoundIntro();
+  void onExitRoundIntro();
+  void onEnterAlienSpawning();
+  void onUpdateAlienSpawning();
+  void onExitAlienSpawning();
+  void onEnterPlaying();
+  void onUpdatePlaying();
+  void onExitPlaying();
+  void onEnterCannonSpawning();
+  void onUpdateCannonSpawning();
+  void onExitCannonSpawning();
+  void onEnterVictory();
+  void onUpdateVictory();
+  void onExitVictory();
+  void onEnterGameOver();
+  void onUpdateGameOver();
+  void onExitGameOver();
+
+  void switchState(State state);
+
+  void spawnUfo(SI::UfoClassID classID);
+  void spawnBomb(int fleetCol, SI::BombClassID bombClassID);
+  void spawnBoom(SI::BoomClassID classID, Vector2i position, int colorIndex); 
+  void spawnCuttleTwin(Alien& alien);
+  void spawnCannon(bool takeLife);
+
+  void resetUfoSpawnCountdown();
+  
+  void moveAliens();
+  void moveUfo(float dt);
+  void moveShot(float dt);
+  void moveBombs(float dt);
+  void moveCannon(float dt);
+
+  void splitCuttleTwin(float dt);
+
   void dropTargetBomb(SI::BombClassID classID);
   void dropRandomBomb(SI::BombClassID classID);
-  void spawnBomb(int fleetCol, SI::BombClassID bombClassID);
-  void tryDropAlienBombs(float dt);
+  void dropAlienBombs(float dt);
 
-  void boomBomb(Bomb& bomb);
-  void boomAllBombs();
-
-  void moveBombs(float dt);
   void animateBombs(float dt);
 
-  void spawnBoom(SI::BoomClassID classID, Vector2i position, int colorIndex); 
-
   void ageBooms(float dt);
+  void onBoomEnd(SI::BoomClassID classID);
 
-  void killAlien(Alien& alien);
-  void morphAlien(Alien& alien);
-  void moveAliens();
-  void morphAliens(float dt);
-  //void doAlienBooming(float dt);
+  void phaseUfo(float dt);
 
-  void moveCannon(float dt);
+  void signalUfo();
+
   void fireCannon();
 
+  void killBomb(Bomb& bomb);
+  void killAllBombs();
+  void killAlien(Alien& alien);
+  void killCannon();
+
+
+
+  //------------
+
+  void startNextRound();
+
+
+  //void doAlienBooming(float dt);
   //void doFleetBeats();
   void doAbortToMenuTest();
-  void startNextRound();
   //void updateBeatFreq();
   //void updateActiveCycle();
   //void updateActiveCycleBeat();
@@ -947,31 +1013,30 @@ private:
   void startVictory();
   void doVictory(float dt);
   void endSpawning();
-  void spawnCannon(bool takeLife);
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
-  void spawnUfo(UfoClassID classID);
-  void boomCannon();
+
   void boomUfo();
   void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
-  void doUfoSpawning();
+
   //void doCannonBooming(float dt);
-  void doLaserMoving(float dt);
-  void doUfoMoving(float dt);
-  void doUfoPhasing(float dt);
-  void doUfoBoomScoring(float dt);
+  //void doUfoBoomScoring(float dt);
+  //
+  //
   void doUfoReinforcing(float dt);
-  void doCollisionsUfoBorders();
-  void doCollisionsBombsHitbar();
-  void doCollisionsBombsCannon();
-  void doCollisionsBombsLaser();
-  void doCollisionsLaserAliens();
-  void doCollisionsLaserUfo();
-  void doCollisionsLaserSky();
-  bool doCollisionsAliensBorders();
-  void doCollisionsBunkersBombs();
-  void doCollisionsBunkersLaser();
-  void doCollisionsBunkersAliens();
+
+  void collideBombsCannon();
+
+  void collideUfoBorders();
+  void collideBombsHitbar();
+  void collideBombsLaser();
+  void collideLaserAliens();
+  void collideLaserUfo();
+  void collideLaserSky();
+  bool collideAliensBorders();
+  void collideBunkersBombs();
+  void collideBunkersLaser();
+  void collideBunkersAliens();
   
   //bool incrementFleetIndex(FleetIndex& index);
   
@@ -984,8 +1049,6 @@ private:
   void drawHitbar();
   void drawBunkers();
 
-  // Predicates.
-  static bool isBombAlive(const Bomb& bomb) {return bomb._isAlive;}
 
 private:
   SpaceInvaders* _si;   // cast from the _app pointer in the base class.
@@ -994,6 +1057,8 @@ private:
   HUD* _hud;
 
   BeatBox _beatBox;
+
+  State _state;
 
   //Vector2i _alienShiftDisplacement;
 
@@ -1030,15 +1095,13 @@ private:
   std::array<int, fleetWidth>  _alienColPop;
   std::array<int, fleetHeight> _alienRowPop;
 
-  Alien* _alienBoomer;
-  Alien* _alienMorpher;
+  Alien* _cuttleTwin;
 
   int _alienPop;
   int _alienMoveDirection;
   int _alienDropsDone;
   int _nextMover;
-  float _alienMorphClock;
-  bool _isAliensMorphing;
+  float _cuttleTwinClock;
   bool _isAliensBooming;
   bool _isAliensSpawning;
   bool _isAliensDropping;
@@ -1054,30 +1117,37 @@ private:
   std::array<Boom, SI::maxBoomCount> _booms;
 
   Cannon _cannon;
-  Laser _laser;
+  Shot _shot;
 
-
-
-  AlienClassID _lastClassAlive;           // part of the sos bodge, used by the sos state.
-
-  static constexpr float schrodingerPhasePeriodSeconds {0.4f};
-  static constexpr int32_t schrodingerSpawnChance {3}; // 1 in spawnChance chance each ufo spawn.
   Ufo _ufo;
-  Mixer::Channel_t _ufoSfxChannel;
-  //static constexpr int tillUfoMin {1200};// each update we do --tillUfo, so for updates at 60hz,
-  //static constexpr int tillUfoMax {1800};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
-  int32_t _tillUfo;                      // when _tillUfo == 0, ufo spawns.
-  int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
-  int32_t _ufoCounter;
-  int32_t _ufoLastScoreGiven;
-  float _ufoSpawnY;                      // Height of ufos.
-  float _ufoSpeed;                       // Unit: pixels per second.
-  float _ufoBoomScoreDuration;           // Unit: seconds.
-  float _ufoPhaseDuration;               // Unit: seconds.
-  float _ufoBoomScoreClock;
-  bool _isUfoBooming;
-  bool _isUfoScoring;                    // Is the score displaying after the ufo was destroyed?
-  bool _canUfosSpawn;                    // ufos cannot spawn if alien pop <= 8
+  int _ufoSpawnCountdown;
+  int _ufoLastScoreEarned;
+
+  int _activeRoundNo;
+
+  float _msgClockSeconds;
+  bool _isRoundIntro;
+  bool _isGameOver;
+  bool _isVictory;
+
+
+  //static constexpr float schrodingerPhasePeriodSeconds {0.4f};
+  //static constexpr int32_t schrodingerSpawnChance {3}; // 1 in spawnChance chance each ufo spawn.
+  //Mixer::Channel_t _ufoSfxChannel;
+  ////static constexpr int tillUfoMin {1200};// each update we do --tillUfo, so for updates at 60hz,
+  ////static constexpr int tillUfoMax {1800};// to spawn ufo every 25s, set tillUfo = 25*60 = 1500.
+  //int32_t _tillUfo;                      // when _tillUfo == 0, ufo spawns.
+  //int32_t _ufoDirection;                 // Constraint: value=-1 (left) or value=1 (right).
+  //int32_t _ufoCounter;
+  //int32_t _ufoLastScoreGiven;
+  //float _ufoSpawnY;                      // Height of ufos.
+  //float _ufoSpeed;                       // Unit: pixels per second.
+  //float _ufoBoomScoreDuration;           // Unit: seconds.
+  //float _ufoPhaseDuration;               // Unit: seconds.
+  //float _ufoBoomScoreClock;
+  //bool _isUfoBooming;
+  //bool _isUfoScoring;                    // Is the score displaying after the ufo was destroyed?
+  //bool _canUfosSpawn;                    // ufos cannot spawn if alien pop <= 8
 
   //static constexpr int32_t cycleCount {13};
   //static constexpr int32_t spawnCycle {5};  // higher than 0 so we spawn faster.
@@ -1111,13 +1181,6 @@ private:
   int32_t _bunkerHeight;
   int32_t _bunkerDeleteThreshold; // The bunker will be deleted if it has threshold or fewer pixels.
 
-  //int _levelIndex;                        // Active level (index into _levels data).
-  int _activeRoundNo;
-
-  float _msgClockSeconds;
-  bool _isRoundIntro;
-  bool _isGameOver;
-  bool _isVictory;
 
   HUD::uid_t _uidUfoScoringText;
   HUD::uid_t _uidMsgText;
