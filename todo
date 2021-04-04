@@ -242,7 +242,10 @@ may have a divide by zero happening
   checks at the start of functions. can also seperate the alien spawn drop code from the 
   general move code. the main onUpdate will then just be a switch calling the update of the 
   active state. the drawing should be the same for all states.
-- add the ability to add HUD elements with a duration arg, so the HUD will auto destroy them
-  when their lifetime is up? although this feature will not be needed actually now I am using
-  states in the gamestate.
+- [DONE] add the ability to add HUD elements with a duration arg, so the HUD will auto destroy them
+  when their lifetime is up? 
 - rename Application to Game, and ApplicationState to Scene.
+
+[04-04-2021]
+- rewrote the entire HUD class; will need to test it once I have the renderer swapped out.
+- have an extra cannon boom bitmap - whats the difference? the original game used only 2.

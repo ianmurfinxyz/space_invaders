@@ -740,73 +740,101 @@ void GameState::spawnFleet()
   }
 }
 
-void GameState::killCannon()
+void GameState::killCannon(bool boom)
 {
   setNextState(State::cannonSpawning);
+
+  if(boom)
+    spawnBoom(SI::BOOM_CANNON, _cannon._position, cc._colorIndex);
 
   //_cannon._isAlive = false;
   //_isAliensFrozen = true;
   //_beatBox.pause();
 }
 
-void GameState::killBomb(Bomb& bomb)
+void GameState::killBomb(Bomb& bomb, bool boom)
 {
   --_bombCount;
   assert(_bombCount >= 0);
   bomb._isAlive = false;
+
+  if(boom){
+    const auto& bbc = SI::bombClasses[bomb._classID];
+    const auto& bmc = SI::boomClasses[SI::BOOM_BOMB];
+    Vector2f boomPosition {
+      bomb._position._x + ((bbc._width - bmc._width) / 2),
+      bomb._position._y + ((bbc._height - bmc._height) / 2)
+    };
+    spawnBoom(SI::BOOM_BOMB, boomPosition, bc._colorIndex);
+  }
 }
 
-void GameState::boomUfo()
+void GameState::killBomb(Bomb& bomb, bool boom, Vector2f boomPosition)
+{
+  --_bombCount;
+  assert(_bombCount >= 0);
+  bomb._isAlive = false;
+
+  if(boom)
+    spawnBoom(SI::BOOM_BOMB, boomPosition, SI::bombClasses[bomb._classID]._colorIndex);
+}
+
+
+void GameState::killUfo(bool boom)
 {
   _ufo._isAlive = false;
+  int scoreTableIndex = _cannon._shotCounter % SI::ufoScoreTableSize;
+  int score = SI::scoreTable[_ufo._classID][scoreTableIndex];
+  _si->addScore(score);
+  mixer->stopChannel(_ufo._sfxChannel);
 
+  if(boom){
+    int colorIndex = SI::_ufoClasses[_ufo._classID]._colorIndex;
+    spawnBoom(SI::UFO_BOOM, _ufo._position, colorIndex);
+    _hud->addLabel(std::make_unique<HUD::Label>{new HUD::TextLabel(
+      _ufo._position,
+      SI::palette[colorIndex],
+      SI::boomClasses[UDO_BOOM]._duration,
+      SI::boomClasses[UDO_BOOM]._duration * 2.f,
+      std::to_string("score") + "!",
+      false
+    )});
+  }
 
-
-
-  _isUfoBooming = true;
-  _ufoBoomScoreClock = 0.f;
-
-  const UfoClass& uc = _ufoClasses[_ufo._classID];
-
-  if((_ufoCounter == 1 && _shotCounter == 23) ||
-     (_ufoCounter > 1  && (_shotCounter - 23) % 15 == 0))
-    _ufoLastScoreGiven = uc._specialScoreValue;
-  else
-    _ufoLastScoreGiven = uc._randScoreValues[randUniformSignedInt(0, UfoClass::randScoreValueCount - 1)];
-
-  static_cast<SpaceInvaders*>(_app)->addScore(_ufoLastScoreGiven);
-
-  mixer->stopChannel(_ufoSfxChannel);
-  _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_LOW_PITCH);
-
-  checkVictory(); // will need this in the refactored version
+  checkVictory();
 }
 
-void GameState::killAlien(Alien& alien)
+void GameState::killAlien(Alien& alien, bool boom)
 {
   _si->addScore(SI::alienClasses[alien._classID]._scoreValue);
   alien._isAlive = false;
   --(_alienColPop[alien._col]);
   --(_alienRowPop[alien._row]);
   --_alienPop;
-  if(_alienPop <= 0) _si->setLastAlienClassAlive(alien._classID);
-  if(alien._classID == SI::CUTTLE_TWIN){
+
+  if(_alienPop <= 0) 
+    _si->setLastAlienClassAlive(alien._classID);
+
+  if(alien._classID == SI::CUTTLE_TWIN) 
     _cuttleTwin = nullptr;
-  }
+
+  if(boom) 
+    spawnBoom(SI::BOOM_ALIEN, alien._position, SI::alienClasses[alien._classID]._colorIndex);
+
   checkVictory();
 }
 
-void GameState::killShot()
+void GameState::killShot(bool boom)
 {
   _shot._isAlive = false;
 
-  //if(makeBoom){
-  //  Vector2i position {};
-  //  position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
-  //  position._y = _laser._position._y;
-
-  //  spawnBoom(position, hit, _laser._colorIndex);
-  //}
+  if(boom){
+    Vector2i position {};
+    position._x = _shot._position._x - ((_bombBoomWidth - _laser._width) / 2);
+    position._y = _shot._position._y;
+    const auto& sc = SI::shotClasses[_shot._classID];
+    spawnBoom(SI::BOOM_SHOT, position, sc._colorIndex);
+  }
 }
 
 void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
@@ -1232,9 +1260,8 @@ void GameState::collideBombsCannon()
     );
 
     if(c._isCollision){
-      killCannon();
-      killBomb(bomb);
-      spawnBoom(SI::BOOM_CANNON, _cannon._position, cc._colorIndex);
+      killCannon(true);
+      killBomb(bomb, false);
     }
   }
 }
@@ -1293,14 +1320,11 @@ void GameState::collideShotFleet()
         false
     );
     if(c._isCollision){
-      if(canAlienBecomeCuttleTwin(alien)){
+      if(canAlienBecomeCuttleTwin(alien))
         spawnCuttleTwin(alien);
-      }
-      else{
-        killAlien(alien);
-        spawnBoom(SI::BOOM_ALIEN, alien._position, ac._colorIndex);
-      }
-      killShot();
+      else
+        killAlien(alien, true);
+      killShot(false);
       break;
     }
   }
@@ -1318,8 +1342,8 @@ void GameState::collideShotUfo()
       false
   );
   if(c._isCollision){
-    killShot();
-    boomUfo();
+    killShot(false);
+    KillUfo(true);
   }
 }
 

@@ -239,13 +239,15 @@ public:
     bool _canTarget;
   };
 
-  enum BoomClassID { BOOM_BOMB, BOOM_LASER, BOOM_CANNON, BOOM_ALIEN, BOOM_UFO };
+  enum BoomClassID { BOOM_BOMB, BOOM_SHOT, BOOM_CANNON, BOOM_ALIEN, BOOM_UFO };
 
   struct BoomClass
   {
     static constexpr int boomFrameCount {2};
     std::array<Assets::Key_t, boomFrameCount> _bitmapKeys;
     Mixer::Key_t _boomSfx;
+    int _width;
+    int _height;
     float _boomDuration;
     float _boomFrameDuration;
   };
@@ -345,13 +347,13 @@ public:
   static constexpr int boomClassCount {3};
   static constexpr std::array<BoomClass, boomClassCount> boomClasses = {{
   //---------------------------------------------------------------------------------------------
-  // bitmap_keys                            boom_sfx         duration    frame_duration
+  // bitmap_keys                            boom_sfx         width  height  duration  frame_dur
   //---------------------------------------------------------------------------------------------
-    {{BMK_BOOM_BOMB   , BMK_BOOM_BOMB    }, SK_COUNT       , 0.4f,       1.0f   },
-    {{BMK_BOOM_LASER  , BMK_BOOM_LASER   }, SK_COUNT       , 0.4f,       1.0f   },
-    {{BMK_BOOM_CANNON0, BMK_BOOM_CANNON1 }, SK_CANNON_BOOM , 1.0f,       0.2f   },
-    {{BMK_BOOM_ALIEN  , BMK_BOOM_ALIEN   }, SK_ALIEN_BOOM  , 0.1f,       1.f    },
-    {{BMK_BOOM_UFO    , BMK_BOOM_UFO     }, SK_UFO_BOOM    , 0.5f,       1.f    }
+    {{BMK_BOOM_BOMB   , BMK_BOOM_BOMB    }, SK_COUNT       , 8,     8,      0.4f,     1.0f },
+    {{BMK_BOOM_LASER  , BMK_BOOM_LASER   }, SK_COUNT       , 8,     8,      0.4f,     1.0f },
+    {{BMK_BOOM_CANNON0, BMK_BOOM_CANNON1 }, SK_CANNON_BOOM , 8,     14,     1.0f,     0.2f },
+    {{BMK_BOOM_ALIEN  , BMK_BOOM_ALIEN   }, SK_ALIEN_BOOM  , 9,     13,     0.1f,     1.f  },
+    {{BMK_BOOM_UFO    , BMK_BOOM_UFO     }, SK_UFO_BOOM    , 8,     22,     0.5f,     1.f  }
   }};
 
   // The reload table defines the rate at which the aliens reload their bombs, i.e. the alien
@@ -958,6 +960,9 @@ private:
     none 
   };
 
+  void awardAlienScore(const Alien& alien);
+  void awardUfoScore();
+
   inline bool canAlienBecomeCuttleTwin(const Alien& alien);
 
   void spawnCannon(bool takeLife);
@@ -993,10 +998,14 @@ private:
 
   void fireCannon();
 
-  void killBomb(Bomb& bomb);
-  void killAllBombs();
+  void killBomb(Bomb& bomb, bool boom);
+  void killBomb(Bomb& bomb, bool boom, Vector2f boomPosition);
+  void killAllBombs(bool boom);
   void killAlien(Alien& alien);
   void killCannon();
+  void killShot(bool boom);
+  void killAlien(bool boom);
+  void killUfo(bool boom);
 
   void collideBombsCannon();
   void collideShotFleet();
