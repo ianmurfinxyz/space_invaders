@@ -819,8 +819,6 @@ class SosState;
 
 class GameState final : public ApplicationState
 {
-  friend SosState; // a bodge!
-
 public:
   static constexpr const char* name = "game";
 
@@ -834,7 +832,6 @@ public:
   std::string getName(){return name;}
 
 public:
-
   enum class State { 
     roundIntro, 
     aliensSpawning, 
@@ -950,15 +947,8 @@ private:
   std::pair<int, int> getAlienRowRange(int row);
   Alien& getAlien(int row, int col);
 
-  enum class State { 
-    roundIntro, 
-    aliensSpawning, 
-    playing, 
-    cannonSpawning, 
-    victory, 
-    gameOver, 
-    none 
-  };
+  void addHudMsg(const char* endMsg, const Color3f& color);
+  void removeHudMsg();
 
   void awardAlienScore(const Alien& alien);
   void awardUfoScore();
@@ -1008,8 +998,12 @@ private:
   void killUfo(bool boom);
 
   void collideBombsCannon();
+  void collideShotBombs();
   void collideShotFleet();
   void collideShotUfo();
+  void collideShotSky();
+  void collideUfoBorders();
+  bool collideFleetBorders();
 
   void checkExit();
   void checkInvasion();
@@ -1052,16 +1046,11 @@ private:
   //void updateBeatFreq();
   //void updateActiveCycle();
   //void updateActiveCycleBeat();
-  void addHudMsg(const char* endMsg, const Color3f& color);
-  void removeHudMsg();
-  void doInvasionTest();
   void startGameOver();
   void doGameOver(float dt);
   void endSpawning();
   void spawnBunker(Vector2f position, Assets::Key_t bitmapKey);
 
-  void boomUfo();
-  void boomLaser(bool makeBoom, BombHit hit = BOMBHIT_MIDAIR);
   void boomBunker(Bunker& bunker, Vector2i hitPixel);
 
   //void doCannonBooming(float dt);
@@ -1071,11 +1060,7 @@ private:
   void doUfoReinforcing(float dt);
 
 
-  void collideUfoBorders();
   void collideBombsHitbar();
-  void collideBombsLaser();
-  void collideLaserSky();
-  bool collideAliensBorders();
   void collideBunkersBombs();
   void collideBunkersLaser();
   void collideBunkersAliens();

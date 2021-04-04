@@ -249,3 +249,12 @@ may have a divide by zero happening
 [04-04-2021]
 - rewrote the entire HUD class; will need to test it once I have the renderer swapped out.
 - have an extra cannon boom bitmap - whats the difference? the original game used only 2.
+- do I need to do all app state switches at the end of the update for the current state? It seems
+  like a bad idea to call a states exit function in the middle of its update, this could invalidate
+  the remainder of the update function.
+- can do the fleet border check significantly fast using the row pops, since I can calculate the
+  position of each row direct from the position of the reference alien, and the row pop tells me
+  what rows have aliens in them. Thus just calculate the positions of the left most and right most
+  popped rows.
+- switch out the engine for pixiretro v2.
+- split the space invaders monolothic files into multiple source files.

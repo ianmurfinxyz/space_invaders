@@ -580,16 +580,16 @@ GameState::Alien& GameState::getAlien(int row, int col)
   return _fleet[(row * fleetWidth) + col];
 }
 
-void GameState::endSpawning()
-{
-  _isAliensDropping = false;
-  spawnCannon(false);
-  //_activeCycle = 0;
-  updateBeatFreq();
-  _beatBox.unpause();
-
-  static_cast<SpaceInvaders*>(_app)->showTopHud();
-}
+//void GameState::endSpawning()
+//{
+//  _isAliensDropping = false;
+//  spawnCannon(false);
+//  //_activeCycle = 0;
+//  updateBeatFreq();
+//  _beatBox.unpause();
+//
+//  static_cast<SpaceInvaders*>(_app)->showTopHud();
+//}
 
 bool GameState::canAlienBecomeCuttleTwin(const Alien& alien)
 {
@@ -993,7 +993,7 @@ void GameState::moveFleet()
         _alienMoveDirection *= -1;
         checkInvasion();
       }
-      else if(doCollisionsAliensBorders()){
+      else if(collideFleetBorders()){
         _isAliensDropping = true;
       }
     }
@@ -1197,13 +1197,11 @@ void GameState::doUfoReinforcing(float dt)
   // TODO
 }
 
-void GameState::doCollisionsUfoBorders()
+void GameState::collideUfoBorders()
 {
-  if(!_ufo._isAlive) return;
-
-  if((_ufoDirection == -1 && _ufo._position._x < 0) ||
-     (_ufoDirection == 1  && _ufo._position._x > _worldSize._x))
-  {
+  bool collision = (_ufoDirection == -1 && _ufo._position._x < 0) || 
+                   (_ufoDirection == 1  && _ufo._position._x > _worldSize._x);
+  if(collision){
     _ufo._isAlive = false;
     mixer->stopChannel(_ufoSfxChannel);
   }
@@ -1266,41 +1264,24 @@ void GameState::collideBombsCannon()
   }
 }
 
-void GameState::doCollisionsBombsLaser()
+void GameState::collideShotBombs()
 {
-  if(!_laser._isAlive)
-    return;
-
-  if(_bombCount == 0)
-    return;
-
-  Vector2i aPosition {};
-  Vector2i bPosition {};
-
-  const Bitmap* aBitmap {nullptr};
-  const Bitmap* bBitmap {nullptr};
-
-  aPosition._x = _laser._position._x;
-  aPosition._y = _laser._position._y;
-
-  aBitmap = &(pxr::assets->getBitmap(_laser._bitmapKey, _worldScale));
-
+  const auto& sc = SI::shotClasses[_shot._classID];
+  const auto& shotBitmap = :assets->getBitmap(sc._bitmapKey);
   for(auto& bomb : _bombs){
-    if(!bomb._isAlive)
-      continue;
-  
-    bPosition._x = bomb._position._x;
-    bPosition._y = bomb._position._y;
-
+    if(!bomb._isAlive) continue;
     BombClass& bc = _bombClasses[bomb._classID];
-
-    bBitmap = &(pxr::assets->getBitmap(bc._bitmapKeys[bomb._frame], _worldScale));
-
-    const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
-
+    const Collision& c = testCollision(
+      _shot._position, 
+      shotBitmap, 
+      bomb._position, 
+      assets->getBitmap(bc._bitmapKeys[bomb._frame]), 
+      false
+    );
     if(c._isCollision){
-      boomLaser(true);
-      if(randUniformSignedInt(0, bc._laserSurvivalChance) != 0) boomBomb(bomb);
+      killShot(true);
+      if(randUniformSignedInt(0, bc._laserSurvivalChance) != 0) 
+        killBomb(bomb, false);
     }
   }
 }
@@ -1335,11 +1316,11 @@ void GameState::collideShotUfo()
   const auto& uc = SI::ufoClasses[_ufo._classID];
   const auto& sc = SI::shotClasses[_shot._classID];
   const Collision& c = testCollision(
-      _shot._position,
-      assets->getBitmap(sc._bitmapKey), 
-      _ufo._position, 
-      assets->getBitmap(uc._bitmapKey), 
-      false
+    _shot._position,
+    assets->getBitmap(sc._bitmapKey), 
+    _ufo._position, 
+    assets->getBitmap(uc._bitmapKey), 
+    false
   );
   if(c._isCollision){
     killShot(false);
@@ -1347,23 +1328,15 @@ void GameState::collideShotUfo()
   }
 }
 
-void GameState::doCollisionsLaserSky()
+void GameState::collideShotSky()
 {
-  if(!_laser._isAlive) return;
-  if(_laser._position._y + _laser._height < _worldTopBorderY) return;
-
-  _laser._isAlive = false;
-  Vector2i position {};
-  position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
-  position._y = _laser._position._y;
-  spawnBoom(position, BOMBHIT_MIDAIR, _laser._colorIndex);
+  const auto& sc = SI::shotClasses[_shot._classID];
+  if(_shot._position._y + sc._height > _worldTopBorderY)
+    killShot(true);
 }
 
-bool GameState::doCollisionsAliensBorders()
+bool GameState::collideFleetBorders()
 {
-  if(_isAliensSpawning) return false;
-  if(_isAliensFrozen) return false;
-  if(_alienPop == 0) return false;
   switch(_alienMoveDirection){
     case -1: 
       for(auto& alien : _fleet){
@@ -1812,10 +1785,19 @@ void GameState::onUpdatePlaying(float dt)
     collideBombsCannon();
 
   if(_shot._isAlive)
-    collideShotFleets();
+    collideShotSky();
+
+  if(_shot._isAlive && _bombCount > 0)
+    collideShotBombs();
+
+  if(_shot._isAlive)
+    collideShotFleet();
 
   if(_shot._isAlive && _ufo._isAlive && _ufo._isPhase)
     collideShotUfo();
+
+  if(_ufo._isAlive)
+    collideUfoBorders();
 }
 
 void GameState::onExitPlaying()
