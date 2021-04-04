@@ -865,174 +865,168 @@ private:
 extern std::unique_ptr<Mixer> mixer;
 
 //===============================================================================================//
-// ##>UI                                                                                         //
+// ##>HUD                                                                                        //
 //===============================================================================================//
 
 //
-// TODO - There is a fair amount of diplicate code in this class. Could be improved.
+// Resetting the HUD will reset activation delays and phaseins, it will not reset age, modify
+// flash state or hidden state. Meaning if label had a finite lifetime and died before the reset,
+// the reset will not bring it back. Further if the label is still alive at the point of reset
+// it will not make the label younger and delay its death.
 //
 
 class HUD
 {
 public:
-  using uid_t = int32_t;
+  using uid_t = uint32_t;
 
-  struct TextLabel
+  static constexpr float immortalLifetime {0.f};
+
+  class Label
   {
-    TextLabel(Vector2i p, Color3f c, std::string t, float activeDelay = 0.f, bool phase = false, bool flash = false);
+    friend HUD;
+  protected:
+    Label(
+      Vector2f position,
+      Color3f color,
+      float activationDelay,
+      float lifetime
+    );
 
-    TextLabel(const TextLabel&) = default;
-    TextLabel(TextLabel&&) = default;
-    TextLabel& operator=(const TextLabel&) = default;
-    TextLabel& operator=(TextLabel&&) = default;
+    virtual void onReset();
+    virtual void onUpdate(float dt);
+    virtual void onDraw(const Font& font) = 0;
 
+    void startFlashing();
+    void stopFlashing();
+    bool isFlashing() const {return _isFlashing;}
+    void hide() {_isHidden = true;}
+    void show() {_isHidden = false;}
+    bool isHidden() const {return _isHidden;}
+    bool isDead() {return _isDead;}
+    uid_t getUid() const {return _uid;}
+
+  private:
+    void initialize(const HUD* owner, uid_t uid);
+  
+  protected:
+    const HUD* _owner;
     uid_t _uid;
     Vector2i _position;
-    Color3f _color;
-    std::string _text;       // Source text.
-    std::string _value;      // The text being shown.
-    int32_t _charNo;         // The index into '_text' of the last character shown if '_phaseIn' = true.
-    float _activeDelay;
-    float _activeTime;
-    bool _isActive;          // Allows delayed activation.
-    bool _isVisible;         // Used internally to flash the label.
-    bool _isHidden;          // Allows manual hiding.
-    bool _phase;
-    bool _flash;
+    Color3f _color; 
+    long _lastFlashNo;
+    float _activationDelay;
+    float _activationClock;
+    float _age;
+    float _lifetime;
+    bool _flashState;
+    bool _isActive;
+    bool _isHidden;
+    bool _isFlashing;
+    bool _isImmortal;
+    bool _isDead;
   };
 
-  struct IntLabel
+  class TextLabel final : public Label
   {
-    IntLabel(Vector2i p, Color3f c, const int32_t* s, int32_t precision, float activeDelay = 0.f, bool flash = false);
+    friend HUD;
+  public:
+    TextLabel(
+      Vector2f position,
+      Color3f color,
+      float activationDelay,
+      float lifetime,
+      std::string text,
+      bool phaseIn
+    );
 
-    IntLabel(const IntLabel&) = default;
-    IntLabel(IntLabel&&) = default;
-    IntLabel& operator=(const IntLabel&) = default;
-    IntLabel& operator=(IntLabel&&) = default;
+    void onReset();
+    void onUpdate(float dt);
+    void onDraw(const Font& font);
 
-    uid_t _uid;
-    Vector2i _position;
-    Color3f _color;
-    const int32_t* _source;  // The integer whom's value to display.
-    int32_t _value;          // The current value of the source.
-    int32_t _precision;      // Number of digits to display.
-    std::string _text;       // Text generated from the value.
-    float _activeDelay;
-    float _activeTime;
-    bool _isActive;
-    bool _isVisible;
-    bool _isHidden;
-    bool _flash;
+  private:
+    std::string _fullText;
+    std::string _visibleText;
+    long _lastPhaseInNo;
+    int _nextCharToShow;
+    bool _isPhasingIn;
   };
 
-  struct BitmapLabel
+  class IntLabel final : public Label
   {
-    BitmapLabel(Vector2i p, Color3f c, const Bitmap* b, float activeDelay = 0.f, bool flash = false);
+    friend HUD;
+  public:
+    IntLabel(
+      Vector2f position,
+      Color3f color,
+      float activationDelay,
+      float lifetime,
+      const int& source,
+      int precision
+    );
 
-    BitmapLabel(const BitmapLabel&) = default;
-    BitmapLabel(BitmapLabel&&) = default;
-    BitmapLabel& operator=(const BitmapLabel&) = default;
-    BitmapLabel& operator=(BitmapLabel&&) = default;
+    void onReset();
+    void onUpdate(float dt);
+    void onDraw(const Font& font);
 
-    uid_t _uid;
-    Vector2i _position;
-    Color3f _color;
-    const Bitmap* _bitmap;
-    float _activeDelay;
-    float _activeTime;
-    bool _isActive;
-    bool _isVisible;
-    bool _isHidden;
-    bool _flash;
+  private:
+    const int& _sourceValue;
+    int _displayValue;
+    int _precision;
+    std::string _displayStr;
+  };
+
+  class BitmapLabel final : public Label
+  {
+    friend HUD;
+  public:
+    BitmapLabel(
+      Vector2f position,
+      Color3f color,
+      float activationDelay,
+      float lifetime,
+      const Bitmap& bitmap
+    );
+
+    void onUpdate(float dt);
+    void onDraw(const Font& font);
+
+  private:
+    const Bitmap& _bitmap;
   };
 
 public:
-  HUD() = default;
-  ~HUD() = default;
-  HUD(const HUD&) = default;
-  HUD(HUD&&) = default;
-  HUD& operator=(const HUD&) = default;
-  HUD& operator=(HUD&&) = default;
-
-  void initialize(const Font* font, float flashPeriod, float phaseInPeriod);
-
-  uid_t addTextLabel(TextLabel label);
-  uid_t addIntLabel(IntLabel label);
-  uid_t addBitmapLabel(BitmapLabel label);
-
-  bool removeTextLabel(uid_t uid);
-  bool removeIntLabel(uid_t uid);
-  bool removeBitmapLabel(uid_t uid);
-
-  void clear();
-
-  void hideTextLabel(uid_t uid);
-  void hideIntLabel(uid_t uid);
-  void hideBitmapLabel(uid_t uid);
-  void showTextLabel(uid_t uid);
-  void showIntLabel(uid_t uid);
-  void showBitmapLabel(uid_t uid);
-
-  void startTextLabelFlash(uid_t uid);
-  void startIntLabelFlash(uid_t uid);
-  void startBitmapLabelFlash(uid_t uid);
-  void stopTextLabelFlash(uid_t uid);
-  void stopIntLabelFlash(uid_t uid);
-  void stopBitmapLabelFlash(uid_t uid);
+  HUD(const Font& font, float flashPeriod, float phaseInPeriod);
 
   void onReset();
   void onUpdate(float dt);
   void onDraw();
 
-  void setFont(const Font* font) {_font = font;}
+  uid_t addLabel(std::unique_ptr<Label> label);
+  void removeLabel(uid_t uid);
+  void clear();
+
+  bool hideLabel(uid_t uid);
+  bool showLabel(uid_t uid);
+  bool startLabelFlashing(uid_t uid);
+  bool stopLabelFlashing(uid_t uid);
+
   void setFlashPeriod(float period) {_flashPeriod = period;}
   void setPhasePeriod(float period) {_phasePeriod = period;}
 
 private:
-  void flashLabels();
-  void phaseLabels();
-  void updateIntLabels();
-  void activateLabels();
+  std::vector::iterator findLabel(uid_t uid);
 
 private:
-  const Font* _font;
-
-  std::vector<TextLabel> _textLabels;
-  std::vector<IntLabel> _intLabels;
-  std::vector<BitmapLabel> _bitmapLabels;
-
-  int32_t _nextUid;
-
-  float _masterClock;     // Unit: seconds. Master timeline which all timing is relative to.
-  float _flashPeriod;     // Unit: seconds. Inverse of the frequency of flashing.
-  float _phasePeriod;     // Unit: seconds. Period between each subsequent letter appearing.
+  const Font& _font;
+  std::vector<std::unique_ptr<Label>> _labels;
+  uid_t _nextUid;
+  long _flashNo;
+  long _phaseInNo;
+  float _flashPeriod;
+  float _phaseInPeriod;
   float _flashClock;
   float _phaseClock;
-};
-
-// 
-// A UI text input box.
-//
-class TextInput
-{
-public:
-  TextInput(Font* font, std::string label, Color3f cursorColor);
-
-  const char* processInput();
-  void draw(float dt);
-
-private:
-  Font* _font;
-  std::vector<char> _buffer;
-  int32_t _bufferSize;
-  Color3f cursorColor;
-  int32_t _cursorPos;
-  float _cursorFlashPeriod;
-  float _cursorFlashClock;
-  std::string label;
-  Vector2i _boxPosition;
-  int32_t _boxW;
-  int32_t _boxH;
 };
 
 //===============================================================================================//

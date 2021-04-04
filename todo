@@ -237,3 +237,12 @@ may have a divide by zero happening
   https://www.robotron-2084.co.uk/manuals/invaders/taito_space_invader_part_II_upright_manual.pdf
 - double the length of the name input? The base game uses a string of max length = 10
 
+[03-04-2021]
+- make the gamestate a state machine - can use the states to remove the need for all the flag
+  checks at the start of functions. can also seperate the alien spawn drop code from the 
+  general move code. the main onUpdate will then just be a switch calling the update of the 
+  active state. the drawing should be the same for all states.
+- add the ability to add HUD elements with a duration arg, so the HUD will auto destroy them
+  when their lifetime is up? although this feature will not be needed actually now I am using
+  states in the gamestate.
+- rename Application to Game, and ApplicationState to Scene.

@@ -451,15 +451,10 @@ GameState::BeatBox::BeatBox(std::array<Mixer::Key_t, beatCount> beats, float bea
   _isPaused{false}
 {}
 
-void GameState::doAbortToMenuTest()
+void GameState::checkExit()
 {
-  if(pxr::input->isKeyPressed(Input::KEY_ESCAPE)){
-    if(_ufo._isAlive) 
-      mixer->stopChannel(_ufoSfxChannel);
-    if(_isRoundIntro || _isGameOver || _isVictory)
-      removeHudMsg();
+  if(input->isKeyPressed(Input::KEY_ESCAPE))
     _app->switchState(MenuState::name);
-  }
 }
 
 void GameState::BeatBox::doBeats(float dt)
@@ -517,213 +512,6 @@ void GameState::initialize()
 
   //_levelIndex = -1;
   _isGameOver = false;
-}
-
-void GameState::startNextRound()
-{
-  // rounds start at 0, the 10th round is the same as round 0, so round 10 % (9 + 1) = 0. 
-  //                                                             roundCount---^
-  _activeRoundNo = _si->getRound() % (roundCount + 1);
-
-  _beatBox.pause();
-
-  std::fill(_alienRowPop.begin(), _alienRowPop.end(), fleetWidth);
-  std::fill(_alienColPop.begin(), _alienColPop.end(), fleetHeight);
-
-  _cuttleTwin = nullptr;
-  _alienPop = fleetSize;
-  _alienMoveDirection = 1;
-  _alienDropsDone = 0;
-  _nextMover = 0;
-  _isAliensDropping = true;
-  _isAliensSpawning = true;
-  _isAliensFrozen = false;
-  _isAliensAboveInvasionRow = false;
-  _lastClassAlive = AlienClassId::SQUID;
-
-  int row{0}, col{0};
-  for(auto& alien : _fleet){
-    alien._classID = _formations[_activeRoundNo][row][col];
-    alien._position._x = _alienReferenceSpawnX + (col * _alienSeperation);
-    alien._position._y = _alienReferenceSpawnY + (row * _alienSeperation);
-    alien._row = row;
-    alien._col = col;
-    alien._frame = false;
-    alien._isAlive = true;
-    ++col;
-    if(col >= fleetWidth){
-      col = 0;
-      ++row;
-    }
-  }
-
-  _bombCount = 0;
-  _bombReloadTableIndex = 0;
-  _bombClock = 0.f;
-  for(auto& bomb : _bombs) 
-    bomb._isAlive = false;
-
-  for(auto& boom : _booms)
-    boom._isAlive = false;
-
-  _shot._isAlive = false;
-
-  _cannon._classID = SI::CannonClassID::LASER_BASE;
-  _cannon._shotCounter = 0;
-  _cannon._isAlive = false;
-
-  _ufo._isAlive = false;
-  resetUfoSpawnCountdown();
-
-  // _isGameOver = false;
-  // _isVictory = false;
-  // startRoundIntro();
-
-
-  //_bombClock = _bombIntervals[_activeCycle];
-
-  // Create fresh (undamaged) hitbar.
-  _hitbar = std::make_unique<Hitbar>(
-      pxr::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 
-      _worldSize._x,
-      1 * _worldScale,
-      16 * _worldScale, 
-      1
-  );
-
-  // Create fresh bunkers.
-  _bunkers.clear();
-  Vector2f position {_bunkerSpawnX, _bunkerSpawnY};
-  for(int i = 0; i < _bunkerSpawnCount; ++i){
-    spawnBunker(position, SpaceInvaders::BMK_BUNKER);
-    position._x += _bunkerSpawnGapX;
-  }
-
-
-  //_hasFleetLooped = false;
-
-  _si->showHud();
-  _si->hideTopHud();
-  _si->showLivesHud();
-}
-
-void GameState::onEnterRoundIntro()
-{
-}
-
-void GameState::onUpdateRoundIntro()
-{
-}
-
-void GameState::onExitRoundIntro()
-{
-}
-
-void GameState::onEnterAlienSpawning()
-{
-}
-
-void GameState::onUpdateAlienSpawning()
-{
-}
-
-void GameState::onExitAlienSpawning()
-{
-}
-
-void GameState::onEnterPlaying()
-{
-}
-
-void GameState::onUpdatePlaying()
-{
-}
-
-void GameState::onExitPlaying()
-{
-}
-
-void GameState::onEnterCannonSpawning()
-{
-}
-
-void GameState::onUpdateCannonSpawning()
-{
-}
-
-void GameState::onExitCannonSpawning()
-{
-}
-
-void GameState::onEnterVictory()
-{
-}
-
-void GameState::onUpdateVictory()
-{
-}
-
-void GameState::onExitVictory()
-{
-}
-
-void GameState::onEnterGameOver()
-{
-}
-
-void GameState::onUpdateGameOver()
-{
-}
-
-void GameState::onExitGameOver()
-{
-}
-
-void GameState::switchState(State state)
-{
-  switch(_state){
-    case State::roundIntro:
-      onExitRoundIntro();
-      break;
-    case State::aliensSpawning:
-      onExitAliensSpawning();
-      break;
-    case State::playing:
-      onExitPlaying();
-      break;
-    case State::cannonSpawning:
-      onExitCannonSpawning();
-      break;
-    case State::victory:
-      onExitVictory();
-      break;
-    case State::gameOver:
-      onExitGameOver();
-      break;
-  }
-
-  _state = state;
-
-  switch(_state){
-    case State::roundIntro:
-      onEnterRoundIntro();
-      break;
-    case State::aliensSpawning:
-      onEnterAliensSpawning();
-      break;
-    case State::playing:
-      onEnterPlaying();
-      break;
-    case State::cannonSpawning:
-      onEnterCannonSpawning();
-      break;
-    case State::victory:
-      onEnterVictory();
-      break;
-    case State::gameOver:
-      onEnterGameOver();
-      break;
-  }
 }
 
 void GameState::resetUfoSpawnCountdown()
@@ -794,7 +582,6 @@ GameState::Alien& GameState::getAlien(int row, int col)
 
 void GameState::endSpawning()
 {
-  _isAliensSpawning = false;
   _isAliensDropping = false;
   spawnCannon(false);
   //_activeCycle = 0;
@@ -802,6 +589,13 @@ void GameState::endSpawning()
   _beatBox.unpause();
 
   static_cast<SpaceInvaders*>(_app)->showTopHud();
+}
+
+bool GameState::canAlienBecomeCuttleTwin(const Alien& alien)
+{
+  return _rounds[_activeRoundNo]._canCuttlesSpawn && 
+          alien._classID == CRAB                  && 
+          alien._col != fleetWidth - 1);
 }
 
 void GameState::spawnCannon(bool takeLife)
@@ -915,12 +709,44 @@ void GameState::spawnCuttleTwin(Alien& alien)
   mixer->playSound(SpaceInvaders::SK_INVADER_MORPHED);
 }
 
+void GameState::spawnFleet()
+{
+  std::fill(_alienRowPop.begin(), _alienRowPop.end(), fleetWidth);
+  std::fill(_alienColPop.begin(), _alienColPop.end(), fleetHeight);
+
+  _cuttleTwin = nullptr;
+  _alienPop = fleetSize;
+  _alienMoveDirection = 1;
+  _alienDropsDone = 0;
+  _nextMover = 0;
+  _isAliensDropping = true;
+  _isAliensFrozen = false;
+  _isAliensAboveInvasionRow = false;
+
+  int row{0}, col{0};
+  for(auto& alien : _fleet){
+    alien._classID = _formations[_activeRoundNo][row][col];
+    alien._position._x = _alienReferenceSpawnX + (col * _alienSeperation);
+    alien._position._y = _alienReferenceSpawnY + (row * _alienSeperation);
+    alien._row = row;
+    alien._col = col;
+    alien._frame = false;
+    alien._isAlive = true;
+    ++col;
+    if(col >= fleetWidth){
+      col = 0;
+      ++row;
+    }
+  }
+}
+
 void GameState::killCannon()
 {
-  _cannon._isAlive = false;
+  setNextState(State::cannonSpawning);
 
-  _isAliensFrozen = true;
-  _beatBox.pause();
+  //_cannon._isAlive = false;
+  //_isAliensFrozen = true;
+  //_beatBox.pause();
 }
 
 void GameState::killBomb(Bomb& bomb)
@@ -933,6 +759,10 @@ void GameState::killBomb(Bomb& bomb)
 void GameState::boomUfo()
 {
   _ufo._isAlive = false;
+
+
+
+
   _isUfoBooming = true;
   _ufoBoomScoreClock = 0.f;
 
@@ -948,6 +778,8 @@ void GameState::boomUfo()
 
   mixer->stopChannel(_ufoSfxChannel);
   _ufoSfxChannel = mixer->playSound(SpaceInvaders::SK_UFO_LOW_PITCH);
+
+  checkVictory(); // will need this in the refactored version
 }
 
 void GameState::killAlien(Alien& alien)
@@ -958,20 +790,23 @@ void GameState::killAlien(Alien& alien)
   --(_alienRowPop[alien._row]);
   --_alienPop;
   if(_alienPop <= 0) _si->setLastAlienClassAlive(alien._classID);
-  mixer->playSound(SpaceInvaders::SK_INVADER_KILLED);
+  if(alien._classID == SI::CUTTLE_TWIN){
+    _cuttleTwin = nullptr;
+  }
+  checkVictory();
 }
 
-void GameState::boomLaser(bool makeBoom, BombHit hit)
+void GameState::killShot()
 {
-  _laser._isAlive = false;
+  _shot._isAlive = false;
 
-  if(makeBoom){
-    Vector2i position {};
-    position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
-    position._y = _laser._position._y;
+  //if(makeBoom){
+  //  Vector2i position {};
+  //  position._x = _laser._position._x - ((_bombBoomWidth - _laser._width) / 2);
+  //  position._y = _laser._position._y;
 
-    spawnBoom(position, hit, _laser._colorIndex);
-  }
+  //  spawnBoom(position, hit, _laser._colorIndex);
+  //}
 }
 
 void GameState::boomBunker(Bunker& bunker, Vector2i pixelHit)
@@ -1024,7 +859,6 @@ void GameState::splitCuttleTwin(float dt)
 {
   if(_cuttleTwin == nullptr) return;
   if(_alienPop == 0) return;
-  if(_isAliensFrozen) return;
 
   _cuttleTwinClock += dt;
   if(_cuttleTwinClock < SI::cuttleTwinDuration) return;
@@ -1106,12 +940,8 @@ void GameState::fireCannon()
   }
 }
 
-void GameState::moveAliens()
+void GameState::moveFleet()
 {
-  if(_isRoundIntro) return;
-  if(_isAliensFrozen) return;
-  if(_alienPop == 0) return;
-
   bool _aliveMoved {false};
   while(!_aliveMoved){
     Alien& alien = _fleet[_nextMover];
@@ -1131,19 +961,32 @@ void GameState::moveAliens()
       _nextMover = 0;
       if(_isAliensDropping){
         ++_alienDropsDone;
-        if(_isAliensSpawning){
-          mixer->playSound(SpaceInvaders::SK_FAST4);
-          if(_alienDropsDone >= _rounds[_activeRoundNo]._spawnDrops)
-            endSpawning();
-        }
-        else{
-          _isAliensDropping = false;
-          _alienMoveDirection *= -1;
-        }
+        _isAliensDropping = false;
+        _alienMoveDirection *= -1;
+        checkInvasion();
       }
       else if(doCollisionsAliensBorders()){
         _isAliensDropping = true;
       }
+    }
+  }
+}
+
+void GameState::moveSpawningFleet()
+{
+  assert(_alienPop == fleetSize);
+
+  for(int i {0}; i < alienSpawnRate; ++i){
+    Alien& alien = _fleet[_nextMover];
+    alien._position._y += _alienDropDisplacement;
+    alien._frame = !alien._frame;
+    ++_nextMover;
+    if(_nextMover >= fleetSize){
+      _nextMover = 0;
+      ++_alienDropsDone;
+      mixer->playSound(SpaceInvaders::SK_FAST4);
+      if(_alienDropsDone >= _rounds[_activeRoundNo]._spawnDrops)
+        setNextState(State::playing);
     }
   }
 }
@@ -1193,7 +1036,7 @@ void GameState::phaseUfo(float dt)
   _ufo._phaseClock = 0.f;
 }
 
-void GameState::dropAlienBombs(float dt)
+void GameState::dropBombs(float dt)
 {
   if(_isAliensFrozen) return;
   if(_isAliensSpawning) return;
@@ -1374,10 +1217,6 @@ void GameState::killAllBombs()
 
 void GameState::collideBombsCannon()
 {
-  if(!_cannon._isAlive) return;
-  if(_bombCount == 0) return;
-  if(_isAliensAboveInvasionRow) return;
-
   const auto& cc = SI::cannonClasses[_cannon._classID];
   const Bitmap& cannonBitmap = assets->getBitmap(cc._bitmapKey);
 
@@ -1439,74 +1278,47 @@ void GameState::doCollisionsBombsLaser()
   }
 }
 
-void GameState::doCollisionsLaserAliens()
+void GameState::collideShotFleet()
 {
-  if(!_laser._isAlive) return;
-  if(_isAliensSpawning) return;
-  if(_isAliensFrozen) return;
-  if(_alienPop == 0) return;
-
-  Vector2i aPosition {}; 
-  Vector2i bPosition {};
-
-  const Bitmap* aBitmap {nullptr};
-  const Bitmap* bBitmap {nullptr};
-
-  aPosition._x = _laser._position._x;
-  aPosition._y = _laser._position._y;
-
-  aBitmap = &(pxr::assets->getBitmap(_laser._bitmapKey, _worldScale));
-
+  const auto& sc = SI::shotClasses[_shot._classID];
+  const auto& shotBitmap = assets->getBitmap(sc._bitmapKey);
   for(auto& alien : _fleet){
     if(!alien._isAlive) continue;
-
-    const AlienClass& ac = _alienClasses[alien._classID];
-    bPosition = alien._position; 
-    bBitmap = &(pxr::assets->getBitmap(ac._bitmapKeys[alien._frame], _worldScale));
-
-    const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
-
+    const AlienClass& ac = SI::alienClasses[alien._classID];
+    const Collision& c = testCollision(
+        _shot._position, 
+        shotBitmap, 
+        alien._position, 
+        assets->getBitmap(ac._bitmapKeys[alien._frame]),
+        false
+    );
     if(c._isCollision){
-      if(alien._classID == CUTTLE_TWIN){
-        _cuttleTwin = nullptr;
-        _isAliensMorphing = false; // TODO remove
-      }
-      if(_rounds[_activeRoundNo]._canCuttlesSpawn && alien._classID == CRAB && alien._col != fleetWidth - 1)
+      if(canAlienBecomeCuttleTwin(alien)){
         spawnCuttleTwin(alien);
-      else
-        boomAlien(alien);
-
-      boomLaser(false);
-      return;
+      }
+      else{
+        killAlien(alien);
+        spawnBoom(SI::BOOM_ALIEN, alien._position, ac._colorIndex);
+      }
+      killShot();
+      break;
     }
   }
 }
 
-void GameState::doCollisionsLaserUfo()
+void GameState::collideShotUfo()
 {
-  if(!_laser._isAlive) return;
-  if(!_ufo._isAlive) return;
-  if(!_ufo._phase) return;
-
-  Vector2i aPosition {}; 
-  Vector2i bPosition {};
-
-  const Bitmap* aBitmap {nullptr};
-  const Bitmap* bBitmap {nullptr};
-
-  aPosition._x = _laser._position._x;
-  aPosition._y = _laser._position._y;
-  bPosition._x = _ufo._position._x;
-  bPosition._y = _ufo._position._y;
-
-  const UfoClass& uc = _ufoClasses[_ufo._classID];
-  bBitmap = &(pxr::assets->getBitmap(uc._shipKey, _worldScale));
-  aBitmap = &(pxr::assets->getBitmap(_laser._bitmapKey, _worldScale));
-
-  const Collision& c = testCollision(aPosition, *aBitmap, bPosition, *bBitmap, false);
-
+  const auto& uc = SI::ufoClasses[_ufo._classID];
+  const auto& sc = SI::shotClasses[_shot._classID];
+  const Collision& c = testCollision(
+      _shot._position,
+      assets->getBitmap(sc._bitmapKey), 
+      _ufo._position, 
+      assets->getBitmap(uc._bitmapKey), 
+      false
+  );
   if(c._isCollision){
-    boomLaser(false);
+    killShot();
     boomUfo();
   }
 }
@@ -1740,48 +1552,24 @@ void GameState::removeHudMsg()
   _hud->removeTextLabel(_uidMsgText);
 }
 
-void GameState::doInvasionTest()
+void GameState::checkInvasion()
 {
-  if(_isGameOver) return;
-  if(_alienPop == 0) return;
-  if(_isAliensFrozen) return;
-  if(_isAliensSpawning) return;
-  if(_isAliensDropping) return;
-
   int minY {std::numeric_limits<int>::max()};
   for(auto& alien : _fleet)
     if(alien._isAlive)
       minY = std::min(minY, alien._position._y);
 
   if(minY == _alienInvasionRowHeight)
-    startGameOver();
+    switchState(State::GameOver);
   else if(minY == _alienInvasionRowHeight + std::abs(_alienDropDisplacement)){
     _isAliensAboveInvasionRow = true;
   }
 }
 
-void GameState::startRoundIntro()
+void GameState::checkVictory()
 {
-  int round = _si->getRound();
-  std::string msg {};
-  msg += msgRoundIntro;
-  msg += " ";
-  msg += std::to_string(round);
-  addHudMsg(msg.c_str(), colors::red);
-  _msgClockSeconds = 0.f;
-  _isRoundIntro = true;
-}
-
-void GameState::doRoundIntro(float dt)
-{
-  if(!_isRoundIntro)
-    return;
-
-  _msgClockSeconds += dt;
-  if(_msgClockSeconds >= msgPeriodSeconds){
-    removeHudMsg();
-    _isRoundIntro = false;
-  }
+  if(_alienPop <= 0 && !_ufo._isAlive)
+    setNextState(State::victory);
 }
 
 void GameState::startGameOver()
@@ -1821,64 +1609,355 @@ void GameState::doGameOver(float dt)
   }
 }
 
-void GameState::doVictoryTest()
-{
-  if(!_isVictory && _alienPop == 0){
-    _beatBox.pause();
-    if(_ufo._isAlive)
-      return;
-    else
-      startVictory();
-  }
-}
+//void GameState::doVictoryTest()
+//{
+//  if(!_isVictory && _alienPop == 0){
+//    _beatBox.pause();
+//    if(_ufo._isAlive)
+//      return;
+//    else
+//      startVictory();
+//  }
+//}
 
-void GameState::startVictory()
+//void GameState::startVictory()
+//{
+//  _beatBox.pause();
+//  if(_ufo._isAlive) 
+//    mixer->stopChannel(_ufoSfxChannel);
+//
+//  addHudMsg(msgVictory, colors::green);
+//  static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
+//
+//  boomAllBombs();
+//
+//  _msgClockSeconds = 0.f;
+//  _isVictory = true;
+//}
+
+//void GameState::doVictory(float dt)
+//{
+//  if(!_isVictory)
+//    return;
+//
+//  assert(!_isGameOver);
+//  assert(!_isRoundIntro);
+//
+//  _msgClockSeconds += dt;
+//  if(_msgClockSeconds > msgPeriodSeconds){
+//    _si->stopScoreHudFlash();
+//    _si->addRound(1);
+//    removeHudMsg();
+//    _si->switchState(SosState::name);
+//  }
+//}
+
+void GameState::onEnter()
 {
+  // rounds start at 0, the 10th round is the same as round 0, so round 10 % (9 + 1) = 0. 
+  //                                                             roundCount---^
+  _activeRoundNo = _si->getRound() % (roundCount + 1);
+
   _beatBox.pause();
-  if(_ufo._isAlive) 
-    mixer->stopChannel(_ufoSfxChannel);
 
-  addHudMsg(msgVictory, colors::green);
-  static_cast<SpaceInvaders*>(_app)->startScoreHudFlash();
+  _bombCount = 0;
+  _bombReloadTableIndex = 0;
+  _bombClock = 0.f;
+  for(auto& bomb : _bombs) 
+    bomb._isAlive = false;
 
-  boomAllBombs();
+  for(auto& boom : _booms)
+    boom._isAlive = false;
 
-  _msgClockSeconds = 0.f;
-  _isVictory = true;
-}
+  _shot._isAlive = false;
 
-void GameState::doVictory(float dt)
-{
-  if(!_isVictory)
-    return;
+  _cannon._classID = SI::CannonClassID::LASER_BASE;
+  _cannon._shotCounter = 0;
 
-  assert(!_isGameOver);
-  assert(!_isRoundIntro);
+  _ufo._isAlive = false;
+  resetUfoSpawnCountdown();
 
-  _msgClockSeconds += dt;
-  if(_msgClockSeconds > msgPeriodSeconds){
-    _si->stopScoreHudFlash();
-    _si->addRound(1);
-    removeHudMsg();
-    _si->switchState(SosState::name);
+  _si->showHud();
+
+  _state = State::none;
+  setNextState(State::roundIntro);
+  switchState();
+
+
+//-----------------------------------
+
+  // _isGameOver = false;
+  // _isVictory = false;
+  // startRoundIntro();
+
+
+  //_bombClock = _bombIntervals[_activeCycle];
+
+  // Create fresh (undamaged) hitbar.
+  _hitbar = std::make_unique<Hitbar>(
+      pxr::assets->getBitmap(SpaceInvaders::BMK_HITBAR, _worldScale), 
+      _worldSize._x,
+      1 * _worldScale,
+      16 * _worldScale, 
+      1
+  );
+
+  // Create fresh bunkers.
+  _bunkers.clear();
+  Vector2f position {_bunkerSpawnX, _bunkerSpawnY};
+  for(int i = 0; i < _bunkerSpawnCount; ++i){
+    spawnBunker(position, SpaceInvaders::BMK_BUNKER);
+    position._x += _bunkerSpawnGapX;
   }
+
+
+  //_hasFleetLooped = false;
+
 }
 
-void GameState::onUpdate(double now, float dt)
+void GameState::onEnterRoundIntro()
 {
+  int round = _si->getRound();
+  std::string msg {};
+  msg += msgRoundIntro;
+  msg += " ";
+  msg += std::to_string(round);
+  addHudMsg(msg.c_str(), colors::red);
+  _msgClockSeconds = 0.f;
+  _beatBox.pause();
+}
 
+void GameState::onUpdateRoundIntro(float dt)
+{
+  _msgClockSeconds += dt;
+  if(_msgClockSeconds >= msgPeriodSeconds)
+    setNextState(State::aliensSpawning);
+}
 
+void GameState::onExitRoundIntro()
+{
+  removeHudMsg();
+}
+
+void GameState::onEnterAlienSpawning()
+{
+  spawnFleet();
+  _alienDropsDone = 0;
+
+  _si->hideTopHud();
+  _si->showLivesHud();
+}
+
+void GameState::onUpdateAlienSpawning(float dt)
+{
+  moveSpawningFleet();
+}
+
+void GameState::onExitAlienSpawning()
+{
+  _si->showTopHud();
+  _isAliensDropping = false;
+}
+
+void GameState::onEnterPlaying()
+{
+  spawnCannon(false);
+  _beatBox.resume();
+}
+
+void GameState::onUpdatePlaying(float dt)
+{
+  checkExit();
 
   moveCannon(dt);
   fireCannon();
-  moveAliens();
+
+  if(!_isAliensFrozen){
+    moveFleet();
+    dropBombs(dt);
+  }
+
   moveBombs(dt);
   moveUfo(dt);
   phaseUfo(dt);
   splitCuttleTwin(dt);
-  dropAlienBombs(dt);
   ageBooms(dt);
   animateBombs(dt);
+
+  if(_bombCount > 0 && !_isAliensAboveInvasionRow)
+    collideBombsCannon();
+
+  if(_shot._isAlive)
+    collideShotFleets();
+
+  if(_shot._isAlive && _ufo._isAlive && _ufo._isPhase)
+    collideShotUfo();
+}
+
+void GameState::onExitPlaying()
+{
+  _beatBox.pause();
+}
+
+void GameState::onEnterCannonSpawning()
+{
+  _cannon._spawnClock = 0.f;
+}
+
+void GameState::onUpdateCannonSpawning(float dt)
+{
+  _cannon._spawnClock += dt;
+  if(_cannon._spawnClock > SI::cannonSpawnDuration)
+    setNextState(State::playing);
+
+  moveBombs(dt);
+  moveUfo(dt);
+  phaseUfo(dt);
+  splitCuttleTwin(dt);
+  ageBooms(dt);
+  animateBombs(dt);
+}
+
+void GameState::onExitCannonSpawning()
+{
+}
+
+void GameState::onEnterVictory()
+{
+  addHudMsg(msgVictory, colors::green);
+  _si->startScoreHudFlash();
+  boomAllBombs();
+  _msgClockSeconds = 0.f;
+}
+
+void GameState::onUpdateVictory(float dt)
+{
+  _msgClockSeconds += dt;
+  if(_msgClockSeconds >= msgPeriodSeconds)
+    setNextState(State::exit);
+}
+
+void GameState::onExitVictory()
+{
+  _si->stopScoreHudFlash();
+  _si->addRound(1);
+  removeHudMsg();
+  _si->switchState(SosState::name);
+}
+
+void GameState::onEnterGameOver()
+{
+}
+
+void GameState::onUpdateGameOver(float dt)
+{
+}
+
+void GameState::onExitGameOver()
+{
+}
+
+void GameState::onEnterExit()
+{
+}
+
+void GameState::setNextState(State state)
+{
+  assert(state != State::none);
+  _newState = state;
+}
+
+void GameState::isStateChange()
+{
+  return _state != _newState;
+}
+
+void GameState::switchState()
+{
+  switch(_state){
+    case State::roundIntro:
+      onExitRoundIntro();
+      break;
+    case State::aliensSpawning:
+      onExitAliensSpawning();
+      break;
+    case State::playing:
+      onExitPlaying();
+      break;
+    case State::cannonSpawning:
+      onExitCannonSpawning();
+      break;
+    case State::victory:
+      onExitVictory();
+      break;
+    case State::gameOver:
+      onExitGameOver();
+      break;
+    case State::exit:
+      break;
+    case State::none:
+      break;
+  }
+
+  switch(_newState){
+    case State::roundIntro:
+      onEnterRoundIntro();
+      break;
+    case State::aliensSpawning:
+      onEnterAliensSpawning();
+      break;
+    case State::playing:
+      onEnterPlaying();
+      break;
+    case State::cannonSpawning:
+      onEnterCannonSpawning();
+      break;
+    case State::victory:
+      onEnterVictory();
+      break;
+    case State::gameOver:
+      onEnterGameOver();
+      break;
+    case State::exit:
+      onEnterExitState();
+      break;
+    case State::none:
+      assert(0);
+  }
+
+  _state = _newState;
+}
+
+void GameState::onUpdate(double now, float dt)
+{
+  switch(_state){
+    case State::roundIntro:
+      onUpdateRoundIntro(dt);
+      break;
+    case State::aliensSpawning:
+      onUpdateAliensSpawning(dt);
+      break;
+    case State::playing:
+      onUpdatePlaying();
+      break;
+    case State::cannonSpawning:
+      onUpdateCannonSpawning(dt);
+      break;
+    case State::victory:
+      onUpdateVictory(dt);
+      break;
+    case State::gameOver:
+      onUpdateGameOver(dt);
+      break;
+  };
+
+  if(isStateChange())
+    switchState();
+
+
+
+  //================================================================================
+
 
 
 
@@ -2040,11 +2119,6 @@ void GameState::onDraw(double now, float dt)
   drawLaser();
   drawBunkers();
   drawHitbar();
-}
-
-void GameState::onEnter()
-{
-  startNextRound();
 }
 
 //===============================================================================================//
