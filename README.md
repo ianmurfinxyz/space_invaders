@@ -11,6 +11,10 @@ programming. So here it is...enjoy! :partying_face:
   <img src="img/splash.gif" alt="splash screen and menu"/>
 </p>
 
+## Project State
+
+#### This project is currently undergoing a major refactor of the master branch and as such is in an unuseable state.
+
 ## Rendering
 
 This is clone of the 1979 game space invaders part II implemented in C++ with a single file custom 
