@@ -11,9 +11,11 @@ programming. So here it is...enjoy! :partying_face:
   <img src="img/splash.gif" alt="splash screen and menu"/>
 </p>
 
+The goal of this project is to make an authentic clone of the original 1979 game complete with all features and a gameplay feel which is almost an exact match. The idea is to make a full clone which playable on a modern linux desktop.
+
 ## Project State
 
-#### This project is currently undergoing a major refactor of the master branch and as such is in an unuseable state.
+#### This project is currently undergoing a major refactor of the master branch and as such is in an unuseable state. However the archived version does compile and is playable (https://github.com/ianmurfinxyz/space_invaders_part_ii_archive). This project is being updated to use the newest version of my engine pixiretro and the play state is being refactored to be more authentic to the implementation of the original (documented here: http://computerarcheology.com/Arcade/SpaceInvaders/Code.html)
 
 ## Rendering
 
