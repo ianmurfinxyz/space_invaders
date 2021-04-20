@@ -11,7 +11,7 @@ programming. So here it is...enjoy! :partying_face:
   <img src="img/splash.gif" alt="splash screen and menu"/>
 </p>
 
-The goal of this project is to make an authentic clone of the original 1979 game complete with all features and a gameplay feel which is almost an exact match. The idea is to make a full clone which playable on a modern linux desktop.
+The goal of this project is to make an authentic clone of the original 1979 game complete with all features and a gameplay feel which is almost an exact match. The idea is to make a full clone which is playable on a modern linux desktop.
 
 ## Project State
 
